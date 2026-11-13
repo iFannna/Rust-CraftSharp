@@ -17,7 +17,17 @@
 - P1 已验证：点击选中与文件名、滚轮首尾回绕、数字键、hover 规则、拖拽交换、剪切半透明、菜单删除/剪切/粘贴、Q 丢弃、打开命令
 - P1 已完成：副手槽渲染，22×22 原版贴图、右槽水平翻转、间距 7、命中区 20×20，窗口固定宽度 240 倍缩放
 - P1 已验证：6x 副手槽场景框体与空槽逐像素一致，快捷栏与左右副手之间双向拖拽交换正常
-- P1 未完成：物品栏、3D 玩家预览、设置面板
+- P1 已修复：格子图标误用状态图标 9 像素，改为按格子 16 MC 像素绘制并等比居中，任意缩放都正确
+- P1 已完成：物品栏渲染，15 种容器样式、坐标 JSON 定位格子、图标、hover 蒙版、灰色蒙版、窗口显隐与位置记忆
+- P1 已加入：物品栏交互，单击/双击打开、长按拖拽交换、Shift 批量移动、中键分发、Q 丢弃、右键菜单
+- P1 已验证：物品栏 6x 与黄金图逐像素一致，差异只在图标内部抗锯齿
+- P1 已完成：物品栏 Tooltip，九宫格背景与边框、Unifont 文本、自动换行、右侧显示超界翻转
+- P1 已完成：准星与攻击指示器，屏幕居中、鼠标穿透、进度裁剪；6x 与黄金图逐像素一致
+- P1 已完成：设置面板，8 个分区，统一配置读写，窗口 980×640 无边框
+- P1 已完成：全局热键，Win32 RegisterHotKey，四项默认 Ctrl+Alt+S/H/E/C
+- P1 已完成：主界面外壳，窗口开关卡片、样式名与热键提示，替代原调试工作台
+- P1 已完成：统一配置，`src/config/appConfig.ts`，字段对齐 AppSettings，兼容旧物品栏配置迁移
+- P1 未完成：3D 玩家预览、BOSS 血条窗口、壁纸引擎、皮肤上传、开机自启、托盘与单实例
 - 未实测项：右键菜单的打开位置、管理员运行、重命名会真的动桌面文件或弹窗；原生文件拖入需要从资源管理器拖，未自动化。本轮只验证了打开命令与路径判断
 - 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
 - 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读
@@ -44,7 +54,11 @@ CARGO_NET_OFFLINE=true npm run tauri dev
 | 6x | 1440×354 | 1092×222 | 0 | 0.00% | 整数倍逐像素一致 |
 | 4.5x | 1080×266 | 819×200 | 约 19900 | 10.9% | 半像素布局取整不同，最优对齐 dx=131 dy=1 |
 
+物品栏（`2560x1440-100-inventory.png`）在 6x 下 1056×996 全画布比较：差异大于 8 的像素 250 个，占 0.024%，全部在图标内部；容器背景、格子位置、空槽逐像素一致。玩家预览区域两边都是黑色占位。
+
 已修正：空气满格时隐藏 empty 背景，只画 full，和 WPF 一致。
+
+快捷栏图标区修正后（6x，核心区 1092×354）与黄金图比较：容差 8 时差异 528 像素，0.14%，全部在图标内部抗锯齿，框体、空槽、图标位置逐像素一致。
 
 副手槽场景（黄金图 `2560x1440-100-statusbar-offhand.png`）在 6x 下对比：容差 3 时差异 17495/509760 = 3.43%，全部落在图标内部，原因是 Chromium 与 WPF 的大倍数缩放算法不同；框体、空槽、状态区逐像素一致。证据见 `docs/refactor/diff-offhand-6x.png`。
 
@@ -78,6 +92,7 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 ### P1 快捷栏交互契约
 
 - 几何：`src/hud/layout.ts` 统一算出状态行、经验条、快捷栏位置；命中区是 20×20 基准外扩 2，图标区 16×16，选中框 24×23 且上沿在 `hotbarTop - scale`
+- 图标尺寸：`layout.slotSize` 是格子图标边长（16 MC 像素），与状态行 `iconSize`（9 MC 像素）分开；绘制走 `drawUniform` 等比居中，对应 WPF 的 `Stretch="Uniform"`，非正方形图片会留边而不是被拉伸
 - 状态机：`src/hud/hotbarInteraction.ts`，按下启动 150ms 定时，定时器触发后再移动超过 10 像素才进拖拽；未进拖拽的松开一律按点击处理，与 WPF 等价
 - 数据：`src/hud/slotStore.ts`，键为 `hotbar_0` 到 `hotbar_8`，暂存 localStorage `craftsharp.slots.v1`，两个窗口用 storage 事件同步；迁移 settings.json 时只替换这一层
 - 文件操作：`src/hud/slotActions.ts` + Rust `platform` 模块，命令是 `open_path`、`reveal_path`、`run_path_as_admin`、`path_exists`、`copy_to_clipboard`、`read_clipboard_paths`、`rename_path`
@@ -89,7 +104,39 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 - 窗口宽度固定为 240 倍缩放（副手槽列始终占位），隐藏副手槽时两侧是透明区域
 - 长按判定同时看定时器和按下时间戳，后台窗口被节流时仍能按时进入拖拽
 - 副手槽显隐暂时由 URL 参数 `?offhand=both|left|right` 控制，设置面板接入后改读配置
-- 证据：`docs/refactor/hud-interaction-select.png`、`hud-context-menu.png`、`hud-drag-swap.png`、`hud-offhand-6x.png`
+- 证据：`docs/refactor/hud-interaction-select.png`、`hud-context-menu.png`、`hud-drag-swap.png`、`hud-offhand-6x.png`、`hud-icons-6x.png`、`diff-icons-6x.png`
+
+### P1 物品栏契约
+
+- 入口：`inventory.html` + `src/inventory.ts`，独立窗口 `inventory`，默认隐藏，桌面上由工作台按钮或后续全局热键显隐
+- 样式：`src/hud/inventoryStyles.ts` 静态导入 15 张容器图与 14 份坐标 JSON；`tab_inventory.png` 没有独立坐标，回退到 `inventory.json`，与原实现一致
+- 布局：`src/hud/inventoryLayout.ts` 按容器图片原始像素乘缩放，格子位置直接取自 JSON 的 x/y/width/height；`player` 坐标不生成格子
+- 渲染：`src/hud/inventoryRenderer.ts`，背景 `NearestNeighbor` 铺满，图标 16 MC 像素等比居中，hover 白色 50% 与绿色 44% 用 `fillRect` 叠在格子上
+- 交互：`src/hud/inventoryInteraction.ts`，hover 250ms 转绿，点击打开跟随单击/双击配置（双击阈值 500ms），长按 150ms 加 10 像素进入拖拽交换
+- Shift 批量：从快捷栏与背包互换首个空位，装备、合成、副手移到背包首个空位；扫过已填充的格子会继续搬运，与原实现的扫格行为一致
+- 中键分发：按住中键扫过空格子会复制同一文件，源格子保留
+- Q 丢弃：按下时丢弃当前悬浮格子，按住扫过其他格子继续丢弃，松开重置
+- 数据：共享模式复用 `craftsharp.slots.v1`，独立模式写 `craftsharp.styleSlots.v1`，按样式隔离；快捷栏格子与 HUD 共用同一份数据
+- 配置：`src/hud/inventoryConfig.ts` 暂存 localStorage，字段对齐 `AppSettings.Inventory`；锁定位置默认开启，未锁定时按住容器空白拖动窗口
+- 灰色蒙版：独立 `overlay` 窗口，覆盖主屏，背景黑 75%，`setIgnoreCursorEvents` 鼠标穿透，显隐与物品栏联动
+- 窗口：打开时按记住的位置恢复，无效则居中；位置变化即写入配置
+- 未实现：Tooltip 窗口、3D 玩家预览、灰底联动隐藏状态栏、全局热键、设置面板
+- 证据：`docs/refactor/inventory-6x.png`、`diff-inventory-6x.png`、`inventory-hover-green.png`
+
+### P1 设置面板与桌面外壳契约
+
+- 统一配置：`src/config/appConfig.ts`，键 `craftsharp.config.v1`，分区 system、appearance、statusBar、hotbar、inventory、hudElements、hotkeys、player；旧 `craftsharp.inventory.v1` 首次启动自动迁移
+- 窗口：`main`、`hud`、`inventory`、`overlay`、`settings`、`crosshair`、`tooltip`，除 main 外全部无边框透明，inventory 以下默认隐藏
+- 窗口控制：`src/windowControls.ts`，显隐与配置持久化集中在这里，主界面、设置面板、热键共用
+- 设置面板：`src/settings/`，八个分区，左栏导航加右侧滚动内容，无边框自绘标题栏；所有修改立即写配置，窗口显隐联动走 windowControls
+- 准星：`src/hud/crosshairLayout.ts` 与 `crosshairRenderer.ts`，整屏透明窗口 + 鼠标穿透，准星 15×15、攻击指示器 16×4/16×16，间距 1 MC 像素，进度默认 100%
+- 准星像素验证：6x、进度 50% 时内容裁剪 96×102，与黄金图逐像素一致，差异 0
+- Tooltip：独立窗口，九宫格边框 3 MC 像素、内边距 3、字号 8、最大宽 150、阴影为文字色 50% 偏移 0.53；显示在格子右侧，超右翻转、超上下贴边
+- 热键：Rust `src-tauri/src/hotkeys.rs` 用 RegisterHotKey 加独立消息线程，命令 `register_hotkeys(actions)`，事件 `craftsharp-hotkey`；前端 `src/hotkeys.ts` 监听并调用窗口开关
+- 主界面：`src/App.tsx`，四张功能卡片加底部热键提示，启动时按配置恢复显隐
+- 已验证：设置面板三个分区截图、准星逐像素、Tooltip 渲染、物品栏样式热切换（漏斗 705×533）、配置跨窗口传播、热键命令返回空失败列表
+- 未实测：全局热键实际按键触发、设置窗口在屏幕上的层级、窗口拖动、开机自启
+- 证据：`docs/refactor/settings-panel.png`、`settings-inventory.png`、`settings-hotkeys.png`、`crosshair-6x.png`、`tooltip-6x.png`
 
 ## 1. 目标
 
@@ -188,7 +235,7 @@ scaleFactor = 逻辑屏宽 / 2560 * 6
 - 格子坐标来自 `assets/minecraft/textures/gui/container/coordinate/*.json`
 - 支持 15 种容器样式，格子数量从 37 到 90 不等
 - `player` 坐标区域渲染 3D 玩家预览，不创建普通格子
-- hover 白色蒙版 50%，停留 300ms 后转绿色蒙版 44%
+- hover 白色蒙版 50%，停留 250ms 后转绿色蒙版 44%
 - 支持 Tooltip、灰色蒙版、打开时隐藏状态栏
 - 支持共享数据或每种样式独立数据
 - 支持窗口拖动、锁定、记忆位置

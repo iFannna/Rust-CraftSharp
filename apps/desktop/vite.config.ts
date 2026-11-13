@@ -24,7 +24,12 @@ export default defineConfig({
       input: {
         main: resolve(rootDir, "index.html"),
         hud: resolve(rootDir, "hud.html"),
-        menu: resolve(rootDir, "menu.html")
+        menu: resolve(rootDir, "menu.html"),
+        inventory: resolve(rootDir, "inventory.html"),
+        overlay: resolve(rootDir, "overlay.html"),
+        settings: resolve(rootDir, "settings.html"),
+        crosshair: resolve(rootDir, "crosshair.html"),
+        tooltip: resolve(rootDir, "tooltip.html")
       }
     }
   }

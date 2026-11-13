@@ -36,7 +36,10 @@ export interface StatusBarLayout {
   coreLeft: number;
   width: number;
   height: number;
+  /** 状态行单个图标边长，9 MC 像素 */
   iconSize: number;
+  /** 快捷栏与副手槽图标区边长，16 MC 像素 */
+  slotSize: number;
   gap: number;
   verticalGap: number;
   hotbarTop: number;
@@ -84,6 +87,7 @@ export function computeLayout(scale: number, offhand: OffhandConfig = { left: fa
     width: coreWidth + coreLeft * 2,
     height,
     iconSize: icon,
+    slotSize: BASE.slot * scale,
     gap,
     verticalGap,
     hotbarTop,

@@ -1,404 +1,134 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FileNameOverlay } from "./hud/fileNameOverlay";
-import { HotbarInteraction, type HotbarHost } from "./hud/hotbarInteraction";
-import { isPathMissing, loadSlotIcon } from "./hud/iconService";
-import { computeLayout, type OffhandConfig } from "./hud/layout";
+import { useEffect, useState } from "react";
+import { useAppConfig } from "./config/useAppConfig";
+import { findContainerStyle } from "./hud/inventoryStyles";
 import {
-  copyItemPath,
-  copySlot,
-  cutSlot,
-  deleteSlotContent,
-  getClipboard,
-  openItem,
-  pasteInto,
-  renameItem,
-  revealItem,
-  runItemAsAdmin,
-  subscribeClipboard
-} from "./hud/slotActions";
-import { showSlotMenu, type MenuItemSpec } from "./hud/slotMenu";
-import {
-  clearSlot,
-  displayNameOf,
-  getSlotItem,
-  setSlot,
-  slotIdForGlobal,
-  subscribeSlots,
-  swapSlots
-} from "./hud/slotStore";
-import { createStatusBarRenderer, type SlotIcon, type StatusBarModel } from "./hud/statusbar";
+  applyConfiguredVisibility,
+  toggleCrosshair,
+  toggleInventory,
+  toggleSettings,
+  toggleStatusBar
+} from "./windowControls";
 
-const SAMPLE_SLOTS = [
-  "C:\\Windows\\System32\\notepad.exe",
-  "C:\\Windows",
-  "C:\\Windows\\Web\\Wallpaper\\Windows\\img0.jpg",
-  "C:\\Windows\\System32\\shell32.dll",
-  "Z:\\craftsharp-missing\\file.txt"
-];
-
-const EXECUTABLE_EXTENSIONS = [".exe", ".bat", ".cmd", ".msi", ".ps1", ".vbs"];
-
-function isExecutable(path: string): boolean {
-  const lower = path.toLowerCase();
-  return EXECUTABLE_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
-interface Stats {
-  health: number;
-  food: number;
-  air: number;
-  armor: number;
-  absorption: number;
-  exp: number;
-}
+type BusyKey = "statusBar" | "inventory" | "crosshair" | "settings" | null;
 
 export default function App() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fileNameRef = useRef<HTMLDivElement | null>(null);
-  const rendererRef = useRef<((model: StatusBarModel) => void) | null>(null);
-  const interactionRef = useRef<HotbarInteraction | null>(null);
-  const iconsRef = useRef<Array<SlotIcon | null>>(Array(11).fill(null));
-  const offhandRef = useRef<OffhandConfig>({ left: false, right: false });
-  const overlayRef = useRef<FileNameOverlay | null>(null);
-  const scaleRef = useRef(4.5);
-  const statsRef = useRef<Stats>({ health: 20, food: 20, air: 20, armor: 20, absorption: 20, exp: 50 });
+  const config = useAppConfig();
+  const [busy, setBusy] = useState<BusyKey>(null);
 
-  const [scale, setScale] = useState(4.5);
-  const [stats, setStats] = useState<Stats>(statsRef.current);
-  const [pathInput, setPathInput] = useState("");
-  const [offhand, setOffhand] = useState<OffhandConfig>({ left: false, right: false });
-  const [version, setVersion] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  const paint = useCallback(() => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-
-    const interaction = interactionRef.current;
-    const drag = interaction?.state.drag ?? null;
-    const current = statsRef.current;
-
-    renderer({
-      scale: scaleRef.current,
-      offhand: offhandRef.current,
-      health: current.health,
-      maxHealth: 20,
-      food: current.food,
-      maxFood: 20,
-      air: current.air,
-      maxAir: 20,
-      armor: current.armor,
-      maxArmor: 20,
-      absorption: current.absorption,
-      maxAbsorption: 20,
-      exp: current.exp,
-      slotIcons: iconsRef.current,
-      selectedSlot: interaction?.state.selected ?? -1,
-      hoverSlot: interaction?.state.hover ?? -1,
-      drag: drag && drag.icon ? { icon: drag.icon, x: drag.x, y: drag.y } : null,
-      dragSourceSlot: drag?.source
-    });
+  useEffect(() => {
+    void applyConfiguredVisibility().catch(() => undefined);
   }, []);
 
-  const refreshIcons = useCallback(async () => {
-    const icons = await Promise.all(
-      Array.from({ length: 11 }, (_, globalIndex) => {
-        const item = getSlotItem(globalIndex);
-        return item ? loadSlotIcon({ path: item.path }) : Promise.resolve(null);
-      })
-    );
-    iconsRef.current = icons;
-    paint();
-  }, [paint]);
-
-  const buildMenuItems = useCallback(async (globalIndex: number): Promise<MenuItemSpec[]> => {
-    const item = getSlotItem(globalIndex);
-    const hasClipboard = getClipboard() !== null;
-
-    if (!item) {
-      return [{ id: "paste", label: "粘贴", disabled: !hasClipboard }];
+  const run = async (key: Exclude<BusyKey, null>, action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(key);
+    try {
+      await action();
+    } finally {
+      setBusy(null);
     }
-
-    const items: MenuItemSpec[] = [
-      { id: "open", label: "打开" },
-      { id: "reveal", label: "打开文件所在位置" }
-    ];
-
-    if (isExecutable(item.path)) {
-      items.push({ id: "admin", label: "以管理员身份运行" });
-    }
-
-    items.push(
-      { id: "separator-1", label: "", separator: true },
-      { id: "copy-path", label: "复制文件地址" },
-      { id: "cut", label: "剪切" },
-      { id: "copy", label: "复制" },
-      { id: "paste", label: "粘贴", disabled: !hasClipboard },
-      { id: "separator-2", label: "", separator: true },
-      { id: "delete", label: "删除" },
-      { id: "rename", label: "重命名" }
-    );
-
-    return items;
-  }, []);
-
-  const runMenuAction = useCallback(async (action: string, globalIndex: number) => {
-    const slotId = slotIdForGlobal(globalIndex);
-    const item = getSlotItem(globalIndex);
-
-    switch (action) {
-      case "open":
-        if (item) await openItem(slotId, item);
-        break;
-      case "reveal":
-        if (item) await revealItem(item);
-        break;
-      case "admin":
-        if (item) await runItemAsAdmin(item);
-        break;
-      case "copy-path":
-        if (item) await copyItemPath(item);
-        break;
-      case "cut":
-        if (item) await cutSlot(slotId, item);
-        break;
-      case "copy":
-        if (item) await copySlot(slotId, item);
-        break;
-      case "paste":
-        await pasteInto(slotId);
-        break;
-      case "delete":
-        deleteSlotContent(slotId);
-        break;
-      case "rename":
-        if (item) await renameItem(item);
-        break;
-      default:
-        break;
-    }
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const fileName = fileNameRef.current;
-    if (!canvas || !fileName) return;
-
-    let disposed = false;
-    let interaction: HotbarInteraction | null = null;
-
-    void createStatusBarRenderer(canvas)
-      .then((renderer) => {
-        if (disposed) return;
-        rendererRef.current = renderer;
-        overlayRef.current = new FileNameOverlay(fileName, scaleRef.current, "#FFFFFF");
-
-        const overlay = overlayRef.current;
-        const host: HotbarHost = {
-          layout: () => computeLayout(scaleRef.current, offhandRef.current),
-          getItem: (globalIndex) => getSlotItem(globalIndex),
-          getIcon: (globalIndex) => iconsRef.current[globalIndex] ?? null,
-          requestRender: paint,
-          openSlot: (globalIndex) => {
-            const item = getSlotItem(globalIndex);
-            if (item) void openItem(slotIdForGlobal(globalIndex), item);
-          },
-          dropSlot: (globalIndex) => clearSlot(slotIdForGlobal(globalIndex)),
-          swapSlots: (source, target) => swapSlots(slotIdForGlobal(source), slotIdForGlobal(target)),
-          openMenu: (globalIndex, clientX, clientY) => {
-            void (async () => {
-              const items = await buildMenuItems(globalIndex);
-              const action = await showSlotMenu(items, clientX, clientY);
-              if (action) await runMenuAction(action, globalIndex);
-            })();
-          },
-          showFileName: (item) => {
-            if (!item || isPathMissing(item.path)) {
-              overlay.hideImmediately();
-              return;
-            }
-            overlay.show(displayNameOf(item));
-          },
-          clickMode: () => "double",
-          hoverEnabled: () => true
-        };
-
-        interaction = new HotbarInteraction(canvas, host);
-        interaction.attach();
-        interactionRef.current = interaction;
-
-        void refreshIcons();
-      })
-      .catch((reason) => setError(String(reason)));
-
-    return () => {
-      disposed = true;
-      interaction?.destroy();
-      interactionRef.current = null;
-      rendererRef.current = null;
-    };
-  }, [buildMenuItems, paint, refreshIcons, runMenuAction]);
-
-  useEffect(() => {
-    return subscribeSlots(() => {
-      setVersion((current) => current + 1);
-      void refreshIcons();
-    });
-  }, [refreshIcons]);
-
-  useEffect(() => subscribeClipboard(() => setVersion((current) => current + 1)), []);
-
-  useEffect(() => {
-    scaleRef.current = scale;
-    paint();
-  }, [scale, paint, version]);
-
-  useEffect(() => {
-    offhandRef.current = offhand;
-    paint();
-  }, [offhand, paint]);
-
-  const updateStat = (key: keyof Stats, value: number) => {
-    statsRef.current = { ...statsRef.current, [key]: value };
-    setStats(statsRef.current);
-    paint();
   };
 
-  const applyPath = (globalIndex: number, path: string) => {
-    const trimmed = path.trim();
-    if (!trimmed) {
-      clearSlot(slotIdForGlobal(globalIndex));
-      return;
-    }
-    setSlot(slotIdForGlobal(globalIndex), { path: trimmed });
-  };
+  const styleName = findContainerStyle(config.inventory.style).name;
+  const hotkeys = config.hotkeys;
 
   return (
-    <main className="app">
-      <header className="title">
-        <div>
+    <main className="shell">
+      <header className="shell-head">
+        <div className="shell-title">
           <h1>CraftSharp</h1>
-          <p>状态栏 Canvas 渲染基线，使用仓库内原版 MC 纹理与真实文件图标</p>
+          <p>桌面 HUD 与壁纸工具</p>
         </div>
-        <span className="badge">P1 交互联调</span>
+        <span className="version">0.1.0</span>
       </header>
 
-      {error ? <p className="error">{error}</p> : null}
+      <section className="cards">
+        <article className="card">
+          <div className="card-head">
+            <h2>状态栏</h2>
+            <span className={config.statusBar.visible ? "state on" : "state"}>
+              {config.statusBar.visible ? "显示中" : "已隐藏"}
+            </span>
+          </div>
+          <p>生命、饥饿、护甲、经验与快捷栏，支持副手槽、文件名颜色与拖拽交换。</p>
+          <div className="card-foot">
+            <button
+              type="button"
+              onClick={() => void run("statusBar", toggleStatusBar)}
+              disabled={busy !== null}
+            >
+              {config.statusBar.visible ? "隐藏状态栏" : "显示状态栏"}
+            </button>
+            <button type="button" className="ghost" onClick={() => void run("settings", toggleSettings)}>
+              调整外观
+            </button>
+          </div>
+        </article>
 
-      <section className="preview">
-        <canvas ref={canvasRef} role="img" aria-label="HUD 状态栏预览" />
-        <div ref={fileNameRef} />
+        <article className="card">
+          <div className="card-head">
+            <h2>物品栏</h2>
+            <span className={config.inventory.visible ? "state on" : "state"}>
+              {config.inventory.visible ? "打开中" : "已关闭"}
+            </span>
+          </div>
+          <p>当前样式：{styleName}。支持拖拽交换、Shift 批量移动、中键分发与右键菜单。</p>
+          <div className="card-foot">
+            <button
+              type="button"
+              onClick={() => void run("inventory", toggleInventory)}
+              disabled={busy !== null}
+            >
+              {config.inventory.visible ? "关闭物品栏" : "打开物品栏"}
+            </button>
+            <button type="button" className="ghost" onClick={() => void run("settings", toggleSettings)}>
+              更换样式
+            </button>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-head">
+            <h2>准星</h2>
+            <span className={config.hudElements.crosshairVisible ? "state on" : "state"}>
+              {config.hudElements.crosshairVisible ? "显示中" : "已隐藏"}
+            </span>
+          </div>
+          <p>屏幕居中的原版准星，可选攻击指示器，跟随当前缩放比例。</p>
+          <div className="card-foot">
+            <button
+              type="button"
+              onClick={() => void run("crosshair", toggleCrosshair)}
+              disabled={busy !== null}
+            >
+              {config.hudElements.crosshairVisible ? "隐藏准星" : "显示准星"}
+            </button>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-head">
+            <h2>设置</h2>
+            <span className="state">8 个分区</span>
+          </div>
+          <p>系统、外观、状态栏、快捷栏、物品栏、准星、热键与关于。</p>
+          <div className="card-foot">
+            <button type="button" onClick={() => void run("settings", toggleSettings)} disabled={busy !== null}>
+              打开设置
+            </button>
+          </div>
+        </article>
       </section>
 
-      <section className="controls">
-        <label>
-          缩放
-          <select value={scale} onChange={(event) => setScale(Number(event.target.value))}>
-            <option value={4.5}>4.5x</option>
-            <option value={6}>6x</option>
-            <option value={9}>9x</option>
-          </select>
-        </label>
-
-        {(
-          [
-            ["health", "生命"],
-            ["food", "饥饿"],
-            ["air", "空气"],
-            ["armor", "护甲"],
-            ["absorption", "伤害吸收"],
-            ["exp", "经验"]
-          ] as Array<[keyof Stats, string]>
-        ).map(([key, label]) => (
-          <label key={key}>
-            {label} {stats[key]}
-            <input
-              type="range"
-              min={0}
-              max={key === "exp" ? 100 : 20}
-              step={key === "air" ? 2 : 1}
-              value={stats[key]}
-              onChange={(event) => updateStat(key, Number(event.target.value))}
-            />
-          </label>
-        ))}
-      </section>
-
-      <section className="icon-source">
-        <div className="icon-source-head">
-          <h2>快捷栏格子</h2>
-          <span className="inline">
-            <label>
-              <input
-                type="checkbox"
-                checked={offhand.left}
-                onChange={(event) => setOffhand((current) => ({ ...current, left: event.target.checked }))}
-              />
-              左副手
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={offhand.right}
-                onChange={(event) => setOffhand((current) => ({ ...current, right: event.target.checked }))}
-              />
-              右副手
-            </label>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              SAMPLE_SLOTS.forEach((path, index) => setSlot(slotIdForGlobal(index + 2), { path }));
-            }}
-          >
-            填入示例
-          </button>
+      <footer className="shell-foot">
+        <div className="hotkey-row">
+          <span>{hotkeys.settings} 设置</span>
+          <span>{hotkeys.statusBar} 状态栏</span>
+          <span>{hotkeys.inventory} 物品栏</span>
+          <span>{hotkeys.crosshair} 准星</span>
         </div>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            applyPath(8, pathInput);
-          }}
-        >
-          <input
-            type="text"
-            value={pathInput}
-            spellCheck={false}
-            placeholder="文件、文件夹或 .lnk 绝对路径，写入第 9 格"
-            onChange={(event) => setPathInput(event.target.value)}
-          />
-          <button type="submit" disabled={!pathInput.trim()}>
-            写入第 9 格
-          </button>
-        </form>
-
-        <ol className="slot-paths">
-          {Array.from({ length: 11 }, (_, globalIndex) => {
-            const item = getSlotItem(globalIndex);
-            const label = globalIndex === 0 ? "左" : globalIndex === 1 ? "右" : String(globalIndex - 1);
-            return (
-              <li key={globalIndex}>
-                <span className="slot-index">{label}</span>
-                <span className="slot-path" title={item?.path ?? "空格子"}>
-                  {item?.path ?? "空格子"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => clearSlot(slotIdForGlobal(globalIndex))}
-                  disabled={!item}
-                >
-                  清除
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-
-        <p className="hint">
-          滚轮切换选中，1-9 选择，Enter 打开，Q 丢弃；长按 150ms 后拖动交换，右键打开菜单
-        </p>
-      </section>
+        <p>Tauri 2 + Rust + React 重写，HUD 使用仓库内原版 Minecraft 纹理</p>
+      </footer>
     </main>
   );
 }

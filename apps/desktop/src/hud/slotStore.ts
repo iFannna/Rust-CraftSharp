@@ -6,8 +6,10 @@ export interface SlotItem {
 }
 
 export type SlotMap = Record<string, SlotItem>;
+export type StyleSlotMap = Record<string, SlotMap>;
 
 const STORAGE_KEY = "craftsharp.slots.v1";
+const STYLE_STORAGE_KEY = "craftsharp.styleSlots.v1";
 
 export function hotbarSlotId(index: number): string {
   return `hotbar_${index}`;
@@ -30,11 +32,11 @@ export function hotbarIndexFromGlobal(slotIndex: number): number {
 }
 
 let slots: SlotMap = loadSlots();
+let styleSlots: StyleSlotMap = loadStyleSlots();
 const listeners = new Set<() => void>();
 
-function loadSlots(): SlotMap {
+function parseSlotMap(raw: string | null): SlotMap {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return {};
@@ -52,9 +54,35 @@ function loadSlots(): SlotMap {
   }
 }
 
+function loadSlots(): SlotMap {
+  return parseSlotMap(localStorage.getItem(STORAGE_KEY));
+}
+
+function loadStyleSlots(): StyleSlotMap {
+  try {
+    const raw = localStorage.getItem(STYLE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const result: StyleSlotMap = {};
+    for (const [style, value] of Object.entries(parsed as Record<string, unknown>)) {
+      result[style] = parseSlotMap(JSON.stringify(value));
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/** 共享数据读 flat 表，独立数据读当前样式的表，对应原 SlotDataService 的两套存储 */
+export function slotMapFor(style: string, shared: boolean): SlotMap {
+  return shared ? slots : styleSlots[style] ?? {};
+}
+
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+    localStorage.setItem(STYLE_STORAGE_KEY, JSON.stringify(styleSlots));
   } catch {
     // 存储不可用时保持内存态，HUD 仍可运行
   }
@@ -65,60 +93,131 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
+function updateMap(style: string, shared: boolean, mutation: (map: SlotMap) => SlotMap | null) {
+  const current = slotMapFor(style, shared);
+  const next = mutation(current);
+  if (!next) return;
+
+  if (shared) {
+    slots = next;
+  } else {
+    styleSlots = { ...styleSlots, [style]: next };
+  }
+
+  notify();
+}
+
 export function getSlot(slotId: string): SlotItem | undefined {
   return slots[slotId];
 }
 
 export function setSlot(slotId: string, item: SlotItem) {
-  slots = { ...slots, [slotId]: item };
-  notify();
+  updateMap("inventory.png", true, (map) => ({ ...map, [slotId]: item }));
 }
 
 export function clearSlot(slotId: string) {
-  if (!slots[slotId]) return;
-  const next = { ...slots };
-  delete next[slotId];
-  slots = next;
-  notify();
+  updateMap("inventory.png", true, (map) => {
+    if (!map[slotId]) return null;
+    const next = { ...map };
+    delete next[slotId];
+    return next;
+  });
 }
 
 /** 所有使用该路径的格子一起清空，对应原 SlotFileValidator.ClearAllSlotsByPath */
 export function clearSlotsByPath(path: string) {
-  const next: SlotMap = {};
-  let changed = false;
-  for (const [key, item] of Object.entries(slots)) {
-    if (item.path === path) {
-      changed = true;
-      continue;
+  updateMap("inventory.png", true, (map) => {
+    const next: SlotMap = {};
+    let changed = false;
+    for (const [key, item] of Object.entries(map)) {
+      if (item.path === path) {
+        changed = true;
+        continue;
+      }
+      next[key] = item;
     }
-    next[key] = item;
-  }
-  if (!changed) return;
-  slots = next;
-  notify();
+    return changed ? next : null;
+  });
 }
 
 /** 文件重命名后同步所有使用该路径的格子 */
 export function replaceSlotsPath(from: string, to: string) {
-  let changed = false;
-  const next: SlotMap = {};
-  for (const [key, item] of Object.entries(slots)) {
-    if (item.path === from) {
-      changed = true;
-      next[key] = { ...item, path: to };
-    } else {
-      next[key] = item;
+  updateMap("inventory.png", true, (map) => {
+    let changed = false;
+    const next: SlotMap = {};
+    for (const [key, item] of Object.entries(map)) {
+      if (item.path === from) {
+        changed = true;
+        next[key] = { ...item, path: to };
+      } else {
+        next[key] = item;
+      }
     }
-  }
-  if (!changed) return;
-  slots = next;
-  notify();
+    return changed ? next : null;
+  });
 }
 
 export function swapSlots(fromId: string, toId: string) {
-  const from = slots[fromId];
-  const to = slots[toId];
-  const next = { ...slots };
+  updateMap("inventory.png", true, (map) => swapInMap(map, fromId, toId));
+}
+
+/** 按样式与共享模式取格子，对应原 SlotDataService.GetSlot(slotId, style, shared) */
+export function getSlotFor(slotId: string, style: string, shared: boolean): SlotItem | undefined {
+  return slotMapFor(style, shared)[slotId];
+}
+
+export function setSlotFor(slotId: string, item: SlotItem, style: string, shared: boolean) {
+  updateMap(style, shared, (map) => ({ ...map, [slotId]: item }));
+}
+
+export function clearSlotFor(slotId: string, style: string, shared: boolean) {
+  updateMap(style, shared, (map) => {
+    if (!map[slotId]) return null;
+    const next = { ...map };
+    delete next[slotId];
+    return next;
+  });
+}
+
+export function clearSlotsByPathFor(path: string, style: string, shared: boolean) {
+  updateMap(style, shared, (map) => {
+    const next: SlotMap = {};
+    let changed = false;
+    for (const [key, item] of Object.entries(map)) {
+      if (item.path === path) {
+        changed = true;
+        continue;
+      }
+      next[key] = item;
+    }
+    return changed ? next : null;
+  });
+}
+
+export function replaceSlotsPathFor(from: string, to: string, style: string, shared: boolean) {
+  updateMap(style, shared, (map) => {
+    let changed = false;
+    const next: SlotMap = {};
+    for (const [key, item] of Object.entries(map)) {
+      if (item.path === from) {
+        changed = true;
+        next[key] = { ...item, path: to };
+      } else {
+        next[key] = item;
+      }
+    }
+    return changed ? next : null;
+  });
+}
+
+export function swapSlotsFor(fromId: string, toId: string, style: string, shared: boolean) {
+  updateMap(style, shared, (map) => swapInMap(map, fromId, toId));
+}
+
+function swapInMap(map: SlotMap, fromId: string, toId: string): SlotMap {
+  const from = map[fromId];
+  const to = map[toId];
+  const next = { ...map };
 
   if (to) next[fromId] = to;
   else delete next[fromId];
@@ -126,8 +225,7 @@ export function swapSlots(fromId: string, toId: string) {
   if (from) next[toId] = from;
   else delete next[toId];
 
-  slots = next;
-  notify();
+  return next;
 }
 
 export function subscribeSlots(listener: () => void): () => void {
@@ -137,8 +235,14 @@ export function subscribeSlots(listener: () => void): () => void {
 
 // 多窗口共享同一份 localStorage，另一个窗口写入后同步刷新
 window.addEventListener("storage", (event) => {
-  if (event.key !== STORAGE_KEY) return;
-  slots = loadSlots();
+  if (event.key === STORAGE_KEY) {
+    slots = loadSlots();
+  } else if (event.key === STYLE_STORAGE_KEY) {
+    styleSlots = loadStyleSlots();
+  } else {
+    return;
+  }
+
   for (const listener of listeners) listener();
 });
 

@@ -3,6 +3,22 @@
 mod icons;
 mod platform;
 
+#[cfg(windows)]
+mod hotkeys;
+
+#[tauri::command]
+fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        hotkeys::register(&app, actions)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, actions);
+        Vec::new()
+    }
+}
+
 /// 获取格子图标，返回 Data URL；路径无效返回 None。
 #[tauri::command]
 fn slot_icon(path: String, show_target_icon: bool) -> Option<String> {
@@ -54,7 +70,8 @@ fn main() {
             path_exists,
             copy_to_clipboard,
             read_clipboard_paths,
-            rename_path
+            rename_path,
+            register_hotkeys
         ])
         .run(tauri::generate_context!())
         .expect("error while running CraftSharp");

@@ -38,7 +38,7 @@ export class FileNameOverlay {
   constructor(
     private readonly element: HTMLElement,
     private readonly scale: number,
-    private readonly colorSetting: string
+    private colorSetting: string
   ) {
     injectFont();
     const depth = 0.75 * scale;
@@ -57,6 +57,11 @@ export class FileNameOverlay {
       whiteSpace: "nowrap"
     });
     element.style.setProperty("--shadow-depth", `${depth}px`);
+  }
+
+  /** 设置面板切换文件名颜色后即时生效 */
+  setColorSetting(colorSetting: string): void {
+    this.colorSetting = colorSetting;
   }
 
   show(fileName: string): void {

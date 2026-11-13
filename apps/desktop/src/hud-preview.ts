@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { HUD_ASSETS, loadImage } from "./hud/assets";
@@ -6,20 +5,9 @@ import { FileNameOverlay } from "./hud/fileNameOverlay";
 import { HotbarInteraction, type HotbarHost } from "./hud/hotbarInteraction";
 import { computeLayout, slotIndexAtPoint, type OffhandConfig } from "./hud/layout";
 import { isPathMissing, loadSlotIcon } from "./hud/iconService";
-import {
-  copyItemPath,
-  cutSlot,
-  copySlot,
-  deleteSlotContent,
-  getClipboard,
-  openItem,
-  pasteInto,
-  renameItem,
-  revealItem,
-  runItemAsAdmin,
-  subscribeClipboard
-} from "./hud/slotActions";
-import { showSlotMenu, type MenuItemSpec } from "./hud/slotMenu";
+import { SHARED_SCOPE, getClipboard, openItem, subscribeClipboard } from "./hud/slotActions";
+import { buildSlotMenuItems, runSlotMenuAction } from "./hud/slotMenuActions";
+import { showSlotMenu } from "./hud/slotMenu";
 import {
   clearSlot,
   displayNameOf,
@@ -30,8 +18,7 @@ import {
   swapSlots
 } from "./hud/slotStore";
 import { createStatusBarRenderer, type SlotIcon, type StatusBarModel } from "./hud/statusbar";
-
-const EXECUTABLE_EXTENSIONS = [".exe", ".bat", ".cmd", ".msi", ".ps1", ".vbs"];
+import { getConfig, subscribeConfig, updateConfig } from "./config/appConfig";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -39,12 +26,19 @@ const scale = Number.isFinite(forcedScale) && forcedScale > 0
   ? forcedScale
   : Math.max(1, (window.screen.width / 2560) * 6);
 
-// 副手槽显隐暂时由 URL 参数控制，等设置面板接入后改读配置
-const offhandParam = params.get("offhand") ?? "";
-const offhand: OffhandConfig = {
-  left: offhandParam === "both" || offhandParam === "left",
-  right: offhandParam === "both" || offhandParam === "right"
-};
+// URL 参数只用于单独预览某个副手场景，正式显隐读设置
+const offhandParam = params.get("offhand");
+let hotbarConfig = getConfig().hotbar;
+
+function currentOffhand(): OffhandConfig {
+  if (offhandParam !== null) {
+    return {
+      left: offhandParam === "both" || offhandParam === "left",
+      right: offhandParam === "both" || offhandParam === "right"
+    };
+  }
+  return { left: hotbarConfig.leftOffhand, right: hotbarConfig.rightOffhand };
+}
 
 const canvas = document.querySelector<HTMLCanvasElement>("#hud");
 const fileNameElement = document.querySelector<HTMLElement>("#file-name");
@@ -54,7 +48,7 @@ if (!canvas || !fileNameElement) {
 }
 
 const renderer = await createStatusBarRenderer(canvas);
-const overlay = new FileNameOverlay(fileNameElement, scale, "#FFFFFF");
+const overlay = new FileNameOverlay(fileNameElement, scale, hotbarConfig.fileNameColor);
 
 const baseModel: StatusBarModel = {
   scale,
@@ -76,7 +70,7 @@ let icons: Array<SlotIcon | null> = Array(11).fill(null);
 let cutSlotId: string | null = null;
 let iconGeneration = 0;
 
-const layout = () => computeLayout(scale, offhand);
+const layout = () => computeLayout(scale, currentOffhand());
 
 function render() {
   const drag = interaction.state.drag;
@@ -85,7 +79,7 @@ function render() {
   renderer({
     ...baseModel,
     slotIcons: icons,
-    offhand,
+    offhand: currentOffhand(),
     selectedSlot: interaction.state.selected,
     hoverSlot: interaction.state.hover,
     dimmedSlot: cutIndex >= 0 ? cutIndex + 2 : undefined,
@@ -101,7 +95,7 @@ function hotbarIndexOfSlotId(slotId: string): number {
 
 async function refreshIcons() {
   const generation = ++iconGeneration;
-  const showTargetIcon = false;
+  const showTargetIcon = hotbarConfig.showTargetIcon;
 
   const next = await Promise.all(
     Array.from({ length: 11 }, (_, globalIndex) => {
@@ -115,78 +109,8 @@ async function refreshIcons() {
   render();
 }
 
-function isExecutable(path: string): boolean {
-  const lower = path.toLowerCase();
-  return EXECUTABLE_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
-async function buildMenuItems(globalIndex: number): Promise<MenuItemSpec[]> {
-  const item = getSlotItem(globalIndex);
-  const clipboardPaths = await invoke<string[]>("read_clipboard_paths").catch(() => []);
-  const hasClipboard = getClipboard() !== null || clipboardPaths.length > 0;
-
-  if (!item) {
-    return [{ id: "paste", label: "粘贴", disabled: !hasClipboard }];
-  }
-
-  const items: MenuItemSpec[] = [
-    { id: "open", label: "打开" },
-    { id: "reveal", label: "打开文件所在位置" }
-  ];
-
-  if (isExecutable(item.path)) {
-    items.push({ id: "admin", label: "以管理员身份运行" });
-  }
-
-  items.push(
-    { id: "separator-1", label: "", separator: true },
-    { id: "copy-path", label: "复制文件地址" },
-    { id: "cut", label: "剪切" },
-    { id: "copy", label: "复制" },
-    { id: "paste", label: "粘贴", disabled: !hasClipboard },
-    { id: "separator-2", label: "", separator: true },
-    { id: "delete", label: "删除" },
-    { id: "rename", label: "重命名" }
-  );
-
-  return items;
-}
-
 async function runMenuAction(action: string, globalIndex: number): Promise<void> {
-  const slotId = slotIdForGlobal(globalIndex);
-  const item = getSlotItem(globalIndex);
-
-  switch (action) {
-    case "open":
-      if (item) await openItem(slotId, item);
-      break;
-    case "reveal":
-      if (item) await revealItem(item);
-      break;
-    case "admin":
-      if (item) await runItemAsAdmin(item);
-      break;
-    case "copy-path":
-      if (item) await copyItemPath(item);
-      break;
-    case "cut":
-      if (item) await cutSlot(slotId, item);
-      break;
-    case "copy":
-      if (item) await copySlot(slotId, item);
-      break;
-    case "paste":
-      await pasteInto(slotId);
-      break;
-    case "delete":
-      deleteSlotContent(slotId);
-      break;
-    case "rename":
-      if (item) await renameItem(item);
-      break;
-    default:
-      break;
-  }
+  await runSlotMenuAction(action, slotIdForGlobal(globalIndex), getSlotItem(globalIndex), SHARED_SCOPE);
 }
 
 const host: HotbarHost = {
@@ -202,7 +126,7 @@ const host: HotbarHost = {
   swapSlots: (source, target) => swapSlots(slotIdForGlobal(source), slotIdForGlobal(target)),
   openMenu: (globalIndex, clientX, clientY) => {
     void (async () => {
-      const items = await buildMenuItems(globalIndex);
+      const items = await buildSlotMenuItems(getSlotItem(globalIndex), SHARED_SCOPE);
       const action = await showSlotMenu(items, clientX, clientY);
       if (action) await runMenuAction(action, globalIndex);
     })();
@@ -214,8 +138,8 @@ const host: HotbarHost = {
     }
     overlay.show(displayNameOf(item));
   },
-  clickMode: () => "double",
-  hoverEnabled: () => true
+  clickMode: () => hotbarConfig.clickMode,
+  hoverEnabled: () => hotbarConfig.hoverEffect
 };
 
 const interaction = new HotbarInteraction(canvas, host);
@@ -239,14 +163,47 @@ const tauriWindow = (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAU
 
 if (tauriWindow) {
   const currentWindow = getCurrentWindow();
-  const width = canvas.width;
-  const height = canvas.height;
-  const screen = window.screen as Screen & { availTop?: number };
-  const x = Math.round((screen.availWidth - width) / 2);
-  const y = Math.round((screen.availTop ?? 0) + screen.availHeight - height);
 
-  await currentWindow.setSize(new LogicalSize(width, height));
-  await currentWindow.setPosition(new LogicalPosition(x, y));
+  const applyWindowGeometry = async () => {
+    const current = layout();
+    await currentWindow.setSize(new LogicalSize(Math.ceil(current.width), Math.ceil(current.height)));
+
+    const saved = getConfig().statusBar.position;
+    if (saved) {
+      await currentWindow.setPosition(new LogicalPosition(saved.x, saved.y));
+      return;
+    }
+
+    const screen = window.screen as Screen & { availTop?: number };
+    const x = Math.round((screen.availWidth - current.width) / 2);
+    const y = Math.round((screen.availTop ?? 0) + screen.availHeight - current.height);
+    await currentWindow.setPosition(new LogicalPosition(x, y));
+  };
+
+  await applyWindowGeometry();
+
+  // 未锁定时按住空白区域拖动状态栏
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || getConfig().statusBar.locked) return;
+    const rect = canvas.getBoundingClientRect();
+    if (slotIndexAtPoint(layout(), event.clientX - rect.left, event.clientY - rect.top) >= 0) return;
+    void currentWindow.startDragging();
+  });
+
+  await currentWindow.onMoved(({ payload }) => {
+    void (async () => {
+      const factor = await currentWindow.scaleFactor();
+      const point = payload as { x: number; y: number };
+      updateConfig({ statusBar: { position: { x: Math.round(point.x / factor), y: Math.round(point.y / factor) } } });
+    })();
+  });
+
+  subscribeConfig(() => {
+    hotbarConfig = getConfig().hotbar;
+    overlay.setColorSetting(hotbarConfig.fileNameColor);
+    void applyWindowGeometry();
+    void refreshIcons();
+  });
 
   await currentWindow.onDragDropEvent((event) => {
     if (event.payload.type !== "drop") return;

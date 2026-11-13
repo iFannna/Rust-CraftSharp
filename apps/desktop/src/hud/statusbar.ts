@@ -1,4 +1,5 @@
 import { loadHudImages, type HudImages } from "./assets";
+import { draw, drawUniform } from "./canvasDraw";
 import {
   BASE,
   computeLayout,
@@ -59,7 +60,7 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
   const layout = computeLayout(model.scale, offhand);
   const coreLeft = layout.coreLeft;
   const coreRight = coreLeft + layout.coreWidth;
-  const { coreWidth, hotbarTop, hotbarHeight, expTop, expHeight, healthTop, absorptionTop, armorTop, foodTop, airTop, iconSize, gap } = layout;
+  const { coreWidth, hotbarTop, hotbarHeight, expTop, expHeight, healthTop, absorptionTop, armorTop, foodTop, airTop, iconSize, slotSize, gap } = layout;
 
   canvas.width = Math.ceil(layout.width);
   canvas.height = Math.ceil(layout.height);
@@ -103,7 +104,8 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
 
   if (model.slotIcons) {
     for (let index = 0; index < 9; index += 1) {
-      drawSlotIcon(ctx, model, index + 2, slotIconRect(layout, index).left, slotIconRect(layout, index).top, layout.iconSize);
+      const rect = slotIconRect(layout, index);
+      drawSlotIcon(ctx, model, index + 2, rect.left, rect.top, slotSize);
     }
 
     if (offhand.left) {
@@ -126,7 +128,7 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
     const size = BASE.slot * model.scale;
     ctx.imageSmoothingEnabled = model.drag.icon.smooth;
     ctx.imageSmoothingQuality = model.drag.icon.smooth ? "high" : "low";
-    draw(ctx, model.drag.icon.image, model.drag.x - size / 2, model.drag.y - size / 2, size, size);
+    drawUniform(ctx, model.drag.icon.image, model.drag.x - size / 2, model.drag.y - size / 2, size, size);
     ctx.imageSmoothingEnabled = false;
   }
 }
@@ -146,7 +148,7 @@ function drawSlotIcon(
   ctx.imageSmoothingEnabled = slot.smooth;
   ctx.imageSmoothingQuality = slot.smooth ? "high" : "low";
   if (model.dimmedSlot === globalIndex) ctx.globalAlpha = 0.5;
-  draw(ctx, slot.image, left, top, size, size);
+  drawUniform(ctx, slot.image, left, top, size, size);
   ctx.globalAlpha = 1;
   ctx.imageSmoothingEnabled = false;
 }
@@ -209,22 +211,6 @@ function drawAirRow(
       draw(ctx, empty, x, top, icon, icon);
     }
   }
-}
-
-function draw(
-  ctx: CanvasRenderingContext2D,
-  image: CanvasImageSource,
-  x: number,
-  y: number,
-  width: number,
-  height: number
-) {
-  const left = Math.round(x);
-  const top = Math.round(y);
-  const right = Math.round(x + width);
-  const bottom = Math.round(y + height);
-
-  ctx.drawImage(image, left, top, Math.max(1, right - left), Math.max(1, bottom - top));
 }
 
 /** 右副手槽贴图水平翻转，保持像素对齐 */

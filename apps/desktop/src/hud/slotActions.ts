@@ -1,12 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
-  clearSlot,
-  clearSlotsByPath,
+  clearSlotFor,
+  clearSlotsByPathFor,
   displayNameOf,
-  replaceSlotsPath,
-  setSlot,
+  replaceSlotsPathFor,
+  setSlotFor,
   type SlotItem
 } from "./slotStore";
+
+/** 格子数据作用域：共享模式忽略 style，独立模式按样式隔离 */
+export interface SlotScope {
+  style: string;
+  shared: boolean;
+}
+
+export const SHARED_SCOPE: SlotScope = { style: "inventory.png", shared: true };
 
 interface ClipboardState {
   slotId: string;
@@ -46,13 +54,13 @@ export async function cutSlot(slotId: string, item: SlotItem): Promise<void> {
 }
 
 /** 粘贴到目标格子：优先内部剪贴板，其次 Windows 剪贴板中的文件 */
-export async function pasteInto(slotId: string): Promise<boolean> {
+export async function pasteInto(slotId: string, scope: SlotScope = SHARED_SCOPE): Promise<boolean> {
   if (clipboard) {
     const { slotId: sourceSlotId, item, cut } = clipboard;
-    setSlot(slotId, { path: item.path, displayName: item.displayName });
+    setSlotFor(slotId, { path: item.path, displayName: item.displayName }, scope.style, scope.shared);
 
     if (cut) {
-      if (sourceSlotId !== slotId) clearSlot(sourceSlotId);
+      if (sourceSlotId !== slotId) clearSlotFor(sourceSlotId, scope.style, scope.shared);
       setClipboard(null);
     }
     return true;
@@ -62,7 +70,7 @@ export async function pasteInto(slotId: string): Promise<boolean> {
   const path = paths.find((candidate) => candidate.trim().length > 0);
   if (!path) return false;
 
-  setSlot(slotId, { path });
+  setSlotFor(slotId, { path }, scope.style, scope.shared);
   return true;
 }
 
@@ -71,31 +79,31 @@ export async function pathExists(path: string): Promise<boolean> {
 }
 
 /** 文件丢失确认：返回是否清除所有使用该路径的格子 */
-export function confirmMissingFile(path: string): boolean {
+export function confirmMissingFile(path: string, scope: SlotScope = SHARED_SCOPE): boolean {
   const confirmed = window.confirm(`文件不存在：\n${path}\n\n是否清除所有使用这个路径的格子？`);
-  if (confirmed) clearSlotsByPath(path);
+  if (confirmed) clearSlotsByPathFor(path, scope.style, scope.shared);
   return confirmed;
 }
 
-export async function openItem(slotId: string, item: SlotItem): Promise<void> {
+export async function openItem(slotId: string, item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<void> {
   if (!(await pathExists(item.path))) {
-    confirmMissingFile(item.path);
+    confirmMissingFile(item.path, scope);
     return;
   }
   await invoke("open_path", { path: item.path }).catch((error) => console.warn("打开失败", error));
 }
 
-export async function revealItem(item: SlotItem): Promise<void> {
+export async function revealItem(item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<void> {
   if (!(await pathExists(item.path))) {
-    confirmMissingFile(item.path);
+    confirmMissingFile(item.path, scope);
     return;
   }
   await invoke("reveal_path", { path: item.path }).catch((error) => console.warn("定位失败", error));
 }
 
-export async function runItemAsAdmin(item: SlotItem): Promise<void> {
+export async function runItemAsAdmin(item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<void> {
   if (!(await pathExists(item.path))) {
-    confirmMissingFile(item.path);
+    confirmMissingFile(item.path, scope);
     return;
   }
   await invoke("run_path_as_admin", { path: item.path }).catch((error) => console.warn("管理员运行失败", error));
@@ -105,11 +113,11 @@ export async function copyItemPath(item: SlotItem): Promise<void> {
   await invoke("copy_to_clipboard", { text: item.path }).catch(() => undefined);
 }
 
-export function deleteSlotContent(slotId: string): void {
-  clearSlot(slotId);
+export function deleteSlotContent(slotId: string, scope: SlotScope = SHARED_SCOPE): void {
+  clearSlotFor(slotId, scope.style, scope.shared);
 }
 
-export async function renameItem(item: SlotItem): Promise<boolean> {
+export async function renameItem(item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<boolean> {
   const name = displayNameOf(item);
   const dotIndex = name.lastIndexOf(".");
   const stem = dotIndex > 0 ? name.slice(0, dotIndex) : name;
@@ -136,6 +144,6 @@ export async function renameItem(item: SlotItem): Promise<boolean> {
     return false;
   }
 
-  replaceSlotsPath(item.path, nextPath);
+  replaceSlotsPathFor(item.path, nextPath, scope.style, scope.shared);
   return true;
 }
