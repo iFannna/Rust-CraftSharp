@@ -7,6 +7,18 @@ param(
 
 Add-Type -AssemblyName System.Drawing
 
+# 先声明每显示器 DPI 感知，否则窗口坐标是虚拟化后的，截图会被裁切
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class DpiAwareness
+{
+    [DllImport("user32.dll")]
+    public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+}
+"@
+[DpiAwareness]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
+
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;

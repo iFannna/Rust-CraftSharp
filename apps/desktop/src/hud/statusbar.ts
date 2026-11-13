@@ -1,5 +1,13 @@
 import { loadHudImages, type HudImages } from "./assets";
-import { BASE, computeLayout, selectionRect, slotIconRect } from "./layout";
+import {
+  BASE,
+  computeLayout,
+  offhandBoxRect,
+  offhandIconRect,
+  selectionRect,
+  slotIconRect,
+  type OffhandConfig
+} from "./layout";
 
 export interface SlotIcon {
   image: CanvasImageSource;
@@ -15,7 +23,9 @@ export interface DragIcon {
 
 export interface StatusBarModel {
   scale: number;
+  /** 按全局格子索引排列：0 左副手、1 右副手、2-10 主快捷栏 */
   slotIcons?: Array<SlotIcon | null>;
+  offhand?: OffhandConfig;
   health: number;
   maxHealth: number;
   food: number;
@@ -45,7 +55,10 @@ export async function createStatusBarRenderer(canvas: HTMLCanvasElement): Promis
 }
 
 function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: StatusBarModel) {
-  const layout = computeLayout(model.scale);
+  const offhand = model.offhand ?? { left: false, right: false };
+  const layout = computeLayout(model.scale, offhand);
+  const coreLeft = layout.coreLeft;
+  const coreRight = coreLeft + layout.coreWidth;
   const { coreWidth, hotbarTop, hotbarHeight, expTop, expHeight, healthTop, absorptionTop, armorTop, foodTop, airTop, iconSize, gap } = layout;
 
   canvas.width = Math.ceil(layout.width);
@@ -60,38 +73,46 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
   ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  drawRow(ctx, images.heartContainer, images.heartFull, images.heartHalf, 0, healthTop, iconSize, gap, model.health, model.maxHealth, coreWidth, false);
-  drawRow(ctx, images.heartContainer, images.absorbingFull, images.absorbingHalf, 0, absorptionTop, iconSize, gap, model.absorption, model.maxAbsorption, coreWidth, false);
-  drawRow(ctx, images.armorEmpty, images.armorFull, images.armorHalf, 0, armorTop, iconSize, gap, model.armor, model.maxArmor, coreWidth, false);
-  drawRow(ctx, images.foodEmpty, images.foodFull, images.foodHalf, 0, foodTop, iconSize, gap, model.food, model.maxFood, coreWidth, true);
-  drawAirRow(ctx, images.airEmpty, images.air, airTop, iconSize, gap, model.air, model.maxAir, coreWidth);
+  if (offhand.left) {
+    const box = offhandBoxRect(layout, 0);
+    draw(ctx, images.hotbarOffhand, box.left, box.top, box.width, box.height);
+  }
+  if (offhand.right) {
+    const box = offhandBoxRect(layout, 1);
+    drawMirrored(ctx, images.hotbarOffhand, box.left, box.top, box.width, box.height);
+  }
 
-  draw(ctx, images.expBackground, 0, expTop, coreWidth, expHeight);
+  drawRow(ctx, images.heartContainer, images.heartFull, images.heartHalf, coreLeft, coreRight, healthTop, iconSize, gap, model.health, model.maxHealth, false);
+  drawRow(ctx, images.heartContainer, images.absorbingFull, images.absorbingHalf, coreLeft, coreRight, absorptionTop, iconSize, gap, model.absorption, model.maxAbsorption, false);
+  drawRow(ctx, images.armorEmpty, images.armorFull, images.armorHalf, coreLeft, coreRight, armorTop, iconSize, gap, model.armor, model.maxArmor, false);
+  drawRow(ctx, images.foodEmpty, images.foodFull, images.foodHalf, coreLeft, coreRight, foodTop, iconSize, gap, model.food, model.maxFood, true);
+  drawAirRow(ctx, images.airEmpty, images.air, coreLeft, coreRight, airTop, iconSize, gap, model.air, model.maxAir);
+
+  draw(ctx, images.expBackground, coreLeft, expTop, coreWidth, expHeight);
   const progress = Math.max(0, Math.min(1, model.exp / 100));
   if (progress > 0) {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, expTop, coreWidth * progress, expHeight);
+    ctx.rect(coreLeft, expTop, coreWidth * progress, expHeight);
     ctx.clip();
-    draw(ctx, images.expProgress, 0, expTop, coreWidth, expHeight);
+    draw(ctx, images.expProgress, coreLeft, expTop, coreWidth, expHeight);
     ctx.restore();
   }
 
-  draw(ctx, images.hotbar, 0, hotbarTop, coreWidth, hotbarHeight);
+  draw(ctx, images.hotbar, coreLeft, hotbarTop, coreWidth, hotbarHeight);
 
   if (model.slotIcons) {
     for (let index = 0; index < 9; index += 1) {
-      const slot = model.slotIcons[index];
-      if (!slot) continue;
-      if (model.drag && model.dragSourceSlot === index + 2) continue;
+      drawSlotIcon(ctx, model, index + 2, slotIconRect(layout, index).left, slotIconRect(layout, index).top, layout.iconSize);
+    }
 
-      const rect = slotIconRect(layout, index);
-      ctx.imageSmoothingEnabled = slot.smooth;
-      ctx.imageSmoothingQuality = slot.smooth ? "high" : "low";
-      if (model.dimmedSlot === index + 2) ctx.globalAlpha = 0.5;
-      draw(ctx, slot.image, rect.left, rect.top, rect.width, rect.height);
-      ctx.globalAlpha = 1;
-      ctx.imageSmoothingEnabled = false;
+    if (offhand.left) {
+      const rect = offhandIconRect(layout, 0);
+      drawSlotIcon(ctx, model, 0, rect.left, rect.top, rect.width);
+    }
+    if (offhand.right) {
+      const rect = offhandIconRect(layout, 1);
+      drawSlotIcon(ctx, model, 1, rect.left, rect.top, rect.width);
     }
   }
 
@@ -110,18 +131,38 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
   }
 }
 
+function drawSlotIcon(
+  ctx: CanvasRenderingContext2D,
+  model: StatusBarModel,
+  globalIndex: number,
+  left: number,
+  top: number,
+  size: number
+) {
+  const slot = model.slotIcons?.[globalIndex];
+  if (!slot) return;
+  if (model.drag && model.dragSourceSlot === globalIndex) return;
+
+  ctx.imageSmoothingEnabled = slot.smooth;
+  ctx.imageSmoothingQuality = slot.smooth ? "high" : "low";
+  if (model.dimmedSlot === globalIndex) ctx.globalAlpha = 0.5;
+  draw(ctx, slot.image, left, top, size, size);
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = false;
+}
+
 function drawRow(
   ctx: CanvasRenderingContext2D,
   background: CanvasImageSource,
   full: CanvasImageSource,
   half: CanvasImageSource,
   left: number,
+  right: number,
   top: number,
   icon: number,
   gap: number,
   value: number,
   max: number,
-  coreWidth: number,
   rightAligned: boolean
 ) {
   const slots = Math.max(0, Math.floor(max / 2));
@@ -131,7 +172,7 @@ function drawRow(
 
   for (let index = 0; index < slots; index += 1) {
     const x = rightAligned
-      ? coreWidth - (index + 1) * step + gap
+      ? right - (index + 1) * step + gap
       : left + index * step;
 
     draw(ctx, background, x, top, icon, icon);
@@ -148,19 +189,20 @@ function drawAirRow(
   ctx: CanvasRenderingContext2D,
   empty: CanvasImageSource,
   full: CanvasImageSource,
+  left: number,
+  right: number,
   top: number,
   icon: number,
   gap: number,
   value: number,
-  max: number,
-  coreWidth: number
+  max: number
 ) {
   const slots = Math.max(0, Math.floor(max / 2));
   const fullCount = Math.floor(value / 2);
   const step = icon + gap;
 
   for (let index = 0; index < slots; index += 1) {
-    const x = coreWidth - (index + 1) * step + gap;
+    const x = right - (index + 1) * step + gap;
     if (index < fullCount) {
       draw(ctx, full, x, top, icon, icon);
     } else {
@@ -183,4 +225,27 @@ function draw(
   const bottom = Math.round(y + height);
 
   ctx.drawImage(image, left, top, Math.max(1, right - left), Math.max(1, bottom - top));
+}
+
+/** 右副手槽贴图水平翻转，保持像素对齐 */
+function drawMirrored(
+  ctx: CanvasRenderingContext2D,
+  image: CanvasImageSource,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) {
+  const left = Math.round(x);
+  const top = Math.round(y);
+  const right = Math.round(x + width);
+  const bottom = Math.round(y + height);
+  const drawWidth = Math.max(1, right - left);
+  const drawHeight = Math.max(1, bottom - top);
+
+  ctx.save();
+  ctx.translate(left + drawWidth, top);
+  ctx.scale(-1, 1);
+  ctx.drawImage(image, 0, 0, drawWidth, drawHeight);
+  ctx.restore();
 }

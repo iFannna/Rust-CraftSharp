@@ -1,4 +1,5 @@
 import hotbarUrl from "../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar.png";
+import hotbarOffhandUrl from "../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar_offhand.png";
 import hotbarSelectionUrl from "../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar_selection.png";
 import heartContainerUrl from "../../../../assets/minecraft/textures/gui/sprites/hud/heart/container.png";
 import heartFullUrl from "../../../../assets/minecraft/textures/gui/sprites/hud/heart/full.png";
@@ -19,6 +20,7 @@ import barrierUrl from "../../../../assets/minecraft/textures/item/item/barrier.
 
 export const HUD_ASSETS = {
   hotbar: hotbarUrl,
+  hotbarOffhand: hotbarOffhandUrl,
   hotbarSelection: hotbarSelectionUrl,
   heartContainer: heartContainerUrl,
   heartFull: heartFullUrl,

@@ -38,6 +38,7 @@ interface PressState {
   slot: number;
   startX: number;
   startY: number;
+  startedAt: number;
   timer: number;
   ready: boolean;
   cancelled: boolean;
@@ -117,6 +118,7 @@ export class HotbarInteraction {
       slot,
       startX: event.clientX,
       startY: event.clientY,
+      startedAt: performance.now(),
       timer,
       ready: false,
       cancelled: false
@@ -139,8 +141,10 @@ export class HotbarInteraction {
     if (!press) return;
 
     const distance = Math.hypot(event.clientX - press.startX, event.clientY - press.startY);
+    // 后台窗口会节流定时器，用按下时间兜底判断长按
+    const ready = press.ready || performance.now() - press.startedAt >= LONG_PRESS_MS;
 
-    if (press.ready) {
+    if (ready) {
       if (distance > DRAG_THRESHOLD) this.startDrag(event);
       return;
     }
@@ -162,7 +166,7 @@ export class HotbarInteraction {
       const { source, target } = this.state.drag;
       this.state.drag = null;
 
-      if (target >= 2 && source !== target) {
+      if (target >= 0 && source !== target) {
         this.host.swapSlots(source, target);
       }
 

@@ -8,10 +8,24 @@
     "logicalWidth": 1920,
     "scaleFactor": 4.5,
     "renderWidth": 1080,
-    "renderHeight": 918.4000000000001,
+    "renderHeight": 918,
     "imageWidth": 819,
-    "imageHeight": 266,
+    "imageHeight": 265,
     "file": "1920x1080-100-statusbar.png"
+  },
+  {
+    "scenario": "1920x1080-100",
+    "element": "statusbar-offhand",
+    "physicalWidth": 1920,
+    "physicalHeight": 1080,
+    "dpiScale": 1,
+    "logicalWidth": 1920,
+    "scaleFactor": 4.5,
+    "renderWidth": 1080,
+    "renderHeight": 918,
+    "imageWidth": 1080,
+    "imageHeight": 265,
+    "file": "1920x1080-100-statusbar-offhand.png"
   },
   {
     "scenario": "1920x1080-100",
@@ -36,7 +50,7 @@
     "logicalWidth": 1920,
     "scaleFactor": 4.5,
     "renderWidth": 792,
-    "renderHeight": 747.2,
+    "renderHeight": 747.3333333333333,
     "imageWidth": 792,
     "imageHeight": 747,
     "file": "1920x1080-100-inventory.png"
@@ -64,10 +78,24 @@
     "logicalWidth": 2560,
     "scaleFactor": 6,
     "renderWidth": 1440,
-    "renderHeight": 1169.6000000000001,
+    "renderHeight": 1084,
     "imageWidth": 1092,
     "imageHeight": 354,
     "file": "2560x1440-100-statusbar.png"
+  },
+  {
+    "scenario": "2560x1440-100",
+    "element": "statusbar-offhand",
+    "physicalWidth": 2560,
+    "physicalHeight": 1440,
+    "dpiScale": 1,
+    "logicalWidth": 2560,
+    "scaleFactor": 6,
+    "renderWidth": 1440,
+    "renderHeight": 1084,
+    "imageWidth": 1440,
+    "imageHeight": 354,
+    "file": "2560x1440-100-statusbar-offhand.png"
   },
   {
     "scenario": "2560x1440-100",
@@ -127,6 +155,20 @@
   },
   {
     "scenario": "2560x1440-150",
+    "element": "statusbar-offhand",
+    "physicalWidth": 2560,
+    "physicalHeight": 1440,
+    "dpiScale": 1.5,
+    "logicalWidth": 1706.6666666666667,
+    "scaleFactor": 4,
+    "renderWidth": 960,
+    "renderHeight": 816,
+    "imageWidth": 1440,
+    "imageHeight": 354,
+    "file": "2560x1440-150-statusbar-offhand.png"
+  },
+  {
+    "scenario": "2560x1440-150",
     "element": "bossbar",
     "physicalWidth": 2560,
     "physicalHeight": 1440,
@@ -161,7 +203,7 @@
     "dpiScale": 1.5,
     "logicalWidth": 1706.6666666666667,
     "scaleFactor": 4,
-    "renderWidth": 1706.6666666666667,
+    "renderWidth": 1706.6666666666665,
     "renderHeight": 960,
     "imageWidth": 96,
     "imageHeight": 102,
@@ -175,11 +217,25 @@
     "dpiScale": 1,
     "logicalWidth": 3840,
     "scaleFactor": 9,
-    "renderWidth": 2160,
-    "renderHeight": 1169.6000000000001,
+    "renderWidth": 1724,
+    "renderHeight": 1084,
     "imageWidth": 1638,
     "imageHeight": 531,
     "file": "3840x2160-100-statusbar.png"
+  },
+  {
+    "scenario": "3840x2160-100",
+    "element": "statusbar-offhand",
+    "physicalWidth": 3840,
+    "physicalHeight": 2160,
+    "dpiScale": 1,
+    "logicalWidth": 3840,
+    "scaleFactor": 9,
+    "renderWidth": 1724,
+    "renderHeight": 1084,
+    "imageWidth": 1638,
+    "imageHeight": 531,
+    "file": "3840x2160-100-statusbar-offhand.png"
   },
   {
     "scenario": "3840x2160-100",
@@ -204,9 +260,9 @@
     "logicalWidth": 3840,
     "scaleFactor": 9,
     "renderWidth": 1584,
-    "renderHeight": 1169.6000000000001,
+    "renderHeight": 1084,
     "imageWidth": 1584,
-    "imageHeight": 1170,
+    "imageHeight": 1084,
     "file": "3840x2160-100-inventory.png"
   },
   {
@@ -220,7 +276,7 @@
     "renderWidth": 3840,
     "renderHeight": 2160,
     "imageWidth": 144,
-    "imageHeight": 153,
+    "imageHeight": 154,
     "file": "3840x2160-100-crosshair.png"
   }
 ]

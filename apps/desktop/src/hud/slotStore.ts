@@ -13,6 +13,17 @@ export function hotbarSlotId(index: number): string {
   return `hotbar_${index}`;
 }
 
+/** 全局格子索引 0 左副手、1 右副手、2-10 主快捷栏 */
+export function slotIdForGlobal(globalIndex: number): string {
+  if (globalIndex === 0) return "hotbar_left_offhand";
+  if (globalIndex === 1) return "hotbar_right_offhand";
+  return hotbarSlotId(globalIndex - 2);
+}
+
+export function getSlotItem(globalIndex: number): SlotItem | undefined {
+  return slots[slotIdForGlobal(globalIndex)];
+}
+
 /** 全局格子索引 2-10 对应 hotbar_0-hotbar_8 */
 export function hotbarIndexFromGlobal(slotIndex: number): number {
   return slotIndex - 2;
@@ -56,10 +67,6 @@ function notify() {
 
 export function getSlot(slotId: string): SlotItem | undefined {
   return slots[slotId];
-}
-
-export function getHotbarItem(index: number): SlotItem | undefined {
-  return slots[hotbarSlotId(index)];
 }
 
 export function setSlot(slotId: string, item: SlotItem) {

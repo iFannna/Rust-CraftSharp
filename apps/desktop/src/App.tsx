@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FileNameOverlay } from "./hud/fileNameOverlay";
 import { HotbarInteraction, type HotbarHost } from "./hud/hotbarInteraction";
 import { isPathMissing, loadSlotIcon } from "./hud/iconService";
-import { computeLayout } from "./hud/layout";
+import { computeLayout, type OffhandConfig } from "./hud/layout";
 import {
   copyItemPath,
   copySlot,
@@ -20,9 +20,9 @@ import { showSlotMenu, type MenuItemSpec } from "./hud/slotMenu";
 import {
   clearSlot,
   displayNameOf,
-  getHotbarItem,
-  hotbarSlotId,
+  getSlotItem,
   setSlot,
+  slotIdForGlobal,
   subscribeSlots,
   swapSlots
 } from "./hud/slotStore";
@@ -57,7 +57,8 @@ export default function App() {
   const fileNameRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<((model: StatusBarModel) => void) | null>(null);
   const interactionRef = useRef<HotbarInteraction | null>(null);
-  const iconsRef = useRef<Array<SlotIcon | null>>(Array(9).fill(null));
+  const iconsRef = useRef<Array<SlotIcon | null>>(Array(11).fill(null));
+  const offhandRef = useRef<OffhandConfig>({ left: false, right: false });
   const overlayRef = useRef<FileNameOverlay | null>(null);
   const scaleRef = useRef(4.5);
   const statsRef = useRef<Stats>({ health: 20, food: 20, air: 20, armor: 20, absorption: 20, exp: 50 });
@@ -65,6 +66,7 @@ export default function App() {
   const [scale, setScale] = useState(4.5);
   const [stats, setStats] = useState<Stats>(statsRef.current);
   const [pathInput, setPathInput] = useState("");
+  const [offhand, setOffhand] = useState<OffhandConfig>({ left: false, right: false });
   const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +80,7 @@ export default function App() {
 
     renderer({
       scale: scaleRef.current,
+      offhand: offhandRef.current,
       health: current.health,
       maxHealth: 20,
       food: current.food,
@@ -99,8 +102,8 @@ export default function App() {
 
   const refreshIcons = useCallback(async () => {
     const icons = await Promise.all(
-      Array.from({ length: 9 }, (_, index) => {
-        const item = getHotbarItem(index);
+      Array.from({ length: 11 }, (_, globalIndex) => {
+        const item = getSlotItem(globalIndex);
         return item ? loadSlotIcon({ path: item.path }) : Promise.resolve(null);
       })
     );
@@ -109,7 +112,7 @@ export default function App() {
   }, [paint]);
 
   const buildMenuItems = useCallback(async (globalIndex: number): Promise<MenuItemSpec[]> => {
-    const item = getHotbarItem(globalIndex - 2);
+    const item = getSlotItem(globalIndex);
     const hasClipboard = getClipboard() !== null;
 
     if (!item) {
@@ -140,9 +143,8 @@ export default function App() {
   }, []);
 
   const runMenuAction = useCallback(async (action: string, globalIndex: number) => {
-    const index = globalIndex - 2;
-    const slotId = hotbarSlotId(index);
-    const item = getHotbarItem(index);
+    const slotId = slotIdForGlobal(globalIndex);
+    const item = getSlotItem(globalIndex);
 
     switch (action) {
       case "open":
@@ -193,16 +195,16 @@ export default function App() {
 
         const overlay = overlayRef.current;
         const host: HotbarHost = {
-          layout: () => computeLayout(scaleRef.current),
-          getItem: (globalIndex) => getHotbarItem(globalIndex - 2),
-          getIcon: (globalIndex) => iconsRef.current[globalIndex - 2] ?? null,
+          layout: () => computeLayout(scaleRef.current, offhandRef.current),
+          getItem: (globalIndex) => getSlotItem(globalIndex),
+          getIcon: (globalIndex) => iconsRef.current[globalIndex] ?? null,
           requestRender: paint,
           openSlot: (globalIndex) => {
-            const item = getHotbarItem(globalIndex - 2);
-            if (item) void openItem(hotbarSlotId(globalIndex - 2), item);
+            const item = getSlotItem(globalIndex);
+            if (item) void openItem(slotIdForGlobal(globalIndex), item);
           },
-          dropSlot: (globalIndex) => clearSlot(hotbarSlotId(globalIndex - 2)),
-          swapSlots: (source, target) => swapSlots(hotbarSlotId(source - 2), hotbarSlotId(target - 2)),
+          dropSlot: (globalIndex) => clearSlot(slotIdForGlobal(globalIndex)),
+          swapSlots: (source, target) => swapSlots(slotIdForGlobal(source), slotIdForGlobal(target)),
           openMenu: (globalIndex, clientX, clientY) => {
             void (async () => {
               const items = await buildMenuItems(globalIndex);
@@ -251,19 +253,24 @@ export default function App() {
     paint();
   }, [scale, paint, version]);
 
+  useEffect(() => {
+    offhandRef.current = offhand;
+    paint();
+  }, [offhand, paint]);
+
   const updateStat = (key: keyof Stats, value: number) => {
     statsRef.current = { ...statsRef.current, [key]: value };
     setStats(statsRef.current);
     paint();
   };
 
-  const applyPath = (index: number, path: string) => {
+  const applyPath = (globalIndex: number, path: string) => {
     const trimmed = path.trim();
     if (!trimmed) {
-      clearSlot(hotbarSlotId(index));
+      clearSlot(slotIdForGlobal(globalIndex));
       return;
     }
-    setSlot(hotbarSlotId(index), { path: trimmed });
+    setSlot(slotIdForGlobal(globalIndex), { path: trimmed });
   };
 
   return (
@@ -320,10 +327,28 @@ export default function App() {
       <section className="icon-source">
         <div className="icon-source-head">
           <h2>快捷栏格子</h2>
+          <span className="inline">
+            <label>
+              <input
+                type="checkbox"
+                checked={offhand.left}
+                onChange={(event) => setOffhand((current) => ({ ...current, left: event.target.checked }))}
+              />
+              左副手
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={offhand.right}
+                onChange={(event) => setOffhand((current) => ({ ...current, right: event.target.checked }))}
+              />
+              右副手
+            </label>
+          </span>
           <button
             type="button"
             onClick={() => {
-              SAMPLE_SLOTS.forEach((path, index) => setSlot(hotbarSlotId(index), { path }));
+              SAMPLE_SLOTS.forEach((path, index) => setSlot(slotIdForGlobal(index + 2), { path }));
             }}
           >
             填入示例
@@ -349,15 +374,20 @@ export default function App() {
         </form>
 
         <ol className="slot-paths">
-          {Array.from({ length: 9 }, (_, index) => {
-            const item = getHotbarItem(index);
+          {Array.from({ length: 11 }, (_, globalIndex) => {
+            const item = getSlotItem(globalIndex);
+            const label = globalIndex === 0 ? "左" : globalIndex === 1 ? "右" : String(globalIndex - 1);
             return (
-              <li key={index}>
-                <span className="slot-index">{index + 1}</span>
+              <li key={globalIndex}>
+                <span className="slot-index">{label}</span>
                 <span className="slot-path" title={item?.path ?? "空格子"}>
                   {item?.path ?? "空格子"}
                 </span>
-                <button type="button" onClick={() => clearSlot(hotbarSlotId(index))} disabled={!item}>
+                <button
+                  type="button"
+                  onClick={() => clearSlot(slotIdForGlobal(globalIndex))}
+                  disabled={!item}
+                >
                   清除
                 </button>
               </li>

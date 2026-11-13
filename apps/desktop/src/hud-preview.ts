@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { HUD_ASSETS, loadImage } from "./hud/assets";
 import { FileNameOverlay } from "./hud/fileNameOverlay";
 import { HotbarInteraction, type HotbarHost } from "./hud/hotbarInteraction";
-import { computeLayout, slotIndexAtPoint } from "./hud/layout";
+import { computeLayout, slotIndexAtPoint, type OffhandConfig } from "./hud/layout";
 import { isPathMissing, loadSlotIcon } from "./hud/iconService";
 import {
   copyItemPath,
@@ -23,9 +23,9 @@ import { showSlotMenu, type MenuItemSpec } from "./hud/slotMenu";
 import {
   clearSlot,
   displayNameOf,
-  getHotbarItem,
-  hotbarSlotId,
+  getSlotItem,
   setSlot,
+  slotIdForGlobal,
   subscribeSlots,
   swapSlots
 } from "./hud/slotStore";
@@ -38,6 +38,13 @@ const forcedScale = Number(params.get("scale"));
 const scale = Number.isFinite(forcedScale) && forcedScale > 0
   ? forcedScale
   : Math.max(1, (window.screen.width / 2560) * 6);
+
+// 副手槽显隐暂时由 URL 参数控制，等设置面板接入后改读配置
+const offhandParam = params.get("offhand") ?? "";
+const offhand: OffhandConfig = {
+  left: offhandParam === "both" || offhandParam === "left",
+  right: offhandParam === "both" || offhandParam === "right"
+};
 
 const canvas = document.querySelector<HTMLCanvasElement>("#hud");
 const fileNameElement = document.querySelector<HTMLElement>("#file-name");
@@ -65,11 +72,11 @@ const baseModel: StatusBarModel = {
   selectedSlot: -1
 };
 
-let icons: Array<SlotIcon | null> = Array(9).fill(null);
+let icons: Array<SlotIcon | null> = Array(11).fill(null);
 let cutSlotId: string | null = null;
 let iconGeneration = 0;
 
-const layout = () => computeLayout(scale);
+const layout = () => computeLayout(scale, offhand);
 
 function render() {
   const drag = interaction.state.drag;
@@ -78,6 +85,7 @@ function render() {
   renderer({
     ...baseModel,
     slotIcons: icons,
+    offhand,
     selectedSlot: interaction.state.selected,
     hoverSlot: interaction.state.hover,
     dimmedSlot: cutIndex >= 0 ? cutIndex + 2 : undefined,
@@ -96,8 +104,8 @@ async function refreshIcons() {
   const showTargetIcon = false;
 
   const next = await Promise.all(
-    Array.from({ length: 9 }, (_, index) => {
-      const item = getHotbarItem(index);
+    Array.from({ length: 11 }, (_, globalIndex) => {
+      const item = getSlotItem(globalIndex);
       return item ? loadSlotIcon({ path: item.path, showTargetIcon }) : Promise.resolve(null);
     })
   );
@@ -113,7 +121,7 @@ function isExecutable(path: string): boolean {
 }
 
 async function buildMenuItems(globalIndex: number): Promise<MenuItemSpec[]> {
-  const item = getHotbarItem(globalIndex - 2);
+  const item = getSlotItem(globalIndex);
   const clipboardPaths = await invoke<string[]>("read_clipboard_paths").catch(() => []);
   const hasClipboard = getClipboard() !== null || clipboardPaths.length > 0;
 
@@ -145,9 +153,8 @@ async function buildMenuItems(globalIndex: number): Promise<MenuItemSpec[]> {
 }
 
 async function runMenuAction(action: string, globalIndex: number): Promise<void> {
-  const slotIndex = globalIndex - 2;
-  const slotId = hotbarSlotId(slotIndex);
-  const item = getHotbarItem(slotIndex);
+  const slotId = slotIdForGlobal(globalIndex);
+  const item = getSlotItem(globalIndex);
 
   switch (action) {
     case "open":
@@ -184,15 +191,15 @@ async function runMenuAction(action: string, globalIndex: number): Promise<void>
 
 const host: HotbarHost = {
   layout,
-  getItem: (globalIndex) => getHotbarItem(globalIndex - 2),
-  getIcon: (globalIndex) => icons[globalIndex - 2] ?? null,
+  getItem: (globalIndex) => getSlotItem(globalIndex),
+  getIcon: (globalIndex) => icons[globalIndex] ?? null,
   requestRender: render,
   openSlot: (globalIndex) => {
-    const item = getHotbarItem(globalIndex - 2);
-    if (item) void openItem(hotbarSlotId(globalIndex - 2), item);
+    const item = getSlotItem(globalIndex);
+    if (item) void openItem(slotIdForGlobal(globalIndex), item);
   },
-  dropSlot: (globalIndex) => clearSlot(hotbarSlotId(globalIndex - 2)),
-  swapSlots: (source, target) => swapSlots(hotbarSlotId(source - 2), hotbarSlotId(target - 2)),
+  dropSlot: (globalIndex) => clearSlot(slotIdForGlobal(globalIndex)),
+  swapSlots: (source, target) => swapSlots(slotIdForGlobal(source), slotIdForGlobal(target)),
   openMenu: (globalIndex, clientX, clientY) => {
     void (async () => {
       const items = await buildMenuItems(globalIndex);
@@ -250,8 +257,8 @@ if (tauriWindow) {
     const index = slotIndexAtPoint(layout(), dropX, dropY);
     const path = event.payload.paths[0];
 
-    if (index >= 2 && path) {
-      setSlot(hotbarSlotId(index - 2), { path });
+    if (index >= 0 && path) {
+      setSlot(slotIdForGlobal(index), { path });
     }
   });
 } else {
@@ -261,6 +268,6 @@ if (tauriWindow) {
     loadImage(HUD_ASSETS.foodFull),
     loadImage(HUD_ASSETS.barrier)
   ]);
-  icons = [heart, food, barrier].map((image) => ({ image, smooth: true })).concat(Array(6).fill(null));
+  icons = [heart, food, barrier].map((image) => ({ image, smooth: true })).concat(Array(8).fill(null));
   render();
 }
