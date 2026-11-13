@@ -23,7 +23,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(rootDir, "index.html"),
-        hud: resolve(rootDir, "hud.html")
+        hud: resolve(rootDir, "hud.html"),
+        menu: resolve(rootDir, "menu.html")
       }
     }
   }

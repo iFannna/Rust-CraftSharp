@@ -1,8 +1,16 @@
 import { loadHudImages, type HudImages } from "./assets";
+import { BASE, computeLayout, selectionRect, slotIconRect } from "./layout";
 
 export interface SlotIcon {
   image: CanvasImageSource;
   smooth: boolean;
+}
+
+export interface DragIcon {
+  icon: SlotIcon;
+  /** 画布内坐标，图标中心 */
+  x: number;
+  y: number;
 }
 
 export interface StatusBarModel {
@@ -19,23 +27,15 @@ export interface StatusBarModel {
   absorption: number;
   maxAbsorption: number;
   exp: number;
+  /** 全局格子索引，-1 表示无选中 */
   selectedSlot: number;
+  hoverSlot?: number;
+  /** 剪切态格子，图标半透明 */
+  dimmedSlot?: number;
+  drag?: DragIcon | null;
+  /** 拖动时隐藏源格子的图标 */
+  dragSourceSlot?: number;
 }
-
-const BASE = {
-  coreWidth: 182,
-  hotbarHeight: 22,
-  expHeight: 5,
-  expMargin: 2,
-  icon: 9,
-  iconGap: -1,
-  verticalGap: 1,
-  margin: 3,
-  slot: 16,
-  slotSpacing: 4,
-  selectionWidth: 24,
-  selectionHeight: 23
-} as const;
 
 export type StatusBarRenderer = (model: StatusBarModel) => void;
 
@@ -45,84 +45,68 @@ export async function createStatusBarRenderer(canvas: HTMLCanvasElement): Promis
 }
 
 function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: StatusBarModel) {
-  const s = model.scale;
-  const icon = BASE.icon * s;
-  const gap = BASE.iconGap * s;
-  const verticalGap = BASE.verticalGap * s;
-  const coreWidth = BASE.coreWidth * s;
-  const hotbarHeight = BASE.hotbarHeight * s;
-  const expHeight = BASE.expHeight * s;
-  const expMargin = BASE.expMargin * s;
+  const layout = computeLayout(model.scale);
+  const { coreWidth, hotbarTop, hotbarHeight, expTop, expHeight, healthTop, absorptionTop, armorTop, foodTop, airTop, iconSize, gap } = layout;
 
-  const leftRows = 3;
-  const rightRows = 2;
-  const statusRows = Math.max(leftRows, rightRows);
-  const statusHeight = statusRows * icon + (statusRows - 1) * verticalGap;
-  const width = coreWidth;
-  const height = hotbarHeight + expMargin + expHeight + verticalGap + statusHeight;
-
-  canvas.width = Math.ceil(width);
-  canvas.height = Math.ceil(height);
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
+  canvas.width = Math.ceil(layout.width);
+  canvas.height = Math.ceil(layout.height);
+  canvas.style.width = `${layout.width}px`;
+  canvas.style.height = `${layout.height}px`;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("无法创建 Canvas 2D 上下文");
 
   ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const hotbarY = height - hotbarHeight;
-  const expY = hotbarY - expMargin - expHeight;
-  const statusBottom = expY - verticalGap;
+  drawRow(ctx, images.heartContainer, images.heartFull, images.heartHalf, 0, healthTop, iconSize, gap, model.health, model.maxHealth, coreWidth, false);
+  drawRow(ctx, images.heartContainer, images.absorbingFull, images.absorbingHalf, 0, absorptionTop, iconSize, gap, model.absorption, model.maxAbsorption, coreWidth, false);
+  drawRow(ctx, images.armorEmpty, images.armorFull, images.armorHalf, 0, armorTop, iconSize, gap, model.armor, model.maxArmor, coreWidth, false);
+  drawRow(ctx, images.foodEmpty, images.foodFull, images.foodHalf, 0, foodTop, iconSize, gap, model.food, model.maxFood, coreWidth, true);
+  drawAirRow(ctx, images.airEmpty, images.air, airTop, iconSize, gap, model.air, model.maxAir, coreWidth);
 
-  const healthY = statusBottom - icon;
-  const absorptionY = healthY - verticalGap - icon;
-  const armorY = absorptionY - verticalGap - icon;
-  const foodY = statusBottom - icon;
-  const airY = foodY - verticalGap - icon;
-
-  drawRow(ctx, images.heartContainer, images.heartFull, images.heartHalf, 0, healthY, icon, gap, model.health, model.maxHealth, coreWidth, false);
-  drawRow(ctx, images.heartContainer, images.absorbingFull, images.absorbingHalf, 0, absorptionY, icon, gap, model.absorption, model.maxAbsorption, coreWidth, false);
-  drawRow(ctx, images.armorEmpty, images.armorFull, images.armorHalf, 0, armorY, icon, gap, model.armor, model.maxArmor, coreWidth, false);
-  drawRow(ctx, images.foodEmpty, images.foodFull, images.foodHalf, 0, foodY, icon, gap, model.food, model.maxFood, coreWidth, true);
-  drawAirRow(ctx, images.airEmpty, images.air, airY, icon, gap, model.air, model.maxAir, coreWidth);
-
-  draw(ctx, images.expBackground, 0, expY, coreWidth, expHeight);
+  draw(ctx, images.expBackground, 0, expTop, coreWidth, expHeight);
   const progress = Math.max(0, Math.min(1, model.exp / 100));
   if (progress > 0) {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, expY, coreWidth * progress, expHeight);
+    ctx.rect(0, expTop, coreWidth * progress, expHeight);
     ctx.clip();
-    draw(ctx, images.expProgress, 0, expY, coreWidth, expHeight);
+    draw(ctx, images.expProgress, 0, expTop, coreWidth, expHeight);
     ctx.restore();
   }
 
-  draw(ctx, images.hotbar, 0, hotbarY, coreWidth, hotbarHeight);
+  draw(ctx, images.hotbar, 0, hotbarTop, coreWidth, hotbarHeight);
 
   if (model.slotIcons) {
-    const iconSize = BASE.slot * s;
-    const iconTop = hotbarY + BASE.margin * s;
-
     for (let index = 0; index < 9; index += 1) {
-      const icon = model.slotIcons[index];
-      if (!icon) continue;
+      const slot = model.slotIcons[index];
+      if (!slot) continue;
+      if (model.drag && model.dragSourceSlot === index + 2) continue;
 
-      const iconLeft = (BASE.margin + index * (BASE.slot + BASE.slotSpacing)) * s;
-      ctx.imageSmoothingEnabled = icon.smooth;
-      ctx.imageSmoothingQuality = icon.smooth ? "high" : "low";
-      draw(ctx, icon.image, iconLeft, iconTop, iconSize, iconSize);
+      const rect = slotIconRect(layout, index);
+      ctx.imageSmoothingEnabled = slot.smooth;
+      ctx.imageSmoothingQuality = slot.smooth ? "high" : "low";
+      if (model.dimmedSlot === index + 2) ctx.globalAlpha = 0.5;
+      draw(ctx, slot.image, rect.left, rect.top, rect.width, rect.height);
+      ctx.globalAlpha = 1;
       ctx.imageSmoothingEnabled = false;
     }
   }
 
-  if (model.selectedSlot >= 0 && model.selectedSlot < 9) {
-    const columnWidth = (BASE.slot + BASE.slotSpacing) * s;
-    const canvasMargin = (BASE.margin - 2) * s;
-    const left = canvasMargin + model.selectedSlot * columnWidth + (columnWidth - BASE.selectionWidth * s) / 2;
-    const top = hotbarY - s;
-    draw(ctx, images.hotbarSelection, left, top, BASE.selectionWidth * s, BASE.selectionHeight * s);
+  const selectionSlot = model.selectedSlot >= 2 ? model.selectedSlot : model.hoverSlot ?? -1;
+  if (selectionSlot >= 2 && selectionSlot <= 10) {
+    const rect = selectionRect(layout, selectionSlot - 2);
+    draw(ctx, images.hotbarSelection, rect.left, rect.top, rect.width, rect.height);
+  }
+
+  if (model.drag) {
+    const size = BASE.slot * model.scale;
+    ctx.imageSmoothingEnabled = model.drag.icon.smooth;
+    ctx.imageSmoothingQuality = model.drag.icon.smooth ? "high" : "low";
+    draw(ctx, model.drag.icon.image, model.drag.x - size / 2, model.drag.y - size / 2, size, size);
+    ctx.imageSmoothingEnabled = false;
   }
 }
 

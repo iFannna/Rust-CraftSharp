@@ -1,98 +1,269 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { hasIconBackend, invalidateSlotIcons, loadSlotIcon } from "./hud/iconService";
-import { loadMockSlotIcons } from "./hud/mockIcons";
-import { createStatusBarRenderer, type StatusBarModel } from "./hud/statusbar";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FileNameOverlay } from "./hud/fileNameOverlay";
+import { HotbarInteraction, type HotbarHost } from "./hud/hotbarInteraction";
+import { isPathMissing, loadSlotIcon } from "./hud/iconService";
+import { computeLayout } from "./hud/layout";
+import {
+  copyItemPath,
+  copySlot,
+  cutSlot,
+  deleteSlotContent,
+  getClipboard,
+  openItem,
+  pasteInto,
+  renameItem,
+  revealItem,
+  runItemAsAdmin,
+  subscribeClipboard
+} from "./hud/slotActions";
+import { showSlotMenu, type MenuItemSpec } from "./hud/slotMenu";
+import {
+  clearSlot,
+  displayNameOf,
+  getHotbarItem,
+  hotbarSlotId,
+  setSlot,
+  subscribeSlots,
+  swapSlots
+} from "./hud/slotStore";
+import { createStatusBarRenderer, type SlotIcon, type StatusBarModel } from "./hud/statusbar";
 
-const initialModel: StatusBarModel = {
-  scale: 4.5,
-  health: 20,
-  maxHealth: 20,
-  food: 20,
-  maxFood: 20,
-  air: 20,
-  maxAir: 20,
-  armor: 20,
-  maxArmor: 20,
-  absorption: 20,
-  maxAbsorption: 20,
-  exp: 50,
-  selectedSlot: -1
-};
-
-/** 覆盖可执行文件、文件夹、图片、系统模块和文件丢失五种情况 */
-const sampleSlotPaths: Array<string | null> = [
+const SAMPLE_SLOTS = [
   "C:\\Windows\\System32\\notepad.exe",
   "C:\\Windows",
   "C:\\Windows\\Web\\Wallpaper\\Windows\\img0.jpg",
   "C:\\Windows\\System32\\shell32.dll",
-  "Z:\\craftsharp-missing\\file.txt",
-  null,
-  null,
-  null,
-  null
+  "Z:\\craftsharp-missing\\file.txt"
 ];
+
+const EXECUTABLE_EXTENSIONS = [".exe", ".bat", ".cmd", ".msi", ".ps1", ".vbs"];
+
+function isExecutable(path: string): boolean {
+  const lower = path.toLowerCase();
+  return EXECUTABLE_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+interface Stats {
+  health: number;
+  food: number;
+  air: number;
+  armor: number;
+  absorption: number;
+  exp: number;
+}
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [draw, setDraw] = useState<((model: StatusBarModel) => void) | null>(null);
-  const [model, setModel] = useState<StatusBarModel>(initialModel);
+  const fileNameRef = useRef<HTMLDivElement | null>(null);
+  const rendererRef = useRef<((model: StatusBarModel) => void) | null>(null);
+  const interactionRef = useRef<HotbarInteraction | null>(null);
+  const iconsRef = useRef<Array<SlotIcon | null>>(Array(9).fill(null));
+  const overlayRef = useRef<FileNameOverlay | null>(null);
+  const scaleRef = useRef(4.5);
+  const statsRef = useRef<Stats>({ health: 20, food: 20, air: 20, armor: 20, absorption: 20, exp: 50 });
+
+  const [scale, setScale] = useState(4.5);
+  const [stats, setStats] = useState<Stats>(statsRef.current);
+  const [pathInput, setPathInput] = useState("");
+  const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [slotPaths, setSlotPaths] = useState<Array<string | null>>(sampleSlotPaths);
-  const [showTargetIcon, setShowTargetIcon] = useState(false);
-  const [customPath, setCustomPath] = useState("");
+
+  const paint = useCallback(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+
+    const interaction = interactionRef.current;
+    const drag = interaction?.state.drag ?? null;
+    const current = statsRef.current;
+
+    renderer({
+      scale: scaleRef.current,
+      health: current.health,
+      maxHealth: 20,
+      food: current.food,
+      maxFood: 20,
+      air: current.air,
+      maxAir: 20,
+      armor: current.armor,
+      maxArmor: 20,
+      absorption: current.absorption,
+      maxAbsorption: 20,
+      exp: current.exp,
+      slotIcons: iconsRef.current,
+      selectedSlot: interaction?.state.selected ?? -1,
+      hoverSlot: interaction?.state.hover ?? -1,
+      drag: drag && drag.icon ? { icon: drag.icon, x: drag.x, y: drag.y } : null,
+      dragSourceSlot: drag?.source
+    });
+  }, []);
+
+  const refreshIcons = useCallback(async () => {
+    const icons = await Promise.all(
+      Array.from({ length: 9 }, (_, index) => {
+        const item = getHotbarItem(index);
+        return item ? loadSlotIcon({ path: item.path }) : Promise.resolve(null);
+      })
+    );
+    iconsRef.current = icons;
+    paint();
+  }, [paint]);
+
+  const buildMenuItems = useCallback(async (globalIndex: number): Promise<MenuItemSpec[]> => {
+    const item = getHotbarItem(globalIndex - 2);
+    const hasClipboard = getClipboard() !== null;
+
+    if (!item) {
+      return [{ id: "paste", label: "粘贴", disabled: !hasClipboard }];
+    }
+
+    const items: MenuItemSpec[] = [
+      { id: "open", label: "打开" },
+      { id: "reveal", label: "打开文件所在位置" }
+    ];
+
+    if (isExecutable(item.path)) {
+      items.push({ id: "admin", label: "以管理员身份运行" });
+    }
+
+    items.push(
+      { id: "separator-1", label: "", separator: true },
+      { id: "copy-path", label: "复制文件地址" },
+      { id: "cut", label: "剪切" },
+      { id: "copy", label: "复制" },
+      { id: "paste", label: "粘贴", disabled: !hasClipboard },
+      { id: "separator-2", label: "", separator: true },
+      { id: "delete", label: "删除" },
+      { id: "rename", label: "重命名" }
+    );
+
+    return items;
+  }, []);
+
+  const runMenuAction = useCallback(async (action: string, globalIndex: number) => {
+    const index = globalIndex - 2;
+    const slotId = hotbarSlotId(index);
+    const item = getHotbarItem(index);
+
+    switch (action) {
+      case "open":
+        if (item) await openItem(slotId, item);
+        break;
+      case "reveal":
+        if (item) await revealItem(item);
+        break;
+      case "admin":
+        if (item) await runItemAsAdmin(item);
+        break;
+      case "copy-path":
+        if (item) await copyItemPath(item);
+        break;
+      case "cut":
+        if (item) await cutSlot(slotId, item);
+        break;
+      case "copy":
+        if (item) await copySlot(slotId, item);
+        break;
+      case "paste":
+        await pasteInto(slotId);
+        break;
+      case "delete":
+        deleteSlotContent(slotId);
+        break;
+      case "rename":
+        if (item) await renameItem(item);
+        break;
+      default:
+        break;
+    }
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const fileName = fileNameRef.current;
+    if (!canvas || !fileName) return;
 
-    createStatusBarRenderer(canvas)
-      .then((render) => setDraw(() => render))
+    let disposed = false;
+    let interaction: HotbarInteraction | null = null;
+
+    void createStatusBarRenderer(canvas)
+      .then((renderer) => {
+        if (disposed) return;
+        rendererRef.current = renderer;
+        overlayRef.current = new FileNameOverlay(fileName, scaleRef.current, "#FFFFFF");
+
+        const overlay = overlayRef.current;
+        const host: HotbarHost = {
+          layout: () => computeLayout(scaleRef.current),
+          getItem: (globalIndex) => getHotbarItem(globalIndex - 2),
+          getIcon: (globalIndex) => iconsRef.current[globalIndex - 2] ?? null,
+          requestRender: paint,
+          openSlot: (globalIndex) => {
+            const item = getHotbarItem(globalIndex - 2);
+            if (item) void openItem(hotbarSlotId(globalIndex - 2), item);
+          },
+          dropSlot: (globalIndex) => clearSlot(hotbarSlotId(globalIndex - 2)),
+          swapSlots: (source, target) => swapSlots(hotbarSlotId(source - 2), hotbarSlotId(target - 2)),
+          openMenu: (globalIndex, clientX, clientY) => {
+            void (async () => {
+              const items = await buildMenuItems(globalIndex);
+              const action = await showSlotMenu(items, clientX, clientY);
+              if (action) await runMenuAction(action, globalIndex);
+            })();
+          },
+          showFileName: (item) => {
+            if (!item || isPathMissing(item.path)) {
+              overlay.hideImmediately();
+              return;
+            }
+            overlay.show(displayNameOf(item));
+          },
+          clickMode: () => "double",
+          hoverEnabled: () => true
+        };
+
+        interaction = new HotbarInteraction(canvas, host);
+        interaction.attach();
+        interactionRef.current = interaction;
+
+        void refreshIcons();
+      })
       .catch((reason) => setError(String(reason)));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const pending = slotPaths.map((path) =>
-      path ? loadSlotIcon({ path, showTargetIcon }) : Promise.resolve(null)
-    );
-
-    Promise.all(pending).then((icons) => {
-      if (!cancelled) setModel((current) => ({ ...current, slotIcons: icons }));
-    });
 
     return () => {
-      cancelled = true;
+      disposed = true;
+      interaction?.destroy();
+      interactionRef.current = null;
+      rendererRef.current = null;
     };
-  }, [slotPaths, showTargetIcon]);
+  }, [buildMenuItems, paint, refreshIcons, runMenuAction]);
 
   useEffect(() => {
-    if (hasIconBackend()) return;
-
-    loadMockSlotIcons().then((slotIcons) => {
-      setModel((current) => ({ ...current, slotIcons }));
+    return subscribeSlots(() => {
+      setVersion((current) => current + 1);
+      void refreshIcons();
     });
-  }, []);
+  }, [refreshIcons]);
+
+  useEffect(() => subscribeClipboard(() => setVersion((current) => current + 1)), []);
 
   useEffect(() => {
-    draw?.(model);
-  }, [draw, model]);
+    scaleRef.current = scale;
+    paint();
+  }, [scale, paint, version]);
 
-  const update = (patch: Partial<StatusBarModel>) => {
-    setModel((current) => ({ ...current, ...patch }));
+  const updateStat = (key: keyof Stats, value: number) => {
+    statsRef.current = { ...statsRef.current, [key]: value };
+    setStats(statsRef.current);
+    paint();
   };
 
-  const applyCustomPath = (event: FormEvent) => {
-    event.preventDefault();
-    const path = customPath.trim();
-    if (!path) return;
-
-    invalidateSlotIcons(path);
-    setSlotPaths((current) => {
-      const next = current.slice();
-      next[8] = path;
-      return next;
-    });
+  const applyPath = (index: number, path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      clearSlot(hotbarSlotId(index));
+      return;
+    }
+    setSlot(hotbarSlotId(index), { path: trimmed });
   };
 
   return (
@@ -102,134 +273,100 @@ export default function App() {
           <h1>CraftSharp</h1>
           <p>状态栏 Canvas 渲染基线，使用仓库内原版 MC 纹理与真实文件图标</p>
         </div>
-        <span className="badge">P1 垂直切片</span>
+        <span className="badge">P1 交互联调</span>
       </header>
 
       {error ? <p className="error">{error}</p> : null}
 
       <section className="preview">
         <canvas ref={canvasRef} role="img" aria-label="HUD 状态栏预览" />
+        <div ref={fileNameRef} />
       </section>
 
       <section className="controls">
         <label>
           缩放
-          <select value={model.scale} onChange={(event) => update({ scale: Number(event.target.value) })}>
+          <select value={scale} onChange={(event) => setScale(Number(event.target.value))}>
             <option value={4.5}>4.5x</option>
             <option value={6}>6x</option>
             <option value={9}>9x</option>
           </select>
         </label>
 
-        <label>
-          生命 {model.health}
-          <input
-            type="range"
-            min={0}
-            max={20}
-            value={model.health}
-            onChange={(event) => update({ health: Number(event.target.value) })}
-          />
-        </label>
-
-        <label>
-          饥饿 {model.food}
-          <input
-            type="range"
-            min={0}
-            max={20}
-            value={model.food}
-            onChange={(event) => update({ food: Number(event.target.value) })}
-          />
-        </label>
-
-        <label>
-          空气 {model.air}
-          <input
-            type="range"
-            min={0}
-            max={20}
-            step={2}
-            value={model.air}
-            onChange={(event) => update({ air: Number(event.target.value) })}
-          />
-        </label>
-
-        <label>
-          护甲 {model.armor}
-          <input
-            type="range"
-            min={0}
-            max={20}
-            value={model.armor}
-            onChange={(event) => update({ armor: Number(event.target.value) })}
-          />
-        </label>
-
-        <label>
-          伤害吸收 {model.absorption}
-          <input
-            type="range"
-            min={0}
-            max={20}
-            value={model.absorption}
-            onChange={(event) => update({ absorption: Number(event.target.value) })}
-          />
-        </label>
-
-        <label>
-          经验 {model.exp}
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={model.exp}
-            onChange={(event) => update({ exp: Number(event.target.value) })}
-          />
-        </label>
+        {(
+          [
+            ["health", "生命"],
+            ["food", "饥饿"],
+            ["air", "空气"],
+            ["armor", "护甲"],
+            ["absorption", "伤害吸收"],
+            ["exp", "经验"]
+          ] as Array<[keyof Stats, string]>
+        ).map(([key, label]) => (
+          <label key={key}>
+            {label} {stats[key]}
+            <input
+              type="range"
+              min={0}
+              max={key === "exp" ? 100 : 20}
+              step={key === "air" ? 2 : 1}
+              value={stats[key]}
+              onChange={(event) => updateStat(key, Number(event.target.value))}
+            />
+          </label>
+        ))}
       </section>
 
       <section className="icon-source">
         <div className="icon-source-head">
-          <h2>格子图标来源</h2>
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={showTargetIcon}
-              onChange={(event) => setShowTargetIcon(event.target.checked)}
-            />
-            快捷方式显示目标图标
-          </label>
+          <h2>快捷栏格子</h2>
+          <button
+            type="button"
+            onClick={() => {
+              SAMPLE_SLOTS.forEach((path, index) => setSlot(hotbarSlotId(index), { path }));
+            }}
+          >
+            填入示例
+          </button>
         </div>
 
-        <form onSubmit={applyCustomPath}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            applyPath(8, pathInput);
+          }}
+        >
           <input
             type="text"
-            value={customPath}
+            value={pathInput}
             spellCheck={false}
-            placeholder="文件、文件夹或 .lnk 绝对路径"
-            onChange={(event) => setCustomPath(event.target.value)}
+            placeholder="文件、文件夹或 .lnk 绝对路径，写入第 9 格"
+            onChange={(event) => setPathInput(event.target.value)}
           />
-          <button type="submit" disabled={!customPath.trim()}>
-            载入第 9 格
+          <button type="submit" disabled={!pathInput.trim()}>
+            写入第 9 格
           </button>
         </form>
 
         <ol className="slot-paths">
-          {slotPaths.map((path, index) => (
-            <li key={index}>
-              <span className="slot-index">{index + 1}</span>
-              <span className="slot-path" title={path ?? "空格子"}>
-                {path ?? "空格子"}
-              </span>
-            </li>
-          ))}
+          {Array.from({ length: 9 }, (_, index) => {
+            const item = getHotbarItem(index);
+            return (
+              <li key={index}>
+                <span className="slot-index">{index + 1}</span>
+                <span className="slot-path" title={item?.path ?? "空格子"}>
+                  {item?.path ?? "空格子"}
+                </span>
+                <button type="button" onClick={() => clearSlot(hotbarSlotId(index))} disabled={!item}>
+                  清除
+                </button>
+              </li>
+            );
+          })}
         </ol>
 
         <p className="hint">
-          {hasIconBackend()
-            ? "图标由 Rust 侧提取：图片文件直读，其余走 Shell 大图标，文件丢失显示屏障占位图"
-            : "当前为浏览器预览，图标提取不可用，显示的是模拟图标"}
+          滚轮切换选中，1-9 选择，Enter 打开，Q 丢弃；长按 150ms 后拖动交换，右键打开菜单
         </p>
       </section>
     </main>

@@ -13,12 +13,14 @@
 - P1 已加入：快捷栏图标层，文件图标走 HighQuality，占位图走 NearestNeighbor，位置按原 slot 内边距
 - P1 已完成：真实文件图标提取，Rust 侧 `slot_icon` 命令返回 Data URL，图片直读、其余走 Shell 大图标、文件丢失回退屏障
 - P1 已验证：exe、文件夹、图片、dll、文件丢失、.lnk 快捷方式（含目标图标开关）在画布上显示正确
-- P1 未完成：快捷栏交互、物品栏、3D 玩家预览
+- P1 已完成：快捷栏交互层，滚轮回绕、1-9、Enter、Q、单击与双击模式、hover、长按拖动交换、文件拖入、右键菜单、文件名 2000ms 渐隐
+- P1 已验证：点击选中与文件名、滚轮首尾回绕、数字键、hover 规则、拖拽交换、剪切半透明、菜单删除/剪切/粘贴、Q 丢弃、打开命令
+- P1 未完成：物品栏、3D 玩家预览、设置面板、副手槽渲染
+- 未实测项：右键菜单的打开位置、管理员运行、重命名会真的动桌面文件或弹窗；原生文件拖入需要从资源管理器拖，未自动化。本轮只验证了打开命令与路径判断
 - 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
 - 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读
-- 已知问题：主预览窗口在多窗口启动时被放到屏幕外 -25600，HUD 窗口位置正常
 - 小数倍对齐：4.5x 差异从 9.86% 降到 7.26%，剩余差异来自 WPF 自身的小数布局取整
-- 已知问题：主预览窗口在多窗口启动时被放到屏幕外 -25600，HUD 窗口位置正常
+- 已知问题：主预览窗口在多窗口启动时会被放到屏幕外 -25600，HUD 窗口位置正常
 
 首次构建与运行：
 
@@ -41,6 +43,8 @@ CARGO_NET_OFFLINE=true npm run tauri dev
 | 4.5x | 819×266 | 819×167 | 13485 | 9.86% | 图标边缘取整不同 |
 
 已修正：空气满格时隐藏 empty 背景，只画 full，和 WPF 一致。
+
+交互层改造后复测：6x 状态区差异 540/242424 = 0.223%，布局常量没有漂移。
 
 结论：整数倍可以做到逐像素一致；小数倍需要产品决策。当前 WPF 在 1920 下是 4.5x，改成整数倍会让 HUD 整体尺寸变化约 ±11%。
 
@@ -66,6 +70,18 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 - 缓存键为「开关 + 路径」，失效条件是文件大小与修改时间变化；前端按同一键缓存 Promise
 - 返回 `null` 时前端回退 `barrier.png` 并 `smooth=false`，对应 WPF 的 NearestNeighbor 占位图
 - 证据：`docs/refactor/icon-workbench.png`、`icon-lnk-shortcut.png`、`icon-lnk-target.png`
+
+### P1 快捷栏交互契约
+
+- 几何：`src/hud/layout.ts` 统一算出状态行、经验条、快捷栏位置；命中区是 20×20 基准外扩 2，图标区 16×16，选中框 24×23 且上沿在 `hotbarTop - scale`
+- 状态机：`src/hud/hotbarInteraction.ts`，按下启动 150ms 定时，定时器触发后再移动超过 10 像素才进拖拽；未进拖拽的松开一律按点击处理，与 WPF 等价
+- 数据：`src/hud/slotStore.ts`，键为 `hotbar_0` 到 `hotbar_8`，暂存 localStorage `craftsharp.slots.v1`，两个窗口用 storage 事件同步；迁移 settings.json 时只替换这一层
+- 文件操作：`src/hud/slotActions.ts` + Rust `platform` 模块，命令是 `open_path`、`reveal_path`、`run_path_as_admin`、`path_exists`、`copy_to_clipboard`、`read_clipboard_paths`、`rename_path`
+- 菜单：独立 `slot-menu` 窗口，`menu.html?items=` 传菜单项，点击后 emit `menu:select` 并关闭；失焦或 Esc 关闭，可以超出 HUD 边界
+- 文件名：DOM 覆盖层，Unifont `8×scale`，距底 `50×scale`，阴影为文字色 50%，偏移 `0.53×scale`，2000ms 后 500ms 线性渐隐
+- 自动配色：.NET 字符串哈希每个进程随机，这里改用 FNV-1a 稳定哈希，预设色表与原实现一致
+- 缺失文件：图标回退屏障，选中时不显示文件名，打开时弹确认并可清空所有同路径格子
+- 证据：`docs/refactor/hud-interaction-select.png`、`hud-context-menu.png`、`hud-drag-swap.png`
 
 ## 1. 目标
 
@@ -148,18 +164,16 @@ scaleFactor = 逻辑屏宽 / 2560 * 6
 
 ### 快捷栏
 
-- 滚轮循环切换选中，范围是主快捷栏 0-8，首尾回绕
+- 滚轮循环切换选中，范围是主快捷栏 0-8，首尾回绕；未选中时第一次滚动选中第一格
 - 数字键 1-9 直接选中对应格子
-- Enter 打开当前选中文件
-- Q 丢弃当前选中或悬浮格子
-- 单击或双击模式可配置
-- Shift 点击或长按移动，长按判定 150ms，移动阈值 10 像素
-- 中键复制或分发
-- 拖拽交换格子内容
-- hover 显示选中框
+- Enter 打开当前选中文件，空格子则清除选中
+- Q 丢弃当前选中格子
+- 单击或双击模式可配置；双击模式下先选中再点一次才打开
+- 长按 150ms 后移动超过 10 像素进入拖拽，落点在另一格则交换内容；Shift 批量移动与中键分发只在物品栏
+- hover 在无选中或悬停的就是选中格时显示选中框
 - 文件拖入格子后写入数据并刷新图标
 - 右键菜单：打开、打开位置、管理员运行、复制路径、剪切、复制、粘贴、删除、重命名
-- 选中后显示文件名，2000ms 后渐隐；颜色支持自动和自定义，阴影为文字色 50%
+- 选中后显示文件名，2000ms 后 500ms 渐隐；颜色支持自动和自定义，阴影为文字色 50%
 
 ### 物品栏
 

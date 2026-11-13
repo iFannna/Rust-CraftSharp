@@ -13,11 +13,17 @@ export function hasIconBackend(): boolean {
 }
 
 const iconCache = new Map<string, Promise<SlotIcon | null>>();
+const missingPaths = new Set<string>();
 let barrierImage: Promise<HTMLImageElement> | null = null;
 
 function loadBarrier(): Promise<HTMLImageElement> {
   barrierImage ??= loadImage(HUD_ASSETS.barrier);
   return barrierImage;
+}
+
+/** 文件是否缺失。图标加载失败时记录，用于隐藏文件名等判断 */
+export function isPathMissing(path: string): boolean {
+  return missingPaths.has(path);
 }
 
 /**
@@ -44,12 +50,15 @@ async function requestSlotIcon(source: SlotIconSource): Promise<SlotIcon | null>
     });
 
     if (!dataUrl) {
+      missingPaths.add(source.path);
       return { image: await loadBarrier(), smooth: false };
     }
 
+    missingPaths.delete(source.path);
     return { image: await loadImage(dataUrl), smooth: true };
   } catch (error) {
     console.warn("格子图标提取失败", source.path, error);
+    missingPaths.add(source.path);
     return { image: await loadBarrier(), smooth: false };
   }
 }
@@ -58,9 +67,11 @@ async function requestSlotIcon(source: SlotIconSource): Promise<SlotIcon | null>
 export function invalidateSlotIcons(path?: string): void {
   if (path === undefined) {
     iconCache.clear();
+    missingPaths.clear();
     return;
   }
 
+  missingPaths.delete(path);
   for (const key of [...iconCache.keys()]) {
     if (key.endsWith(`\u0001${path}`)) {
       iconCache.delete(key);
