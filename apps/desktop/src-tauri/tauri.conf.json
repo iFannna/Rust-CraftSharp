@@ -21,7 +21,9 @@
         "x": 80,
         "y": 80,
         "center": false,
-        "resizable": true
+        "resizable": true,
+        "visible": false,
+        "skipTaskbar": true
       },
       {
         "label": "hud",
@@ -76,13 +78,13 @@
         "label": "settings",
         "title": "CraftSharp 设置",
         "url": "settings.html",
-        "width": 980,
-        "height": 640,
+        "width": 1080,
+        "height": 720,
+        "minWidth": 720,
+        "minHeight": 480,
         "center": true,
-        "transparent": true,
         "decorations": false,
-        "skipTaskbar": true,
-        "resizable": false,
+        "resizable": true,
         "visible": false,
         "shadow": true
       },

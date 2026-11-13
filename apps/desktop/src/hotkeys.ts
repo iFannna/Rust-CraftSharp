@@ -3,13 +3,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getConfig, subscribeConfig } from "./config/appConfig";
-import { toggleCrosshair, toggleInventory, toggleSettings, toggleStatusBar } from "./windowControls";
+import { applyWindowAction } from "./windowControls";
 
 const EVENT_NAME = "craftsharp-hotkey";
 const RELOAD_DEBOUNCE_MS = 300;
 
 const actions = ["settings", "statusBar", "inventory", "crosshair"] as const;
-type HotkeyAction = (typeof actions)[number];
 
 let started = false;
 let reloadTimer = 0;
@@ -23,25 +22,6 @@ async function applyHotkeys() {
   }
 }
 
-function runAction(action: HotkeyAction) {
-  switch (action) {
-    case "settings":
-      void toggleSettings();
-      break;
-    case "statusBar":
-      void toggleStatusBar();
-      break;
-    case "inventory":
-      void toggleInventory();
-      break;
-    case "crosshair":
-      void toggleCrosshair();
-      break;
-    default:
-      break;
-  }
-}
-
 /** 主窗口启动时调用一次 */
 export function initializeHotkeys() {
   if (started || !("__TAURI_INTERNALS__" in window)) return;
@@ -49,10 +29,9 @@ export function initializeHotkeys() {
 
   void applyHotkeys();
 
-  void listen<string>(EVENT_NAME, (event) => {
-    if ((actions as readonly string[]).includes(event.payload)) {
-      runAction(event.payload as HotkeyAction);
-    }
+  void listen<number>(EVENT_NAME, (event) => {
+    const action = actions[event.payload];
+    if (action) void applyWindowAction(action);
   });
 
   subscribeConfig(() => {

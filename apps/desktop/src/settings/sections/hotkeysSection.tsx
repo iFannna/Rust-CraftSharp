@@ -7,10 +7,10 @@ import { HotkeyInput } from "../components/hotkeyInput";
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair";
 
 const HOTKEY_ITEMS: { key: HotkeyKey; label: string; description: string }[] = [
-  { key: "settings", label: "打开设置", description: "显示或隐藏设置面板。" },
-  { key: "statusBar", label: "显示状态栏", description: "显示或隐藏状态栏。" },
-  { key: "inventory", label: "打开物品栏", description: "显示或隐藏物品栏。" },
-  { key: "crosshair", label: "打开准星", description: "显示或隐藏准星。" }
+  { key: "settings", label: "打开设置面板", description: "显示或隐藏设置面板窗口" },
+  { key: "statusBar", label: "打开状态栏", description: "显示或隐藏状态栏窗口" },
+  { key: "inventory", label: "打开物品栏", description: "显示或隐藏物品栏窗口" },
+  { key: "crosshair", label: "打开准星", description: "显示或隐藏准星窗口" }
 ];
 
 export function HotkeysSection() {
@@ -36,25 +36,20 @@ export function HotkeysSection() {
 
   return (
     <>
-      <SectionHead title="热键" description="全局热键，必须在窗口外也能生效。" />
-      <Card>
-        {HOTKEY_ITEMS.map((item) => (
-          <Row key={item.key} label={item.label} description={item.description}>
-            <HotkeyInput
-              value={config.hotkeys[item.key]}
-              label={item.label}
-              onChange={(hotkey) => updateHotkey(item.key, hotkey)}
-            />
-          </Row>
-        ))}
-        <div className="button-row">
-          <Button onClick={resetHotkeys}>恢复默认热键</Button>
-        </div>
+      <SectionHead title="快捷键设置" />
+      {HOTKEY_ITEMS.map((item) => (
+        <Row key={item.key} label={item.label} description={item.description}>
+          <HotkeyInput
+            value={config.hotkeys[item.key]}
+            label={item.label}
+            onChange={(hotkey) => updateHotkey(item.key, hotkey)}
+          />
+        </Row>
+      ))}
+      <Card className="action-card">
+        <Button onClick={resetHotkeys}>恢复默认设置</Button>
       </Card>
-      <Note>
-        点击输入框后按下组合键即可捕获：必须包含至少一个修饰键（Ctrl / Alt / Shift），Esc 取消，Backspace
-        清空。改动在重新注册后生效，前端会监听配置变化，无需重启应用。
-      </Note>
+      <Note>点击快捷键框后按下组合键，至少包含一个修饰键；Esc 取消，Backspace 清空。</Note>
     </>
   );
 }

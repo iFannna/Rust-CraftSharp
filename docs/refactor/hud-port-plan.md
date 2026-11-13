@@ -23,11 +23,14 @@
 - P1 已验证：物品栏 6x 与黄金图逐像素一致，差异只在图标内部抗锯齿
 - P1 已完成：物品栏 Tooltip，九宫格背景与边框、Unifont 文本、自动换行、右侧显示超界翻转
 - P1 已完成：准星与攻击指示器，屏幕居中、鼠标穿透、进度裁剪；6x 与黄金图逐像素一致
-- P1 已完成：设置面板，8 个分区，统一配置读写，窗口 980×640 无边框
+- P1 已完成：设置面板，8 个分区，统一配置读写，窗口 1080×720 无边框
 - P1 已完成：全局热键，Win32 RegisterHotKey，四项默认 Ctrl+Alt+S/H/E/C
-- P1 已完成：主界面外壳，窗口开关卡片、样式名与热键提示，替代原调试工作台
+- P1 已调整：移除卡片式主界面，改为系统托盘菜单 + 全局热键作为入口，主窗口只留隐藏宿主
 - P1 已完成：统一配置，`src/config/appConfig.ts`，字段对齐 AppSettings，兼容旧物品栏配置迁移
-- P1 未完成：3D 玩家预览、BOSS 血条窗口、壁纸引擎、皮肤上传、开机自启、托盘与单实例
+- P1 已重做：设置面板视觉，按原版 Fluent 风格实测截图对齐，深色 #202020、卡片 #2D2D2D、系统蓝 #0078D4、微软雅黑 14、每项一张卡片
+- P1 已修复：设置窗口拖动抖动与始终置顶，取消透明窗与 topmost，改为不透明可调大小并进入任务栏
+- P1 已修复：热键事件负载从组合键字符串改为下标映射，全局热键实测可切换窗口
+- P1 未完成：3D 玩家预览、BOSS 血条窗口、壁纸引擎、皮肤上传、开机自启、单实例
 - 未实测项：右键菜单的打开位置、管理员运行、重命名会真的动桌面文件或弹窗；原生文件拖入需要从资源管理器拖，未自动化。本轮只验证了打开命令与路径判断
 - 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
 - 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读
@@ -126,17 +129,21 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 ### P1 设置面板与桌面外壳契约
 
 - 统一配置：`src/config/appConfig.ts`，键 `craftsharp.config.v1`，分区 system、appearance、statusBar、hotbar、inventory、hudElements、hotkeys、player；旧 `craftsharp.inventory.v1` 首次启动自动迁移
-- 窗口：`main`、`hud`、`inventory`、`overlay`、`settings`、`crosshair`、`tooltip`，除 main 外全部无边框透明，inventory 以下默认隐藏
+- 窗口：`main`、`hud`、`inventory`、`overlay`、`settings`、`crosshair`、`tooltip`，除 main 外全部无边框透明；main 是隐藏宿主，只负责初始化与托盘事件，不再显示界面
 - 窗口控制：`src/windowControls.ts`，显隐与配置持久化集中在这里，主界面、设置面板、热键共用
 - 设置面板：`src/settings/`，八个分区，左栏导航加右侧滚动内容，无边框自绘标题栏；所有修改立即写配置，窗口显隐联动走 windowControls
 - 准星：`src/hud/crosshairLayout.ts` 与 `crosshairRenderer.ts`，整屏透明窗口 + 鼠标穿透，准星 15×15、攻击指示器 16×4/16×16，间距 1 MC 像素，进度默认 100%
 - 准星像素验证：6x、进度 50% 时内容裁剪 96×102，与黄金图逐像素一致，差异 0
 - Tooltip：独立窗口，九宫格边框 3 MC 像素、内边距 3、字号 8、最大宽 150、阴影为文字色 50% 偏移 0.53；显示在格子右侧，超右翻转、超上下贴边
 - 热键：Rust `src-tauri/src/hotkeys.rs` 用 RegisterHotKey 加独立消息线程，命令 `register_hotkeys(actions)`，事件 `craftsharp-hotkey`；前端 `src/hotkeys.ts` 监听并调用窗口开关
-- 主界面：`src/App.tsx`，四张功能卡片加底部热键提示，启动时按配置恢复显隐
+- 入口：系统托盘菜单（打开设置、状态栏、物品栏、准星、退出），左键托盘打开设置；主窗口隐藏且不进任务栏
+- 宿主：`src/App.tsx` 无界面，启动恢复窗口显隐、监听托盘动作、按配置决定是否自动打开设置
+- 设置面板视觉：对齐原版 WPF-UI Fluent，深色底 #202020、卡片 #2D2D2D、强调色 #0078D4、微软雅黑 14、220 侧栏加 Segoe Fluent 图标、每项独立卡片、40×20 开关；亮色 #F3F3F3 底加白卡片，主题只作用于设置面板
+- 设置窗口：不透明、`decorations: false`、可调整大小（最小 720×480）、不置顶、进任务栏，标题栏自绘最小化/最大化/关闭，关闭只隐藏
 - 已验证：设置面板三个分区截图、准星逐像素、Tooltip 渲染、物品栏样式热切换（漏斗 705×533）、配置跨窗口传播、热键命令返回空失败列表
-- 未实测：全局热键实际按键触发、设置窗口在屏幕上的层级、窗口拖动、开机自启
-- 证据：`docs/refactor/settings-panel.png`、`settings-inventory.png`、`settings-hotkeys.png`、`crosshair-6x.png`、`tooltip-6x.png`
+- 已验证：全局热键真实按键切换设置窗口；设置面板深色与浅色主题、热键输入捕获与即时重注册
+- 未实测：托盘图标在系统托盘区的实际展示与菜单点击（UIA 查不到，Windows 11 默认收进溢出区）、真实窗口拖动与缩放、开机自启
+- 证据：`docs/refactor/settings-v3-system.png`、`settings-v3-inventory.png`、`settings-v3-about.png`、`settings-v3-light.png`、`crosshair-6x.png`、`tooltip-6x.png`
 
 ## 1. 目标
 

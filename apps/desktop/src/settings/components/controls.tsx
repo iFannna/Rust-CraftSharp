@@ -5,24 +5,15 @@ export interface Option<T extends string = string> {
   label: string;
 }
 
-export function SectionHead({ title, description }: { title: string; description: string }) {
-  return (
-    <header className="section-head">
-      <h2>{title}</h2>
-      <p>{description}</p>
-    </header>
-  );
+export function SectionHead({ title }: { title: string }) {
+  return <h2 className="section-title">{title}</h2>;
 }
 
-export function Card({ title, children }: { title?: string; children: ReactNode }) {
-  return (
-    <section className="card">
-      {title ? <p className="card-title">{title}</p> : null}
-      {children}
-    </section>
-  );
+export function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return <section className={className ? `card ${className}` : "card"}>{children}</section>;
 }
 
+/** 单个设置项：每项独立卡片，与原版 ui:Card 一致 */
 export function Row({
   label,
   description,
@@ -35,13 +26,15 @@ export function Row({
   children: ReactNode;
 }) {
   return (
-    <div className={disabled ? "row is-disabled" : "row"}>
-      <div className="row-text">
-        <div className="row-label">{label}</div>
-        {description ? <div className="row-desc">{description}</div> : null}
+    <section className={disabled ? "card is-disabled" : "card"}>
+      <div className="row">
+        <div className="row-text">
+          <div className="row-label">{label}</div>
+          {description ? <div className="row-desc">{description}</div> : null}
+        </div>
+        <div className="row-control">{children}</div>
       </div>
-      <div className="row-control">{children}</div>
-    </div>
+    </section>
   );
 }
 
@@ -96,37 +89,6 @@ export function Select<T extends string>({
         </option>
       ))}
     </select>
-  );
-}
-
-export function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  disabled = false,
-  ariaLabel
-}: {
-  value: T;
-  options: Option<T>[];
-  onChange: (next: T) => void;
-  disabled?: boolean;
-  ariaLabel: string;
-}) {
-  return (
-    <div className="segmented" role="group" aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={option.value === value ? "is-active" : undefined}
-          disabled={disabled}
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
   );
 }
 

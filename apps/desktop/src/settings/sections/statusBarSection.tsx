@@ -15,28 +15,26 @@ export function StatusBarSection() {
 
   return (
     <>
-      <SectionHead title="状态栏" description="桌面底部快捷栏容器的显示与位置。" />
-      <Card>
-        <Row label="显示状态栏" description="切换状态栏窗口的显隐。">
-          <Toggle
-            checked={config.statusBar.visible}
-            label="显示状态栏"
-            onChange={(visible) => {
-              // 窗口操作失败不影响配置写入，配置仍是唯一事实来源
-              void setStatusBarVisible(visible).catch(() => undefined);
-            }}
-          />
-        </Row>
-        <Row label="锁定位置" description="锁定后不能拖动状态栏。">
-          <Toggle
-            checked={config.statusBar.locked}
-            label="锁定状态栏位置"
-            onChange={(locked) => updateConfig({ statusBar: { locked } })}
-          />
-        </Row>
-        <div className="button-row">
-          <Button onClick={resetPosition}>恢复默认位置</Button>
-        </div>
+      <SectionHead title="状态栏设置" />
+      <Row label="显示状态栏" description="在桌面显示状态栏窗口">
+        <Toggle
+          checked={config.statusBar.visible}
+          label="显示状态栏"
+          onChange={(visible) => {
+            // 窗口操作失败不影响配置写入，配置仍是唯一事实来源
+            void setStatusBarVisible(visible).catch(() => undefined);
+          }}
+        />
+      </Row>
+      <Row label="锁定位置" description="防止状态栏被意外拖动">
+        <Toggle
+          checked={config.statusBar.locked}
+          label="锁定状态栏位置"
+          onChange={(locked) => updateConfig({ statusBar: { locked } })}
+        />
+      </Row>
+      <Card className="action-card">
+        <Button onClick={resetPosition}>恢复默认位置</Button>
       </Card>
       {message ? <Note tone="success">{message}</Note> : null}
     </>

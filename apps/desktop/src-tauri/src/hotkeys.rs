@@ -83,11 +83,10 @@ fn spawn_thread(app: AppHandle) {
 
             match msg.message {
                 WM_HOTKEY => {
+                    // 只广播下标，动作名由前端按注册顺序映射
                     let id = msg.wparam;
-                    if let Ok(registered) = REGISTERED.lock() {
-                        if let Some(Some(action)) = registered.get(id) {
-                            let _ = app.emit(EVENT_NAME, action.clone());
-                        }
+                    if REGISTERED.lock().map(|registered| registered.get(id).is_some_and(Option::is_some)).unwrap_or(false) {
+                        let _ = app.emit(EVENT_NAME, id);
                     }
                 }
                 WM_APP_RELOAD => {

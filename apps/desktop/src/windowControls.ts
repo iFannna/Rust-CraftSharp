@@ -84,6 +84,28 @@ export async function toggleCrosshair() {
   await setCrosshairVisible(!getConfig().hudElements.crosshairVisible);
 }
 
+export type WindowAction = "settings" | "statusBar" | "inventory" | "crosshair";
+
+/** 托盘与热键共用的动作分发 */
+export async function applyWindowAction(action: WindowAction) {
+  switch (action) {
+    case "settings":
+      await toggleSettings();
+      break;
+    case "statusBar":
+      await toggleStatusBar();
+      break;
+    case "inventory":
+      await toggleInventory();
+      break;
+    case "crosshair":
+      await toggleCrosshair();
+      break;
+    default:
+      break;
+  }
+}
+
 /** 启动时按配置恢复各窗口显隐 */
 export async function applyConfiguredVisibility() {
   const config = getConfig();
