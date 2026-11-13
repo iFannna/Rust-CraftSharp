@@ -1,0 +1,530 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- Window Title -->
+    <sys:String x:Key="AppTitle">Craft#</sys:String>
+    <sys:String x:Key="SettingsTitle">Craft# Settings</sys:String>
+    <sys:String x:Key="BossBarWindowTitle">Boss Bar</sys:String>
+    <sys:String x:Key="StatusBarWindowTitle">Status Bar</sys:String>
+    <sys:String x:Key="InventoryWindowTitle">Inventory</sys:String>
+
+    <!-- Window title bar buttons (for screen readers) -->
+    <sys:String x:Key="WindowButtonMinimize">Minimize</sys:String>
+    <sys:String x:Key="WindowButtonMaximize">Maximize</sys:String>
+    <sys:String x:Key="WindowButtonRestore">Restore</sys:String>
+    <sys:String x:Key="WindowButtonClose">Close</sys:String>
+
+    <!-- Navigation Menu -->
+    <sys:String x:Key="NavSystem">System</sys:String>
+    <sys:String x:Key="NavAppearance">Appearance</sys:String>
+    <sys:String x:Key="NavWallpaper">Wallpaper</sys:String>
+    <sys:String x:Key="NavSkin">Skin</sys:String>
+    <sys:String x:Key="NavHud">HUD</sys:String>
+    <sys:String x:Key="NavInventory">Inventory</sys:String>
+    <sys:String x:Key="NavHotkey">Hotkeys</sys:String>
+    <sys:String x:Key="NavAbout">About</sys:String>
+
+    <!-- Wallpaper Settings Panel -->
+    <sys:String x:Key="WallpaperPanelTitle">Wallpaper Settings</sys:String>
+    <sys:String x:Key="WallpaperAll">All</sys:String>
+    <sys:String x:Key="WallpaperStatic">Static</sys:String>
+    <sys:String x:Key="WallpaperDynamic">Dynamic</sys:String>
+    <sys:String x:Key="WallpaperSortLatest">Latest</sys:String>
+    <sys:String x:Key="WallpaperSortHot">Hottest</sys:String>
+    <sys:String x:Key="WallpaperSortDownloads">Downloads</sys:String>
+    <sys:String x:Key="WallpaperPageInfo">Page {0} / {1}</sys:String>
+    <sys:String x:Key="WallpaperModeSync">Sync</sys:String>
+    <sys:String x:Key="WallpaperModeIndependent">Individual</sys:String>
+    <sys:String x:Key="WallpaperModeSpan">Span</sys:String>
+    <sys:String x:Key="WallpaperApplyAction">Apply</sys:String>
+    <sys:String x:Key="WallpaperPrev">Previous</sys:String>
+    <sys:String x:Key="WallpaperNext">Next</sys:String>
+    <sys:String x:Key="WallpaperRetry">Retry</sys:String>
+    <sys:String x:Key="WallpaperErrorTitle">Failed to Load</sys:String>
+    <sys:String x:Key="WallpaperErrorDesc">Unable to load wallpaper list. Please check your network connection and try again.</sys:String>
+    <sys:String x:Key="WallpaperLoading">Loading...</sys:String>
+    <sys:String x:Key="WallpaperLoadFailed">Load Failed</sys:String>
+    <sys:String x:Key="WallpaperDynamicBadge">Dynamic</sys:String>
+    <sys:String x:Key="WallpaperQuickSet">Set as Wallpaper</sys:String>
+    <sys:String x:Key="WallpaperViewImage">View Image</sys:String>
+    <sys:String x:Key="WallpaperSetWallpaper">Set as Wallpaper</sys:String>
+    <sys:String x:Key="WallpaperDownload">Download</sys:String>
+    <sys:String x:Key="WallpaperSetting">Setting...</sys:String>
+    <sys:String x:Key="WallpaperSetSuccess">Wallpaper set!</sys:String>
+    <sys:String x:Key="WallpaperDownloadSuccess">Download complete!</sys:String>
+    <sys:String x:Key="WallpaperPreviewTitle">Wallpaper Preview</sys:String>
+    <sys:String x:Key="WallpaperPreviewClose">Close</sys:String>
+    <sys:String x:Key="WallpaperPreviewFit">Fit to Window</sys:String>
+    <sys:String x:Key="WallpaperPreviewPrev">Previous</sys:String>
+    <sys:String x:Key="WallpaperPreviewNext">Next</sys:String>
+    <sys:String x:Key="WallpaperPreviewZoomIn">Zoom In</sys:String>
+    <sys:String x:Key="WallpaperPreviewZoomOut">Zoom Out</sys:String>
+    <sys:String x:Key="WallpaperPreviewDownload">Download Wallpaper</sys:String>
+
+    <!-- Display settings dialog -->
+    <sys:String x:Key="DisplaySettingsTitle">Display Settings</sys:String>
+    <sys:String x:Key="DisplayIdentify">Identify</sys:String>
+    <sys:String x:Key="DisplaySpanReset">Reset</sys:String>
+    <sys:String x:Key="DisplayModeExtend">Extend these displays</sys:String>
+    <sys:String x:Key="DisplayModeDuplicate">Duplicate these displays</sys:String>
+    <sys:String x:Key="DisplayModeSingle">Show only on this display</sys:String>
+    <sys:String x:Key="DisplayScaleLayoutSection">Scale &amp; Layout</sys:String>
+    <sys:String x:Key="DisplayScale">Scale</sys:String>
+    <sys:String x:Key="DisplayScaleDesc">Change the size of text, apps, and other items</sys:String>
+    <sys:String x:Key="DisplayResolution">Display resolution</sys:String>
+    <sys:String x:Key="DisplayResolutionDesc">Adjust resolution to match your display</sys:String>
+    <sys:String x:Key="DisplayMonitorNameFallback">Display {0}</sys:String>
+    <sys:String x:Key="DisplayNoTarget">Select at least one display</sys:String>
+
+    <!-- Skin Settings Panel -->
+    <sys:String x:Key="SkinPanelTitle">Skin Settings</sys:String>
+    <sys:String x:Key="SkinTabUpload">Upload Skin</sys:String>
+    <sys:String x:Key="SkinSearchPlaceholder">Search skins...</sys:String>
+
+    <!-- Upload Skin Window -->
+    <sys:String x:Key="UploadSkinTitle">Upload Skin</sys:String>
+    <sys:String x:Key="UploadSkinNameLabel">Skin Name</sys:String>
+    <sys:String x:Key="UploadSkinNamePlaceholder">Skin name should be less than 32 bytes and contain no special symbols</sys:String>
+    <sys:String x:Key="UploadSkinTypeLabel">Skin Type</sys:String>
+    <sys:String x:Key="UploadSkinFileLabel">Skin File</sys:String>
+    <sys:String x:Key="UploadSkinSelectFile">Select File</sys:String>
+    <sys:String x:Key="UploadSkinCancel">Cancel</sys:String>
+    <sys:String x:Key="UploadSkinConfirm">Confirm</sys:String>
+    <sys:String x:Key="UploadSkinNameTooLong">Name length cannot exceed 32 characters</sys:String>
+    <sys:String x:Key="UploadSkinNameInvalidChars">Name can only contain letters, numbers, underscores, hyphens and spaces</sys:String>
+    <sys:String x:Key="UploadSkinNameRequired">Please enter a skin name</sys:String>
+    <sys:String x:Key="UploadSkinNoFile">Please select a skin file first</sys:String>
+    <sys:String x:Key="UploadSkinNameConflict">A skin named "{0}" already exists, please use another name</sys:String>
+    <sys:String x:Key="UploadSkinCopyFailed">Failed to copy file: {0}</sys:String>
+    <sys:String x:Key="UploadSkinSuccess">Upload successful</sys:String>
+
+    <!-- System Settings Panel -->
+    <sys:String x:Key="SystemPanelTitle">System Settings</sys:String>
+    <sys:String x:Key="LanguageLabel">Language / 语言</sys:String>
+    <sys:String x:Key="LanguageDesc">Select interface display language</sys:String>
+    <sys:String x:Key="LangZhCN">简体中文</sys:String>
+    <sys:String x:Key="LangEnUS">English</sys:String>
+    <sys:String x:Key="AutoStartLabel">Auto Start</sys:String>
+    <sys:String x:Key="AutoStartDesc">Run Craft# automatically when system starts</sys:String>
+    <sys:String x:Key="DefaultOpenPanelLabel">Open Panel on Launch</sys:String>
+    <sys:String x:Key="DefaultOpenPanelDesc">Automatically open the settings panel when the app starts</sys:String>
+    <sys:String x:Key="RememberWindowPositionLabel">Remember Position</sys:String>
+    <sys:String x:Key="RememberWindowPositionDesc">Restore settings window position on next launch</sys:String>
+    <sys:String x:Key="RememberWindowSizeLabel">Remember Size</sys:String>
+    <sys:String x:Key="RememberWindowSizeDesc">Restore settings window size on next launch</sys:String>
+    <sys:String x:Key="RememberCardStatesLabel">Remember Card States</sys:String>
+    <sys:String x:Key="RememberCardStatesDesc">Restore settings page card expanded/collapsed states on next launch</sys:String>
+    <sys:String x:Key="RememberNavSelectionLabel">Remember Nav Selection</sys:String>
+    <sys:String x:Key="RememberNavSelectionDesc">Restore last selected settings page on next launch</sys:String>
+
+    <!-- Appearance Settings Panel -->
+    <sys:String x:Key="AppearancePanelTitle">Appearance Settings</sys:String>
+    <sys:String x:Key="ThemeLabel">Theme</sys:String>
+    <sys:String x:Key="ThemeDesc">Select interface display style</sys:String>
+    <sys:String x:Key="ThemeSystem">Follow System</sys:String>
+    <sys:String x:Key="ThemeDark">Dark</sys:String>
+    <sys:String x:Key="ThemeLight">Light</sys:String>
+    <sys:String x:Key="FontLabel">Font</sys:String>
+    <sys:String x:Key="FontDesc">Select interface display font</sys:String>
+    <sys:String x:Key="FontDefault">Follow System</sys:String>
+    <sys:String x:Key="FontYaHei">Microsoft YaHei</sys:String>
+    <sys:String x:Key="FontSongTi">SimSun</sys:String>
+    <sys:String x:Key="FontHeiTi">SimHei</sys:String>
+    <sys:String x:Key="FontKaiTi">KaiTi</sys:String>
+    <sys:String x:Key="FontPixel">Pixel Font</sys:String>
+    <sys:String x:Key="FontUnifont">Unifont</sys:String>
+    <sys:String x:Key="FontSizeLabel">Font Size</sys:String>
+    <sys:String x:Key="FontSizeDesc">Select interface font size</sys:String>
+    <sys:String x:Key="IconStyleLabel">Icon</sys:String>
+    <sys:String x:Key="IconStyleDesc">Select interface icon style</sys:String>
+    <sys:String x:Key="IconStyleDefault">Default</sys:String>
+    <sys:String x:Key="IconStylePixel">Pixel</sys:String>
+    <sys:String x:Key="IconStyleSimple">Simple</sys:String>
+    <sys:String x:Key="IconStyleRealistic">Realistic</sys:String>
+
+    <!-- Tray Icon -->
+    <sys:String x:Key="AppIconLabel">Icon</sys:String>
+    <sys:String x:Key="AppIconDesc">Select tray icon</sys:String>
+    <sys:String x:Key="AppIconTooltip">Click to change icon</sys:String>
+
+    <!-- Icon Picker Window -->
+    <sys:String x:Key="IconPickerTitle">Select App Icon</sys:String>
+    <sys:String x:Key="IconPickerCategoryBlock">Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryBlockAll">All Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryBuildingBlock">Building Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryColoredBlock">Colored Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryFunctionalBlock">Functional Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryNaturalBlock">Natural Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryRedstoneBlock">Redstone Blocks</sys:String>
+    <sys:String x:Key="IconPickerCategoryItem">Items</sys:String>
+    <sys:String x:Key="IconPickerCategoryItemAll">All Items</sys:String>
+    <sys:String x:Key="IconPickerCategoryCombat">Combat</sys:String>
+    <sys:String x:Key="IconPickerCategoryFood">Food &amp; Drink</sys:String>
+    <sys:String x:Key="IconPickerCategoryIngredient">Ingredients</sys:String>
+    <sys:String x:Key="IconPickerCategorySpawnEgg">Spawn Eggs</sys:String>
+    <sys:String x:Key="IconPickerCategoryTool">Tools &amp; utilities</sys:String>
+    <sys:String x:Key="IconPickerLoading">Loading...</sys:String>
+
+    <!-- HUD Icon Picker Window -->
+    <sys:String x:Key="HudIconPickerTitle">Select Element Icon</sys:String>
+
+    <!-- HUD Settings Panel -->
+    <sys:String x:Key="HudPanelTitle">HUD Settings</sys:String>
+    <sys:String x:Key="HudStatusBarSettings">Status Bar Settings</sys:String>
+    <sys:String x:Key="HudCrosshairSettings">Crosshair Settings</sys:String>
+    <sys:String x:Key="HudElementStatusBar">Status Bar</sys:String>
+    <sys:String x:Key="HudElementHotbar">Hotbar</sys:String>
+    <sys:String x:Key="HudElementHealth">Health</sys:String>
+    <sys:String x:Key="HudElementFood">Food</sys:String>
+    <sys:String x:Key="HudElementExpbar">Experience Bar</sys:String>
+    <sys:String x:Key="HudElementAir">Air</sys:String>
+    <sys:String x:Key="HudElementArmor">Armor</sys:String>
+    <sys:String x:Key="HudElementAbsorbing">Absorption</sys:String>
+    <sys:String x:Key="HudElementCrosshair">Crosshair</sys:String>
+    <sys:String x:Key="HudElementAttackIndicator">Attack Indicator</sys:String>
+    <sys:String x:Key="HudBossBarSettings">Boss Bar Settings</sys:String>
+    <sys:String x:Key="HudElementBossBar">Boss Bar</sys:String>
+
+    <!-- HUD Options -->
+    <sys:String x:Key="HudOptionShowStatusBar">Show Status Bar</sys:String>
+    <sys:String x:Key="HudOptionShowStatusBarDesc">Display status bar window on desktop</sys:String>
+    <sys:String x:Key="HudOptionRememberPosition">Remember Position</sys:String>
+    <sys:String x:Key="HudOptionRememberPositionDesc">Restore status bar window position on next launch</sys:String>
+    <sys:String x:Key="HudOptionClickMode">Open Action</sys:String>
+    <sys:String x:Key="HudOptionClickModeDesc">Select the action to open hotbar slot</sys:String>
+    <sys:String x:Key="HudOptionClickModeSingle">Single Click</sys:String>
+    <sys:String x:Key="HudOptionClickModeDouble">Double Click</sys:String>
+    <sys:String x:Key="HudOptionShowHotbar">Show Hotbar</sys:String>
+    <sys:String x:Key="HudOptionShowHotbarDesc">Display hotbar window on desktop</sys:String>
+    <sys:String x:Key="HudOptionHoverEffect">Hover Effect</sys:String>
+    <sys:String x:Key="HudOptionHoverEffectDesc">Show selection frame when hovering over slot</sys:String>
+    <sys:String x:Key="HudOptionShowTargetIcon">Show Target Icon</sys:String>
+    <sys:String x:Key="HudOptionShowTargetIconDesc">Only applies to shortcuts. May fail due to permission issues</sys:String>
+    <sys:String x:Key="HudOptionFileNameColor">File Name Color</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorDesc">Color of file name when hotbar slot is selected</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorAuto">Auto</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorOther">Other...</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorCustom">Custom</sys:String>
+    <sys:String x:Key="ColorPickerTitle">Select Color</sys:String>
+    <sys:String x:Key="ColorPickerPreview">Preview</sys:String>
+    <sys:String x:Key="ColorPickerConfirm">Confirm</sys:String>
+    <sys:String x:Key="ColorPickerCancel">Cancel</sys:String>
+    <sys:String x:Key="HudOptionLockPosition">Lock Position</sys:String>
+    <sys:String x:Key="HudOptionLockPositionDesc">Prevent hotbar from being accidentally dragged</sys:String>
+    <sys:String x:Key="HudOptionLeftOffhand">Left Offhand</sys:String>
+    <sys:String x:Key="HudOptionLeftOffhandDesc">Show offhand slot on the left side of hotbar</sys:String>
+    <sys:String x:Key="HudOptionRightOffhand">Right Offhand</sys:String>
+    <sys:String x:Key="HudOptionRightOffhandDesc">Show offhand slot on the right side of hotbar</sys:String>
+    <sys:String x:Key="HudOptionElementIcon">Element Icon</sys:String>
+    <sys:String x:Key="HudOptionElementIconDesc">The display icon for this HUD element</sys:String>
+    <sys:String x:Key="HudOptionShowElement">Show Element</sys:String>
+    <sys:String x:Key="HudOptionShowElementDesc">Display this HUD element on hotbar</sys:String>
+    <sys:String x:Key="HudOptionTopMost">Window Top Most</sys:String>
+    <sys:String x:Key="HudOptionTopMostDesc">Keep crosshair window above all other windows</sys:String>
+    <sys:String x:Key="HudOptionRegenAnim">Animation Effect</sys:String>
+    <sys:String x:Key="HudOptionRegenAnimDesc">Show animation effect when health changes</sys:String>
+    <sys:String x:Key="HudOptionAirAnim">Animation Effect</sys:String>
+    <sys:String x:Key="HudOptionAirAnimDesc">Show bubble burst animation when air decreases</sys:String>
+    <sys:String x:Key="HudOptionDataMapping">Data Mapping</sys:String>
+    <sys:String x:Key="HudOptionDataMappingDesc">Enable to select system data to map</sys:String>
+    <sys:String x:Key="HudOptionCustomValue">Custom Value</sys:String>
+    <sys:String x:Key="HudOptionCustomValueDesc">Enable to manually set value</sys:String>
+
+    <!-- Data Mapping Types -->
+    <sys:String x:Key="DataMappingBattery">Battery Level</sys:String>
+    <sys:String x:Key="DataMappingMemory">Memory Usage</sys:String>
+    <sys:String x:Key="DataMappingCpu">CPU Usage</sys:String>
+    <sys:String x:Key="DataMappingGpu">GPU Usage</sys:String>
+
+    <!-- Custom Value -->
+    <sys:String x:Key="CustomCurrentValue">Current Value</sys:String>
+    <sys:String x:Key="CustomMaxValue">Max Value</sys:String>
+    <sys:String x:Key="CustomSaturationValue">Saturation</sys:String>
+
+    <!-- Common -->
+    <sys:String x:Key="RestoreDefaults">Restore Default Settings</sys:String>
+    <sys:String x:Key="RestoreDefaultsConfirmTitle">Confirm Restore Defaults</sys:String>
+    <sys:String x:Key="RestoreDefaultsConfirmMessage">This will reset all settings on this page to their default values. Continue?</sys:String>
+    <sys:String x:Key="ConfirmDialogConfirm">Confirm</sys:String>
+    <sys:String x:Key="ConfirmDialogCancel">Cancel</sys:String>
+    <sys:String x:Key="MessageDialogOk">OK</sys:String>
+
+    <!-- Hotkey Settings Panel -->
+    <sys:String x:Key="HotkeyPanelTitle">Hotkey Settings</sys:String>
+    <sys:String x:Key="HotkeyGlobalHotkeys">Global Hotkeys</sys:String>
+    <sys:String x:Key="HotkeyLocalHotkeys">Local Hotkeys</sys:String>
+    <sys:String x:Key="HotkeyDesktopIconsLabel">Show Desktop Icons</sys:String>
+    <sys:String x:Key="HotkeyDesktopIconsDesc">Show/Hide Windows desktop icons</sys:String>
+    <sys:String x:Key="HotkeyInventoryLabel">Open Inventory</sys:String>
+    <sys:String x:Key="HotkeyInventoryDesc">Show/Hide inventory window</sys:String>
+    <sys:String x:Key="HotkeySettingsLabel">Open Settings Panel</sys:String>
+    <sys:String x:Key="HotkeySettingsDesc">Show/Hide settings panel window</sys:String>
+    <sys:String x:Key="HotkeyStatusBarLabel">Open Status Bar</sys:String>
+    <sys:String x:Key="HotkeyStatusBarDesc">Show/Hide status bar window</sys:String>
+    <sys:String x:Key="HotkeyCrosshairLabel">Open Crosshair</sys:String>
+    <sys:String x:Key="HotkeyCrosshairDesc">Show/Hide crosshair window</sys:String>
+    <sys:String x:Key="HotkeyDropItemLabel">Drop Item</sys:String>
+    <sys:String x:Key="HotkeyDropItemDesc">Drop item in the hovered slot of the inventory window</sys:String>
+    <sys:String x:Key="HotkeyOpenInventoryLabel">Open Inventory</sys:String>
+    <sys:String x:Key="HotkeyOpenInventoryDesc">Show/Hide the inventory window, only works when an app window is focused</sys:String>
+    <sys:String x:Key="HotkeyRestoreDefaults">Restore Default Settings</sys:String>
+    <sys:String x:Key="HotkeyClearTooltip">Clear hotkey</sys:String>
+    <sys:String x:Key="HotkeyConflictTitle">Hotkey Conflict</sys:String>
+    <sys:String x:Key="HotkeyConflictWarning">Hotkey "{0}" is already used by {1}</sys:String>
+    <sys:String x:Key="HotkeyConflictHint">Do you still want to use this hotkey?</sys:String>
+    <sys:String x:Key="HotkeyConflictConfirm">Confirm</sys:String>
+    <sys:String x:Key="HotkeyConflictCancel">Cancel</sys:String>
+    <sys:String x:Key="HotkeySimpleTitle">Warning</sys:String>
+    <sys:String x:Key="HotkeySimpleMessage">The hotkey "{0}" is too simple. To avoid conflicts with other features and accidental triggers, please use a more complex key combination. Do you want to use this hotkey?</sys:String>
+    <sys:String x:Key="HotkeySimpleConfirm">Confirm</sys:String>
+    <sys:String x:Key="HotkeySimpleCancel">Cancel</sys:String>
+    <sys:String x:Key="HotkeyNotSet">Not Set</sys:String>
+
+    <!-- About Panel -->
+    <sys:String x:Key="AboutPanelTitle">About</sys:String>
+    <sys:String x:Key="AboutDesc">A Minecraft-themed desktop management tool with wallpaper engine and system enhancements</sys:String>
+    <sys:String x:Key="AboutAuthor">Author</sys:String>
+    <sys:String x:Key="AboutLicense">License</sys:String>
+    <sys:String x:Key="AboutProjectUrl">Project URL</sys:String>
+    <sys:String x:Key="AboutTerms">Terms of Service</sys:String>
+    <sys:String x:Key="AboutPrivacy">Privacy Policy</sys:String>
+    <sys:String x:Key="AboutCopyright">Copyright</sys:String>
+    <sys:String x:Key="AboutView">View</sys:String>
+    <sys:String x:Key="AboutCheckUpdate">Check Update</sys:String>
+    <sys:String x:Key="AboutCheckingUpdate">Checking...</sys:String>
+    <sys:String x:Key="AboutFeedback">Feedback</sys:String>
+
+    <!-- Tray Menu -->
+    <sys:String x:Key="TrayShowSettingsPanel">Show Settings Panel</sys:String>
+    <sys:String x:Key="TrayHideSettingsPanel">Hide Settings Panel</sys:String>
+    <sys:String x:Key="TrayShowStatusBar">Show Status Bar</sys:String>
+    <sys:String x:Key="TrayHideStatusBar">Hide Status Bar</sys:String>
+    <sys:String x:Key="TrayShowInventory">Show Inventory</sys:String>
+    <sys:String x:Key="TrayHideInventory">Hide Inventory</sys:String>
+    <sys:String x:Key="TrayExit">Exit</sys:String>
+    <sys:String x:Key="TrayMinimized">Application minimized to system tray</sys:String>
+
+    <!-- Top Most Confirmation Dialog -->
+    <sys:String x:Key="TopMostConfirmTitle">Window Top Most Confirmation</sys:String>
+    <sys:String x:Key="TopMostConfirmHint">Note: This feature does not work in exclusive fullscreen mode</sys:String>
+    <sys:String x:Key="TopMostConfirmSolution">Solution: Enable borderless windowed or windowed fullscreen mode</sys:String>
+    <sys:String x:Key="TopMostConfirmWarningLabel">Risk Warning</sys:String>
+    <sys:String x:Key="TopMostConfirmWarningContent">Anti-cheat systems (VAC, EAC, BattlEye) in most online multiplayer games (CS2, Valorant, PUBG, Apex, etc.) may consider third-party crosshair software as cheating tools. Please use with caution</sys:String>
+    <sys:String x:Key="TopMostConfirmCancel">Cancel</sys:String>
+    <sys:String x:Key="TopMostConfirmOk">Confirm</sys:String>
+
+    <!-- Slot File Missing Confirm Dialog -->
+    <sys:String x:Key="SlotMissingConfirmTitle">File Missing Confirmation</sys:String>
+    <sys:String x:Key="SlotMissingConfirmHint">The original path is missing. Do you want to remove this slot?</sys:String>
+    <sys:String x:Key="SlotMissingConfirmCancel">Cancel</sys:String>
+    <sys:String x:Key="SlotMissingConfirmOk">Confirm</sys:String>
+
+    <!-- BOSS Bar Edit Dialog -->
+    <sys:String x:Key="BossBarEditTitle">Edit Boss Bar</sys:String>
+    <sys:String x:Key="BossBarNameLabel">Name</sys:String>
+    <sys:String x:Key="BossBarNamePlaceholder">Enter boss name</sys:String>
+    <sys:String x:Key="BossBarEditSave">Save</sys:String>
+    <sys:String x:Key="BossBarItemEdit">Edit</sys:String>
+    <sys:String x:Key="BossBarItemDelete">Delete</sys:String>
+    <sys:String x:Key="BossBarItemEnable">Enable</sys:String>
+    <sys:String x:Key="BossBarItemDisable">Disable</sys:String>
+    <sys:String x:Key="BossBarNotchLabel">Notches</sys:String>
+    <sys:String x:Key="BossBarNotchDesc">Click preview to select notch style</sys:String>
+
+    <!-- Inventory Settings Panel -->
+    <sys:String x:Key="InventoryPanelTitle">Inventory Settings</sys:String>
+    <sys:String x:Key="InventoryPlayerSettings">Inventory Related</sys:String>
+    <sys:String x:Key="InventoryPlayerInventorySettings">Player Inventory</sys:String>
+    <sys:String x:Key="InventoryContainerPanelSettings">Container Panel</sys:String>
+    <sys:String x:Key="InventoryFunctionalBlockSettings">Functional Block Panel</sys:String>
+    <sys:String x:Key="InventoryCreatureSettings">Creature Inventory</sys:String>
+    <sys:String x:Key="InventoryTitle">Inventory</sys:String>
+    <sys:String x:Key="TooltipTitle">Tooltip</sys:String>
+    <sys:String x:Key="InventoryOptionVisible">Show Inventory</sys:String>
+    <sys:String x:Key="InventoryOptionVisibleDesc">Display inventory window on desktop</sys:String>
+    <sys:String x:Key="InventoryOptionLocked">Lock Position</sys:String>
+    <sys:String x:Key="InventoryOptionLockedDesc">Prevent inventory window from being accidentally dragged</sys:String>
+    <sys:String x:Key="InventoryOptionRememberPosition">Remember Position</sys:String>
+    <sys:String x:Key="InventoryOptionRememberPositionDesc">Restore inventory window position on next launch</sys:String>
+    <sys:String x:Key="InventoryOptionHoverEffect">Hover Effect</sys:String>
+    <sys:String x:Key="InventoryOptionHoverEffectDesc">Show white overlay when hovering over slots</sys:String>
+    <sys:String x:Key="InventoryOptionShowTooltip">Tooltip</sys:String>
+    <sys:String x:Key="InventoryOptionShowTooltipDesc">Show file details when hovering</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileName">File Name</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileNameDesc">Show file name without extension</sys:String>
+    <sys:String x:Key="TooltipOptionShowOriginalName">Original Name</sys:String>
+    <sys:String x:Key="TooltipOptionShowOriginalNameDesc">Show original file name with extension</sys:String>
+    <sys:String x:Key="TooltipOptionShowFilePath">File Path</sys:String>
+    <sys:String x:Key="TooltipOptionShowFilePathDesc">Show full file path</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileType">File Type</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileTypeDesc">Show file extension type</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlay">Gray Overlay</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayDesc">Show fullscreen gray overlay when inventory is open</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayOpacity">Opacity</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayOpacityDesc">Adjust gray overlay opacity (0-100)</sys:String>
+    <sys:String x:Key="GrayOverlayOpacityMax">/100%</sys:String>
+    <sys:String x:Key="InventoryOptionHideStatusBar">Hide Status Bar</sys:String>
+    <sys:String x:Key="InventoryOptionHideStatusBarDesc">Hide status bar window when inventory is open</sys:String>
+    <sys:String x:Key="SurvivalInventoryTitle">Survival Inventory</sys:String>
+    <sys:String x:Key="CreativeInventoryTitle">Creative Inventory</sys:String>
+    <sys:String x:Key="ChestTitle">Chest</sys:String>
+    <sys:String x:Key="LargeChestTitle">Large Chest</sys:String>
+    <sys:String x:Key="CraftingTableTitle">Crafting Table</sys:String>
+    <sys:String x:Key="EnchantmentTableTitle">Enchantment Table</sys:String>
+    <sys:String x:Key="BeaconTitle">Beacon</sys:String>
+    <sys:String x:Key="AnvilTitle">Anvil</sys:String>
+    <sys:String x:Key="GrindstoneTitle">Grindstone</sys:String>
+    <sys:String x:Key="CartographyTableTitle">Cartography Table</sys:String>
+    <sys:String x:Key="StonecutterTitle">Stonecutter</sys:String>
+    <sys:String x:Key="LoomTitle">Loom</sys:String>
+    <sys:String x:Key="SmithingTableTitle">Smithing Table</sys:String>
+    <sys:String x:Key="VillagerTitle">Villager</sys:String>
+    <sys:String x:Key="HorseTitle">Horse</sys:String>
+    <sys:String x:Key="DonkeyTitle">Donkey</sys:String>
+    <sys:String x:Key="CamelTitle">Camel</sys:String>
+    <sys:String x:Key="LlamaTitle">Llama</sys:String>
+    <sys:String x:Key="NautilusTitle">Nautilus</sys:String>
+
+    <!-- Inventory Style Preview Window -->
+    <sys:String x:Key="StylePreviewTitle">Select Inventory Style</sys:String>
+    <sys:String x:Key="StylePreviewPrev">Previous Style</sys:String>
+    <sys:String x:Key="StylePreviewNext">Next Style</sys:String>
+    <sys:String x:Key="InventoryStyleChangeName">Change Style</sys:String>
+    <sys:String x:Key="HudIconChangeName">Change Icon</sys:String>
+    <sys:String x:Key="InventoryStyleOption">Inventory Style</sys:String>
+    <sys:String x:Key="InventoryStyleOptionDesc">Click to select inventory display style</sys:String>
+    <!-- Style Names -->
+    <sys:String x:Key="InventoryStyleInventory">Inventory</sys:String>
+    <sys:String x:Key="InventoryStyleTabInventory">Tab Inventory</sys:String>
+    <sys:String x:Key="InventoryStyleBrewingStand">Brewing Stand</sys:String>
+    <sys:String x:Key="InventoryStyleCartographyTable">Cartography Table</sys:String>
+    <sys:String x:Key="InventoryStyleCrafter">Crafter</sys:String>
+    <sys:String x:Key="InventoryStyleCraftingTable">Crafting Table</sys:String>
+    <sys:String x:Key="InventoryStyleDispenser">Dispenser</sys:String>
+    <sys:String x:Key="InventoryStyleFurnace">Furnace</sys:String>
+    <sys:String x:Key="InventoryStyleGeneric54">Large Chest</sys:String>
+    <sys:String x:Key="InventoryStyleGrindstone">Grindstone</sys:String>
+    <sys:String x:Key="InventoryStyleHopper">Hopper</sys:String>
+    <sys:String x:Key="InventoryStyleHorse">Horse</sys:String>
+    <sys:String x:Key="InventoryStyleNautilus">Nautilus</sys:String>
+    <sys:String x:Key="InventoryStyleShulkerBox">Shulker Box</sys:String>
+    <sys:String x:Key="InventoryStyleSmithing">Smithing Table</sys:String>
+    <sys:String x:Key="InventoryOptionSharedData">Shared Data</sys:String>
+    <sys:String x:Key="InventoryOptionSharedDataDesc">When enabled, all styles share slot data; when disabled, each style has independent storage</sys:String>
+
+    <!-- Slot Context Menu -->
+    <sys:String x:Key="ContextMenuOpen">Open</sys:String>
+    <sys:String x:Key="ContextMenuOpenLocation">Open File Location</sys:String>
+    <sys:String x:Key="ContextMenuRunAsAdmin">Run as Administrator</sys:String>
+    <sys:String x:Key="ContextMenuCopyPath">Copy File Path</sys:String>
+    <sys:String x:Key="ContextMenuCut">Cut</sys:String>
+    <sys:String x:Key="ContextMenuCopy">Copy</sys:String>
+    <sys:String x:Key="ContextMenuPaste">Paste</sys:String>
+    <sys:String x:Key="ContextMenuDelete">Delete</sys:String>
+    <sys:String x:Key="ContextMenuRename">Rename</sys:String>
+    <sys:String x:Key="ContextMenuProperties">Properties</sys:String>
+
+    <!-- Rename Slot Dialog -->
+    <sys:String x:Key="RenameSlotTitle">Rename Slot</sys:String>
+    <sys:String x:Key="RenameSlotFilePath">File Path</sys:String>
+    <sys:String x:Key="RenameSlotDisplayName">Display Name</sys:String>
+    <sys:String x:Key="RenameSlotPlaceholder">Enter custom display name</sys:String>
+    <sys:String x:Key="RenameSlotCancel">Cancel</sys:String>
+    <sys:String x:Key="RenameSlotConfirm">Confirm</sys:String>
+
+    <!-- HUD Icon Options -->
+    <!-- Heart Type -->
+    <sys:String x:Key="IconHeartNormal">Normal</sys:String>
+    <sys:String x:Key="IconHeartHardcore">Hardcore</sys:String>
+    <sys:String x:Key="IconHeartPoisoned">Poisoned</sys:String>
+    <sys:String x:Key="IconHeartPoisonedHardcore">Poisoned Hardcore</sys:String>
+    <sys:String x:Key="IconHeartWithered">Withered</sys:String>
+    <sys:String x:Key="IconHeartWitheredHardcore">Withered Hardcore</sys:String>
+    <sys:String x:Key="IconHeartFrozen">Frozen</sys:String>
+    <sys:String x:Key="IconHeartFrozenHardcore">Frozen Hardcore</sys:String>
+    <sys:String x:Key="IconHeartVehicle">Vehicle</sys:String>
+    <sys:String x:Key="IconHeartAbsorption">Absorption</sys:String>
+    <sys:String x:Key="IconHeartAbsorptionHardcore">Absorption Hardcore</sys:String>
+
+    <!-- Food Type -->
+    <sys:String x:Key="IconFoodNormal">Normal</sys:String>
+    <sys:String x:Key="IconFoodHunger">Hunger Effect</sys:String>
+
+    <!-- Absorbing Type -->
+    <sys:String x:Key="IconAbsorbingNormal">Normal</sys:String>
+    <sys:String x:Key="IconAbsorbingHardcore">Hardcore</sys:String>
+
+    <!-- Armor/Air Type -->
+    <sys:String x:Key="IconArmorNormal">Normal</sys:String>
+    <sys:String x:Key="IconAirNormal">Normal</sys:String>
+
+    <!-- ExpBar Type -->
+    <sys:String x:Key="IconExpBarExperience">Experience Bar</sys:String>
+    <sys:String x:Key="IconExpBarJump">Jump Bar</sys:String>
+
+    <!-- BossBar Type -->
+    <sys:String x:Key="IconBossBarBlue">Blue</sys:String>
+    <sys:String x:Key="IconBossBarGreen">Green</sys:String>
+    <sys:String x:Key="IconBossBarRed">Red</sys:String>
+    <sys:String x:Key="IconBossBarPink">Pink</sys:String>
+    <sys:String x:Key="IconBossBarPurple">Purple</sys:String>
+    <sys:String x:Key="IconBossBarWhite">White</sys:String>
+    <sys:String x:Key="IconBossBarYellow">Yellow</sys:String>
+
+    <!-- Notch Type -->
+    <sys:String x:Key="IconNotchNone">None</sys:String>
+    <sys:String x:Key="IconNotch6">6 Notches</sys:String>
+    <sys:String x:Key="IconNotch10">10 Notches</sys:String>
+    <sys:String x:Key="IconNotch12">12 Notches</sys:String>
+    <sys:String x:Key="IconNotch20">20 Notches</sys:String>
+
+    <!-- Skin Tab Options -->
+    <sys:String x:Key="SkinTabSteve">Steve</sys:String>
+    <sys:String x:Key="SkinTabAlex">Alex</sys:String>
+    <sys:String x:Key="SkinLoading">Loading...</sys:String>
+
+    <!-- Rename Skin Window -->
+    <sys:String x:Key="RenameSkinTitle">Rename Skin</sys:String>
+    <sys:String x:Key="RenameSkinNewLabel">New Name</sys:String>
+    <sys:String x:Key="RenameSkinCancel">Cancel</sys:String>
+    <sys:String x:Key="RenameSkinConfirm">Confirm</sys:String>
+    <sys:String x:Key="RenameSkinDuplicate">A skin named "{0}" already exists</sys:String>
+    <sys:String x:Key="RenameSkinDuplicateTitle">Rename</sys:String>
+    <sys:String x:Key="RenameSkinDeleteFailed">Failed to delete file</sys:String>
+    <sys:String x:Key="RenameSkinDeleteTitle">Remove Skin</sys:String>
+
+    <!-- Remove Skin Confirm Window -->
+    <sys:String x:Key="RemoveSkinTitle">Remove Skin</sys:String>
+    <sys:String x:Key="RemoveSkinConfirmHint">Are you sure you want to remove this skin? This action cannot be undone.</sys:String>
+    <sys:String x:Key="RemoveSkinCancel">Cancel</sys:String>
+    <sys:String x:Key="RemoveSkinConfirm">Remove</sys:String>
+
+    <!-- About Panel -->
+    <sys:String x:Key="AboutCheckUpdateMessage">You are already on the latest version</sys:String>
+    <sys:String x:Key="AboutCheckUpdateTitle">Check Update</sys:String>
+    <sys:String x:Key="UpdateDialogDownload">Download</sys:String>
+    <sys:String x:Key="UpdateDialogSkip">Skip</sys:String>
+    <sys:String x:Key="UpdateDialogNoChangelog">No changelog available</sys:String>
+
+    <!-- Other -->
+    <sys:String x:Key="IconPickerNone">None</sys:String>
+    <sys:String x:Key="BossBarDefaultName">New Boss</sys:String>
+
+    <!-- Localization backfill -->
+    <sys:String x:Key="SkinPreviewTitle">Skin Preview</sys:String>
+    <sys:String x:Key="SkinPreviewHint">Drag to rotate | Click ViewCube | Scroll to zoom</sys:String>
+    <sys:String x:Key="ContextMenuSetCurrentSkin">Set as current skin</sys:String>
+    <sys:String x:Key="ContextMenuRemove">Remove</sys:String>
+    <sys:String x:Key="RenameSkinNameEmpty">Name cannot be empty</sys:String>
+    <sys:String x:Key="RenameSkinInvalidChars">Only letters, digits, underscores, hyphens and spaces are allowed</sys:String>
+    <sys:String x:Key="RenameSkinNameTooLong">Name cannot exceed 32 characters</sys:String>
+    <sys:String x:Key="SlotRenameFailedTitle">Rename Failed</sys:String>
+    <sys:String x:Key="SlotRenameExistsMessage">File "{0}" already exists, choose another name.</sys:String>
+    <sys:String x:Key="SlotRenameError">Rename failed: {0}</sys:String>
+    <sys:String x:Key="TooltipFileMissing">File missing</sys:String>
+    <sys:String x:Key="TooltipNoExtension">(no extension)</sys:String>
+    <sys:String x:Key="CrosshairWindowTitle">Crosshair</sys:String>
+    <sys:String x:Key="GrayOverlayWindowTitle">Gray Overlay</sys:String>
+    <sys:String x:Key="PngFileFilter">PNG files (*.png)|*.png</sys:String>
+</ResourceDictionary>

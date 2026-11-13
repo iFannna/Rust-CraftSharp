@@ -1,0 +1,115 @@
+:root {
+  color: #e8e8e8;
+  background: #141414;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+
+.title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.02em;
+}
+
+.title p {
+  margin: 6px 0 0;
+  color: #9a9a9a;
+  font-size: 13px;
+}
+
+.badge {
+  flex: none;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: #bdbdbd;
+  font-size: 12px;
+}
+
+.preview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  min-height: 340px;
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid #2b2b2b;
+  border-radius: 12px;
+  background-color: #1b1b1b;
+  background-image:
+    linear-gradient(45deg, #202020 25%, transparent 25%),
+    linear-gradient(-45deg, #202020 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #202020 75%),
+    linear-gradient(-45deg, transparent 75%, #202020 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  overflow: auto;
+}
+
+.preview canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 20px;
+  margin-top: 20px;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #bdbdbd;
+  font-size: 13px;
+}
+
+.controls select,
+.controls input[type="range"] {
+  width: 100%;
+}
+
+.controls select {
+  padding: 6px 8px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1e1e1e;
+  color: #e8e8e8;
+}
+
+.error {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid #6b2b2b;
+  border-radius: 8px;
+  background: #2a1616;
+  color: #ff9b9b;
+  font-size: 13px;
+  white-space: pre-wrap;
+}

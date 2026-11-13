@@ -1,0 +1,530 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- 窗口标题 -->
+    <sys:String x:Key="AppTitle">Craft#</sys:String>
+    <sys:String x:Key="SettingsTitle">Craft# 设置</sys:String>
+    <sys:String x:Key="BossBarWindowTitle">BOSS血条</sys:String>
+    <sys:String x:Key="StatusBarWindowTitle">状态栏</sys:String>
+    <sys:String x:Key="InventoryWindowTitle">物品栏</sys:String>
+
+    <!-- 窗口标题栏按钮（读屏朗读用） -->
+    <sys:String x:Key="WindowButtonMinimize">最小化</sys:String>
+    <sys:String x:Key="WindowButtonMaximize">最大化</sys:String>
+    <sys:String x:Key="WindowButtonRestore">还原</sys:String>
+    <sys:String x:Key="WindowButtonClose">关闭</sys:String>
+
+    <!-- 导航菜单 -->
+    <sys:String x:Key="NavSystem">系统</sys:String>
+    <sys:String x:Key="NavAppearance">外观</sys:String>
+    <sys:String x:Key="NavWallpaper">壁纸</sys:String>
+    <sys:String x:Key="NavSkin">皮肤</sys:String>
+    <sys:String x:Key="NavHud">HUD</sys:String>
+    <sys:String x:Key="NavInventory">物品栏</sys:String>
+    <sys:String x:Key="NavHotkey">快捷键</sys:String>
+    <sys:String x:Key="NavAbout">关于</sys:String>
+
+    <!-- 壁纸设置面板 -->
+    <sys:String x:Key="WallpaperPanelTitle">壁纸设置</sys:String>
+    <sys:String x:Key="WallpaperAll">全部</sys:String>
+    <sys:String x:Key="WallpaperStatic">静态</sys:String>
+    <sys:String x:Key="WallpaperDynamic">动态</sys:String>
+    <sys:String x:Key="WallpaperSortLatest">最新</sys:String>
+    <sys:String x:Key="WallpaperSortHot">最热</sys:String>
+    <sys:String x:Key="WallpaperSortDownloads">下载量</sys:String>
+    <sys:String x:Key="WallpaperPageInfo">第 {0} / {1} 页</sys:String>
+    <sys:String x:Key="WallpaperModeSync">同步设置</sys:String>
+    <sys:String x:Key="WallpaperModeIndependent">单独设置</sys:String>
+    <sys:String x:Key="WallpaperModeSpan">跨屏拼接</sys:String>
+    <sys:String x:Key="WallpaperApplyAction">应用</sys:String>
+    <sys:String x:Key="WallpaperPrev">上一页</sys:String>
+    <sys:String x:Key="WallpaperNext">下一页</sys:String>
+    <sys:String x:Key="WallpaperRetry">重试</sys:String>
+    <sys:String x:Key="WallpaperErrorTitle">加载失败</sys:String>
+    <sys:String x:Key="WallpaperErrorDesc">无法加载壁纸列表，请检查网络连接后重试。</sys:String>
+    <sys:String x:Key="WallpaperLoading">加载中...</sys:String>
+    <sys:String x:Key="WallpaperLoadFailed">加载失败</sys:String>
+    <sys:String x:Key="WallpaperDynamicBadge">动态</sys:String>
+    <sys:String x:Key="WallpaperQuickSet">设为壁纸</sys:String>
+    <sys:String x:Key="WallpaperViewImage">查看壁纸</sys:String>
+    <sys:String x:Key="WallpaperSetWallpaper">设为壁纸</sys:String>
+    <sys:String x:Key="WallpaperDownload">下载</sys:String>
+    <sys:String x:Key="WallpaperSetting">设置中...</sys:String>
+    <sys:String x:Key="WallpaperSetSuccess">壁纸已设置</sys:String>
+    <sys:String x:Key="WallpaperDownloadSuccess">下载完成</sys:String>
+    <sys:String x:Key="WallpaperPreviewTitle">壁纸预览</sys:String>
+    <sys:String x:Key="WallpaperPreviewClose">关闭</sys:String>
+    <sys:String x:Key="WallpaperPreviewFit">适应窗口</sys:String>
+    <sys:String x:Key="WallpaperPreviewPrev">上一张</sys:String>
+    <sys:String x:Key="WallpaperPreviewNext">下一张</sys:String>
+    <sys:String x:Key="WallpaperPreviewZoomIn">放大</sys:String>
+    <sys:String x:Key="WallpaperPreviewZoomOut">缩小</sys:String>
+    <sys:String x:Key="WallpaperPreviewDownload">下载壁纸</sys:String>
+
+    <!-- 显示器设置弹窗 -->
+    <sys:String x:Key="DisplaySettingsTitle">显示器设置</sys:String>
+    <sys:String x:Key="DisplayIdentify">标识</sys:String>
+    <sys:String x:Key="DisplaySpanReset">重置</sys:String>
+    <sys:String x:Key="DisplayModeExtend">扩展这些显示器</sys:String>
+    <sys:String x:Key="DisplayModeDuplicate">复制这些显示器</sys:String>
+    <sys:String x:Key="DisplayModeSingle">仅在此屏幕上显示</sys:String>
+    <sys:String x:Key="DisplayScaleLayoutSection">缩放和布局</sys:String>
+    <sys:String x:Key="DisplayScale">缩放</sys:String>
+    <sys:String x:Key="DisplayScaleDesc">更改文本、应用和其他项目的大小</sys:String>
+    <sys:String x:Key="DisplayResolution">显示器分辨率</sys:String>
+    <sys:String x:Key="DisplayResolutionDesc">调整分辨率以适合所连接的显示器</sys:String>
+    <sys:String x:Key="DisplayMonitorNameFallback">显示器 {0}</sys:String>
+    <sys:String x:Key="DisplayNoTarget">请至少选择一个显示器</sys:String>
+
+    <!-- 皮肤设置面板 -->
+    <sys:String x:Key="SkinPanelTitle">皮肤设置</sys:String>
+    <sys:String x:Key="SkinTabUpload">上传材质</sys:String>
+    <sys:String x:Key="SkinSearchPlaceholder">搜索皮肤...</sys:String>
+
+    <!-- 上传材质弹窗 -->
+    <sys:String x:Key="UploadSkinTitle">上传材质</sys:String>
+    <sys:String x:Key="UploadSkinNameLabel">材质名称</sys:String>
+    <sys:String x:Key="UploadSkinNamePlaceholder">材质名称应小于 32 个字节且不能包含奇怪的符号</sys:String>
+    <sys:String x:Key="UploadSkinTypeLabel">材质类型</sys:String>
+    <sys:String x:Key="UploadSkinFileLabel">皮肤文件</sys:String>
+    <sys:String x:Key="UploadSkinSelectFile">选择文件</sys:String>
+    <sys:String x:Key="UploadSkinCancel">取消</sys:String>
+    <sys:String x:Key="UploadSkinConfirm">确认</sys:String>
+    <sys:String x:Key="UploadSkinNameTooLong">名称长度不能超过32个字符</sys:String>
+    <sys:String x:Key="UploadSkinNameInvalidChars">名称只能包含字母、数字、下划线、横杠和空格</sys:String>
+    <sys:String x:Key="UploadSkinNameRequired">请输入材质名称</sys:String>
+    <sys:String x:Key="UploadSkinNoFile">请先选择一个皮肤文件</sys:String>
+    <sys:String x:Key="UploadSkinNameConflict">已存在同名皮肤 "{0}"，请使用其他名称</sys:String>
+    <sys:String x:Key="UploadSkinCopyFailed">复制文件失败：{0}</sys:String>
+    <sys:String x:Key="UploadSkinSuccess">上传成功</sys:String>
+
+    <!-- 系统设置面板 -->
+    <sys:String x:Key="SystemPanelTitle">系统设置</sys:String>
+    <sys:String x:Key="LanguageLabel">语言 / Language</sys:String>
+    <sys:String x:Key="LanguageDesc">选择界面显示语言</sys:String>
+    <sys:String x:Key="LangZhCN">简体中文</sys:String>
+    <sys:String x:Key="LangEnUS">English</sys:String>
+    <sys:String x:Key="AutoStartLabel">开机自启动</sys:String>
+    <sys:String x:Key="AutoStartDesc">系统启动时自动运行 Craft#</sys:String>
+    <sys:String x:Key="DefaultOpenPanelLabel">默认打开面板</sys:String>
+    <sys:String x:Key="DefaultOpenPanelDesc">程序启动时自动打开设置面板窗口</sys:String>
+    <sys:String x:Key="RememberWindowPositionLabel">记住窗口位置</sys:String>
+    <sys:String x:Key="RememberWindowPositionDesc">下次启动时恢复设置窗口的位置</sys:String>
+    <sys:String x:Key="RememberWindowSizeLabel">记住窗口大小</sys:String>
+    <sys:String x:Key="RememberWindowSizeDesc">下次启动时恢复设置窗口的大小</sys:String>
+    <sys:String x:Key="RememberCardStatesLabel">记住卡片状态</sys:String>
+    <sys:String x:Key="RememberCardStatesDesc">下次启动时恢复设置页面卡片的展开/折叠状态</sys:String>
+    <sys:String x:Key="RememberNavSelectionLabel">记住菜单选项</sys:String>
+    <sys:String x:Key="RememberNavSelectionDesc">下次启动时恢复上次选中的设置页面</sys:String>
+
+    <!-- 外观设置面板 -->
+    <sys:String x:Key="AppearancePanelTitle">外观设置</sys:String>
+    <sys:String x:Key="ThemeLabel">主题</sys:String>
+    <sys:String x:Key="ThemeDesc">选择界面显示风格</sys:String>
+    <sys:String x:Key="ThemeSystem">跟随系统</sys:String>
+    <sys:String x:Key="ThemeDark">暗色</sys:String>
+    <sys:String x:Key="ThemeLight">亮色</sys:String>
+    <sys:String x:Key="FontLabel">字体</sys:String>
+    <sys:String x:Key="FontDesc">选择界面显示字体</sys:String>
+    <sys:String x:Key="FontDefault">跟随系统</sys:String>
+    <sys:String x:Key="FontYaHei">微软雅黑</sys:String>
+    <sys:String x:Key="FontSongTi">宋体</sys:String>
+    <sys:String x:Key="FontHeiTi">黑体</sys:String>
+    <sys:String x:Key="FontKaiTi">楷体</sys:String>
+    <sys:String x:Key="FontPixel">像素字体</sys:String>
+    <sys:String x:Key="FontUnifont">统一字体</sys:String>
+    <sys:String x:Key="FontSizeLabel">字体大小</sys:String>
+    <sys:String x:Key="FontSizeDesc">选择界面字体大小</sys:String>
+    <sys:String x:Key="IconStyleLabel">图标</sys:String>
+    <sys:String x:Key="IconStyleDesc">选择界面图标样式</sys:String>
+    <sys:String x:Key="IconStyleDefault">默认</sys:String>
+    <sys:String x:Key="IconStylePixel">像素</sys:String>
+    <sys:String x:Key="IconStyleSimple">简约</sys:String>
+    <sys:String x:Key="IconStyleRealistic">写实</sys:String>
+
+    <!-- 系统托盘图标 -->
+    <sys:String x:Key="AppIconLabel">图标</sys:String>
+    <sys:String x:Key="AppIconDesc">选择系统托盘图标</sys:String>
+    <sys:String x:Key="AppIconTooltip">点击更换图标</sys:String>
+
+    <!-- 图标选择窗口 -->
+    <sys:String x:Key="IconPickerTitle">选择应用图标</sys:String>
+    <sys:String x:Key="IconPickerCategoryBlock">方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryBlockAll">全部方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryBuildingBlock">建筑方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryColoredBlock">染色方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryFunctionalBlock">功能方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryNaturalBlock">自然方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryRedstoneBlock">红石方块</sys:String>
+    <sys:String x:Key="IconPickerCategoryItem">物品</sys:String>
+    <sys:String x:Key="IconPickerCategoryItemAll">全部物品</sys:String>
+    <sys:String x:Key="IconPickerCategoryCombat">战斗用品</sys:String>
+    <sys:String x:Key="IconPickerCategoryFood">食物与饮品</sys:String>
+    <sys:String x:Key="IconPickerCategoryIngredient">原材料</sys:String>
+    <sys:String x:Key="IconPickerCategorySpawnEgg">刷怪蛋</sys:String>
+    <sys:String x:Key="IconPickerCategoryTool">工具与实用物品</sys:String>
+    <sys:String x:Key="IconPickerLoading">加载中...</sys:String>
+
+    <!-- HUD 图标选择窗口 -->
+    <sys:String x:Key="HudIconPickerTitle">选择元素图标</sys:String>
+
+    <!-- HUD 设置面板 -->
+    <sys:String x:Key="HudPanelTitle">HUD 设置</sys:String>
+    <sys:String x:Key="HudStatusBarSettings">状态栏设置</sys:String>
+    <sys:String x:Key="HudCrosshairSettings">准星设置</sys:String>
+    <sys:String x:Key="HudElementStatusBar">状态栏</sys:String>
+    <sys:String x:Key="HudElementHotbar">快捷栏</sys:String>
+    <sys:String x:Key="HudElementHealth">生命值</sys:String>
+    <sys:String x:Key="HudElementFood">饥饿值</sys:String>
+    <sys:String x:Key="HudElementExpbar">经验条</sys:String>
+    <sys:String x:Key="HudElementAir">空气值</sys:String>
+    <sys:String x:Key="HudElementArmor">护甲值</sys:String>
+    <sys:String x:Key="HudElementAbsorbing">伤害吸收值</sys:String>
+    <sys:String x:Key="HudElementCrosshair">准星</sys:String>
+    <sys:String x:Key="HudElementAttackIndicator">攻击指示器</sys:String>
+    <sys:String x:Key="HudBossBarSettings">BOSS血条设置</sys:String>
+    <sys:String x:Key="HudElementBossBar">BOSS血条</sys:String>
+
+    <!-- HUD 选项 -->
+    <sys:String x:Key="HudOptionShowStatusBar">显示状态栏</sys:String>
+    <sys:String x:Key="HudOptionShowStatusBarDesc">在桌面显示状态栏窗口</sys:String>
+    <sys:String x:Key="HudOptionRememberPosition">记住位置</sys:String>
+    <sys:String x:Key="HudOptionRememberPositionDesc">下次启动时恢复状态栏窗口位置</sys:String>
+    <sys:String x:Key="HudOptionClickMode">打开动作</sys:String>
+    <sys:String x:Key="HudOptionClickModeDesc">选择打开快捷栏格子的操作方式</sys:String>
+    <sys:String x:Key="HudOptionClickModeSingle">单击</sys:String>
+    <sys:String x:Key="HudOptionClickModeDouble">双击</sys:String>
+    <sys:String x:Key="HudOptionShowHotbar">显示快捷栏</sys:String>
+    <sys:String x:Key="HudOptionShowHotbarDesc">在桌面显示快捷栏窗口</sys:String>
+    <sys:String x:Key="HudOptionHoverEffect">悬浮效果</sys:String>
+    <sys:String x:Key="HudOptionHoverEffectDesc">鼠标悬停时显示选中框</sys:String>
+    <sys:String x:Key="HudOptionShowTargetIcon">显示目标程序图标</sys:String>
+    <sys:String x:Key="HudOptionShowTargetIconDesc">仅对快捷方式生效，可能因为权限问题失效</sys:String>
+    <sys:String x:Key="HudOptionFileNameColor">文件名颜色</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorDesc">选中快捷栏格子时显示的文件名颜色</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorAuto">自动</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorOther">其他...</sys:String>
+    <sys:String x:Key="HudOptionFileNameColorCustom">自定义</sys:String>
+    <sys:String x:Key="ColorPickerTitle">选择颜色</sys:String>
+    <sys:String x:Key="ColorPickerPreview">预览</sys:String>
+    <sys:String x:Key="ColorPickerConfirm">确定</sys:String>
+    <sys:String x:Key="ColorPickerCancel">取消</sys:String>
+    <sys:String x:Key="HudOptionLockPosition">锁定位置</sys:String>
+    <sys:String x:Key="HudOptionLockPositionDesc">防止快捷栏被意外拖动</sys:String>
+    <sys:String x:Key="HudOptionLeftOffhand">左副手槽</sys:String>
+    <sys:String x:Key="HudOptionLeftOffhandDesc">在快捷栏左侧显示副手槽位</sys:String>
+    <sys:String x:Key="HudOptionRightOffhand">右副手槽</sys:String>
+    <sys:String x:Key="HudOptionRightOffhandDesc">在快捷栏右侧显示副手槽位</sys:String>
+    <sys:String x:Key="HudOptionElementIcon">元素图标</sys:String>
+    <sys:String x:Key="HudOptionElementIconDesc">此HUD元素的显示图标</sys:String>
+    <sys:String x:Key="HudOptionShowElement">显示元素</sys:String>
+    <sys:String x:Key="HudOptionShowElementDesc">在快捷栏上显示此 HUD 元素</sys:String>
+    <sys:String x:Key="HudOptionTopMost">窗口置顶</sys:String>
+    <sys:String x:Key="HudOptionTopMostDesc">准星窗口始终保持在其他窗口之上</sys:String>
+    <sys:String x:Key="HudOptionRegenAnim">动画效果</sys:String>
+    <sys:String x:Key="HudOptionRegenAnimDesc">生命值变化时显示动画效果</sys:String>
+    <sys:String x:Key="HudOptionAirAnim">动画效果</sys:String>
+    <sys:String x:Key="HudOptionAirAnimDesc">空气值减少时显示气泡破裂动画效果</sys:String>
+    <sys:String x:Key="HudOptionDataMapping">数据映射</sys:String>
+    <sys:String x:Key="HudOptionDataMappingDesc">开启后选择映射的系统数据</sys:String>
+    <sys:String x:Key="HudOptionCustomValue">自定义数值</sys:String>
+    <sys:String x:Key="HudOptionCustomValueDesc">开启后手动设置数值</sys:String>
+
+    <!-- 数据映射类型 -->
+    <sys:String x:Key="DataMappingBattery">电池电量</sys:String>
+    <sys:String x:Key="DataMappingMemory">内存占用率</sys:String>
+    <sys:String x:Key="DataMappingCpu">CPU利用率</sys:String>
+    <sys:String x:Key="DataMappingGpu">GPU利用率</sys:String>
+
+    <!-- 自定义数值 -->
+    <sys:String x:Key="CustomCurrentValue">当前值</sys:String>
+    <sys:String x:Key="CustomMaxValue">最大值</sys:String>
+    <sys:String x:Key="CustomSaturationValue">饱和度</sys:String>
+
+    <!-- 通用 -->
+    <sys:String x:Key="RestoreDefaults">恢复默认设置</sys:String>
+    <sys:String x:Key="RestoreDefaultsConfirmTitle">确认恢复默认设置</sys:String>
+    <sys:String x:Key="RestoreDefaultsConfirmMessage">此操作将恢复当前页面的所有设置为默认值，是否继续？</sys:String>
+    <sys:String x:Key="ConfirmDialogConfirm">确认</sys:String>
+    <sys:String x:Key="ConfirmDialogCancel">取消</sys:String>
+    <sys:String x:Key="MessageDialogOk">好的</sys:String>
+
+    <!-- 快捷键设置面板 -->
+    <sys:String x:Key="HotkeyPanelTitle">快捷键设置</sys:String>
+    <sys:String x:Key="HotkeyGlobalHotkeys">全局快捷键</sys:String>
+    <sys:String x:Key="HotkeyLocalHotkeys">局部快捷键</sys:String>
+    <sys:String x:Key="HotkeyDesktopIconsLabel">显示桌面图标</sys:String>
+    <sys:String x:Key="HotkeyDesktopIconsDesc">显示/隐藏 Windows 桌面图标</sys:String>
+    <sys:String x:Key="HotkeyInventoryLabel">打开物品栏</sys:String>
+    <sys:String x:Key="HotkeyInventoryDesc">显示/隐藏物品栏窗口</sys:String>
+    <sys:String x:Key="HotkeySettingsLabel">打开设置面板</sys:String>
+    <sys:String x:Key="HotkeySettingsDesc">显示/隐藏设置面板窗口</sys:String>
+    <sys:String x:Key="HotkeyStatusBarLabel">打开状态栏</sys:String>
+    <sys:String x:Key="HotkeyStatusBarDesc">显示/隐藏状态栏窗口</sys:String>
+    <sys:String x:Key="HotkeyCrosshairLabel">打开准星</sys:String>
+    <sys:String x:Key="HotkeyCrosshairDesc">显示/隐藏准星窗口</sys:String>
+    <sys:String x:Key="HotkeyDropItemLabel">丢弃物品</sys:String>
+    <sys:String x:Key="HotkeyDropItemDesc">丢弃物品栏窗口中鼠标悬浮格子内的物品</sys:String>
+    <sys:String x:Key="HotkeyOpenInventoryLabel">打开物品栏</sys:String>
+    <sys:String x:Key="HotkeyOpenInventoryDesc">显示/隐藏物品栏窗口，仅在应用窗口聚焦时生效</sys:String>
+    <sys:String x:Key="HotkeyRestoreDefaults">恢复默认设置</sys:String>
+    <sys:String x:Key="HotkeyClearTooltip">清除快捷键</sys:String>
+    <sys:String x:Key="HotkeyConflictTitle">快捷键冲突</sys:String>
+    <sys:String x:Key="HotkeyConflictWarning">快捷键 "{0}" 已被 {1} 占用</sys:String>
+    <sys:String x:Key="HotkeyConflictHint">是否仍要继续使用此快捷键？</sys:String>
+    <sys:String x:Key="HotkeyConflictConfirm">确认</sys:String>
+    <sys:String x:Key="HotkeyConflictCancel">取消</sys:String>
+    <sys:String x:Key="HotkeySimpleTitle">警告</sys:String>
+    <sys:String x:Key="HotkeySimpleMessage">快捷键 "{0}" 过于简单，为避免与其他功能冲突和误触，请设置更复杂的快捷键组合。确定要使用此快捷键吗？</sys:String>
+    <sys:String x:Key="HotkeySimpleConfirm">确认</sys:String>
+    <sys:String x:Key="HotkeySimpleCancel">取消</sys:String>
+    <sys:String x:Key="HotkeyNotSet">未设置</sys:String>
+
+    <!-- 关于面板 -->
+    <sys:String x:Key="AboutPanelTitle">关于</sys:String>
+    <sys:String x:Key="AboutDesc">一款 Minecraft 主题风格的桌面管理工具，集成壁纸引擎与系统增强功能</sys:String>
+    <sys:String x:Key="AboutAuthor">作者</sys:String>
+    <sys:String x:Key="AboutLicense">许可证</sys:String>
+    <sys:String x:Key="AboutProjectUrl">项目地址</sys:String>
+    <sys:String x:Key="AboutTerms">服务条款</sys:String>
+    <sys:String x:Key="AboutPrivacy">隐私政策</sys:String>
+    <sys:String x:Key="AboutCopyright">版权</sys:String>
+    <sys:String x:Key="AboutView">查看</sys:String>
+    <sys:String x:Key="AboutCheckUpdate">检查更新</sys:String>
+    <sys:String x:Key="AboutCheckingUpdate">检查中...</sys:String>
+    <sys:String x:Key="AboutFeedback">反馈问题</sys:String>
+
+    <!-- 托盘菜单 -->
+    <sys:String x:Key="TrayShowSettingsPanel">显示设置面板</sys:String>
+    <sys:String x:Key="TrayHideSettingsPanel">隐藏设置面板</sys:String>
+    <sys:String x:Key="TrayShowStatusBar">显示状态栏</sys:String>
+    <sys:String x:Key="TrayHideStatusBar">隐藏状态栏</sys:String>
+    <sys:String x:Key="TrayShowInventory">显示物品栏</sys:String>
+    <sys:String x:Key="TrayHideInventory">隐藏物品栏</sys:String>
+    <sys:String x:Key="TrayExit">退出</sys:String>
+    <sys:String x:Key="TrayMinimized">程序已最小化到系统托盘</sys:String>
+
+    <!-- 窗口置顶确认弹窗 -->
+    <sys:String x:Key="TopMostConfirmTitle">窗口置顶确认</sys:String>
+    <sys:String x:Key="TopMostConfirmHint">提示：独占全屏模式下此功能会失效</sys:String>
+    <sys:String x:Key="TopMostConfirmSolution">解决方案：开启无边框窗口化或窗口化全屏模式</sys:String>
+    <sys:String x:Key="TopMostConfirmWarningLabel">风险警告</sys:String>
+    <sys:String x:Key="TopMostConfirmWarningContent">绝大多数在线多人游戏（如CS2、Valorant、PUBG、Apex等）的反作弊系统（VAC、EAC、BattlEye）会将此类第三方准星软件视为作弊工具，请谨慎使用</sys:String>
+    <sys:String x:Key="TopMostConfirmCancel">取消</sys:String>
+    <sys:String x:Key="TopMostConfirmOk">确认</sys:String>
+
+    <!-- 格子文件丢失确认弹窗 -->
+    <sys:String x:Key="SlotMissingConfirmTitle">文件丢失确认</sys:String>
+    <sys:String x:Key="SlotMissingConfirmHint">检测到原路径内容已丢失，是否移除该格子？</sys:String>
+    <sys:String x:Key="SlotMissingConfirmCancel">取消</sys:String>
+    <sys:String x:Key="SlotMissingConfirmOk">确定</sys:String>
+
+    <!-- BOSS血条编辑弹窗 -->
+    <sys:String x:Key="BossBarEditTitle">编辑 BOSS血条</sys:String>
+    <sys:String x:Key="BossBarNameLabel">名称</sys:String>
+    <sys:String x:Key="BossBarNamePlaceholder">输入BOSS名称</sys:String>
+    <sys:String x:Key="BossBarEditSave">保存</sys:String>
+    <sys:String x:Key="BossBarItemEdit">编辑</sys:String>
+    <sys:String x:Key="BossBarItemDelete">删除</sys:String>
+    <sys:String x:Key="BossBarItemEnable">启用</sys:String>
+    <sys:String x:Key="BossBarItemDisable">禁用</sys:String>
+    <sys:String x:Key="BossBarNotchLabel">等级</sys:String>
+    <sys:String x:Key="BossBarNotchDesc">点击预览选择分段样式</sys:String>
+
+    <!-- 物品栏设置面板 -->
+    <sys:String x:Key="InventoryPanelTitle">物品栏设置</sys:String>
+    <sys:String x:Key="InventoryPlayerSettings">物品栏相关</sys:String>
+    <sys:String x:Key="InventoryPlayerInventorySettings">玩家物品栏</sys:String>
+    <sys:String x:Key="InventoryContainerPanelSettings">容器面板</sys:String>
+    <sys:String x:Key="InventoryFunctionalBlockSettings">功能方块面板</sys:String>
+    <sys:String x:Key="InventoryCreatureSettings">生物物品栏</sys:String>
+    <sys:String x:Key="InventoryTitle">物品栏</sys:String>
+    <sys:String x:Key="TooltipTitle">文本提示框</sys:String>
+    <sys:String x:Key="InventoryOptionVisible">显示物品栏</sys:String>
+    <sys:String x:Key="InventoryOptionVisibleDesc">在桌面显示物品栏窗口</sys:String>
+    <sys:String x:Key="InventoryOptionLocked">锁定位置</sys:String>
+    <sys:String x:Key="InventoryOptionLockedDesc">防止物品栏窗口被意外拖动</sys:String>
+    <sys:String x:Key="InventoryOptionRememberPosition">记住位置</sys:String>
+    <sys:String x:Key="InventoryOptionRememberPositionDesc">下次启动时恢复物品栏窗口位置</sys:String>
+    <sys:String x:Key="InventoryOptionHoverEffect">悬浮效果</sys:String>
+    <sys:String x:Key="InventoryOptionHoverEffectDesc">鼠标悬浮在格子时显示白色蒙版</sys:String>
+    <sys:String x:Key="InventoryOptionShowTooltip">文本提示框</sys:String>
+    <sys:String x:Key="InventoryOptionShowTooltipDesc">悬浮时显示文件详细信息</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileName">文件名</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileNameDesc">显示文件名（不含后缀）</sys:String>
+    <sys:String x:Key="TooltipOptionShowOriginalName">原文件名</sys:String>
+    <sys:String x:Key="TooltipOptionShowOriginalNameDesc">显示原文件名（含后缀）</sys:String>
+    <sys:String x:Key="TooltipOptionShowFilePath">文件路径</sys:String>
+    <sys:String x:Key="TooltipOptionShowFilePathDesc">显示文件完整路径</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileType">文件类型</sys:String>
+    <sys:String x:Key="TooltipOptionShowFileTypeDesc">显示文件后缀类型</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlay">灰色蒙版</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayDesc">打开物品栏时显示全屏灰色遮罩</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayOpacity">不透明度</sys:String>
+    <sys:String x:Key="InventoryOptionGrayOverlayOpacityDesc">调节灰色蒙版不透明度（0-100）</sys:String>
+    <sys:String x:Key="GrayOverlayOpacityMax">/100%</sys:String>
+    <sys:String x:Key="InventoryOptionHideStatusBar">隐藏状态栏</sys:String>
+    <sys:String x:Key="InventoryOptionHideStatusBarDesc">打开物品栏时隐藏状态栏窗口</sys:String>
+    <sys:String x:Key="SurvivalInventoryTitle">生存物品栏</sys:String>
+    <sys:String x:Key="CreativeInventoryTitle">创造物品栏</sys:String>
+    <sys:String x:Key="ChestTitle">箱子</sys:String>
+    <sys:String x:Key="LargeChestTitle">大箱子</sys:String>
+    <sys:String x:Key="CraftingTableTitle">工作台</sys:String>
+    <sys:String x:Key="EnchantmentTableTitle">附魔台</sys:String>
+    <sys:String x:Key="BeaconTitle">信标</sys:String>
+    <sys:String x:Key="AnvilTitle">铁砧</sys:String>
+    <sys:String x:Key="GrindstoneTitle">砂轮</sys:String>
+    <sys:String x:Key="CartographyTableTitle">制图台</sys:String>
+    <sys:String x:Key="StonecutterTitle">切石机</sys:String>
+    <sys:String x:Key="LoomTitle">织布机</sys:String>
+    <sys:String x:Key="SmithingTableTitle">锻造台</sys:String>
+    <sys:String x:Key="VillagerTitle">村民</sys:String>
+    <sys:String x:Key="HorseTitle">马</sys:String>
+    <sys:String x:Key="DonkeyTitle">驴</sys:String>
+    <sys:String x:Key="CamelTitle">骆驼</sys:String>
+    <sys:String x:Key="LlamaTitle">羊驼</sys:String>
+    <sys:String x:Key="NautilusTitle">鹦鹉螺</sys:String>
+
+    <!-- 物品栏样式预览弹窗 -->
+    <sys:String x:Key="StylePreviewTitle">选择物品栏样式</sys:String>
+    <sys:String x:Key="StylePreviewPrev">上一个样式</sys:String>
+    <sys:String x:Key="StylePreviewNext">下一个样式</sys:String>
+    <sys:String x:Key="InventoryStyleChangeName">更改样式</sys:String>
+    <sys:String x:Key="HudIconChangeName">更改图标</sys:String>
+    <sys:String x:Key="InventoryStyleOption">物品栏样式</sys:String>
+    <sys:String x:Key="InventoryStyleOptionDesc">点击选择物品栏的显示样式</sys:String>
+    <!-- 样式名称 -->
+    <sys:String x:Key="InventoryStyleInventory">物品栏</sys:String>
+    <sys:String x:Key="InventoryStyleTabInventory">标签页物品栏</sys:String>
+    <sys:String x:Key="InventoryStyleBrewingStand">酿造台</sys:String>
+    <sys:String x:Key="InventoryStyleCartographyTable">制图台</sys:String>
+    <sys:String x:Key="InventoryStyleCrafter">合成器</sys:String>
+    <sys:String x:Key="InventoryStyleCraftingTable">工作台</sys:String>
+    <sys:String x:Key="InventoryStyleDispenser">发射器</sys:String>
+    <sys:String x:Key="InventoryStyleFurnace">熔炉</sys:String>
+    <sys:String x:Key="InventoryStyleGeneric54">大箱子</sys:String>
+    <sys:String x:Key="InventoryStyleGrindstone">砂轮</sys:String>
+    <sys:String x:Key="InventoryStyleHopper">漏斗</sys:String>
+    <sys:String x:Key="InventoryStyleHorse">马</sys:String>
+    <sys:String x:Key="InventoryStyleNautilus">鹦鹉螺</sys:String>
+    <sys:String x:Key="InventoryStyleShulkerBox">潜影盒</sys:String>
+    <sys:String x:Key="InventoryStyleSmithing">锻造台</sys:String>
+    <sys:String x:Key="InventoryOptionSharedData">共享数据</sys:String>
+    <sys:String x:Key="InventoryOptionSharedDataDesc">开启后所有样式共用格子数据，关闭后每个样式独立存储</sys:String>
+
+    <!-- 格子右键菜单 -->
+    <sys:String x:Key="ContextMenuOpen">打开</sys:String>
+    <sys:String x:Key="ContextMenuOpenLocation">打开文件所在位置</sys:String>
+    <sys:String x:Key="ContextMenuRunAsAdmin">以管理员身份运行</sys:String>
+    <sys:String x:Key="ContextMenuCopyPath">复制文件地址</sys:String>
+    <sys:String x:Key="ContextMenuCut">剪切</sys:String>
+    <sys:String x:Key="ContextMenuCopy">复制</sys:String>
+    <sys:String x:Key="ContextMenuPaste">粘贴</sys:String>
+    <sys:String x:Key="ContextMenuDelete">删除</sys:String>
+    <sys:String x:Key="ContextMenuRename">重命名</sys:String>
+    <sys:String x:Key="ContextMenuProperties">属性</sys:String>
+
+    <!-- 重命名格子对话框 -->
+    <sys:String x:Key="RenameSlotTitle">重命名格子</sys:String>
+    <sys:String x:Key="RenameSlotFilePath">文件路径</sys:String>
+    <sys:String x:Key="RenameSlotDisplayName">显示名称</sys:String>
+    <sys:String x:Key="RenameSlotPlaceholder">输入自定义显示名称</sys:String>
+    <sys:String x:Key="RenameSlotCancel">取消</sys:String>
+    <sys:String x:Key="RenameSlotConfirm">确定</sys:String>
+
+    <!-- HUD 图标选项 -->
+    <!-- Heart 类型 -->
+    <sys:String x:Key="IconHeartNormal">普通</sys:String>
+    <sys:String x:Key="IconHeartHardcore">极限模式</sys:String>
+    <sys:String x:Key="IconHeartPoisoned">中毒</sys:String>
+    <sys:String x:Key="IconHeartPoisonedHardcore">中毒极限</sys:String>
+    <sys:String x:Key="IconHeartWithered">凋零</sys:String>
+    <sys:String x:Key="IconHeartWitheredHardcore">凋零极限</sys:String>
+    <sys:String x:Key="IconHeartFrozen">冻结</sys:String>
+    <sys:String x:Key="IconHeartFrozenHardcore">冻结极限</sys:String>
+    <sys:String x:Key="IconHeartVehicle">载具</sys:String>
+    <sys:String x:Key="IconHeartAbsorption">伤害吸收</sys:String>
+    <sys:String x:Key="IconHeartAbsorptionHardcore">伤害吸收极限</sys:String>
+
+    <!-- Food 类型 -->
+    <sys:String x:Key="IconFoodNormal">普通</sys:String>
+    <sys:String x:Key="IconFoodHunger">饥饿效果</sys:String>
+
+    <!-- Absorbing 类型 -->
+    <sys:String x:Key="IconAbsorbingNormal">普通</sys:String>
+    <sys:String x:Key="IconAbsorbingHardcore">极限模式</sys:String>
+
+    <!-- Armor/Air 类型 -->
+    <sys:String x:Key="IconArmorNormal">普通</sys:String>
+    <sys:String x:Key="IconAirNormal">普通</sys:String>
+
+    <!-- ExpBar 类型 -->
+    <sys:String x:Key="IconExpBarExperience">经验条</sys:String>
+    <sys:String x:Key="IconExpBarJump">跳跃进度条</sys:String>
+
+    <!-- BossBar 类型 -->
+    <sys:String x:Key="IconBossBarBlue">蓝色</sys:String>
+    <sys:String x:Key="IconBossBarGreen">绿色</sys:String>
+    <sys:String x:Key="IconBossBarRed">红色</sys:String>
+    <sys:String x:Key="IconBossBarPink">粉色</sys:String>
+    <sys:String x:Key="IconBossBarPurple">紫色</sys:String>
+    <sys:String x:Key="IconBossBarWhite">白色</sys:String>
+    <sys:String x:Key="IconBossBarYellow">黄色</sys:String>
+
+    <!-- Notch 类型 -->
+    <sys:String x:Key="IconNotchNone">无</sys:String>
+    <sys:String x:Key="IconNotch6">6格</sys:String>
+    <sys:String x:Key="IconNotch10">10格</sys:String>
+    <sys:String x:Key="IconNotch12">12格</sys:String>
+    <sys:String x:Key="IconNotch20">20格</sys:String>
+
+    <!-- 皮肤选项 -->
+    <sys:String x:Key="SkinTabSteve">Steve</sys:String>
+    <sys:String x:Key="SkinTabAlex">Alex</sys:String>
+    <sys:String x:Key="SkinLoading">加载中...</sys:String>
+
+    <!-- 重命名皮肤弹窗 -->
+    <sys:String x:Key="RenameSkinTitle">重命名皮肤</sys:String>
+    <sys:String x:Key="RenameSkinNewLabel">新名称</sys:String>
+    <sys:String x:Key="RenameSkinCancel">取消</sys:String>
+    <sys:String x:Key="RenameSkinConfirm">确认</sys:String>
+    <sys:String x:Key="RenameSkinDuplicate">已存在同名皮肤 "{0}"</sys:String>
+    <sys:String x:Key="RenameSkinDuplicateTitle">重命名</sys:String>
+    <sys:String x:Key="RenameSkinDeleteFailed">删除文件失败</sys:String>
+    <sys:String x:Key="RenameSkinDeleteTitle">移除皮肤</sys:String>
+
+    <!-- 移除皮肤确认弹窗 -->
+    <sys:String x:Key="RemoveSkinTitle">移除皮肤</sys:String>
+    <sys:String x:Key="RemoveSkinConfirmHint">确定要移除该皮肤吗？此操作无法撤销。</sys:String>
+    <sys:String x:Key="RemoveSkinCancel">取消</sys:String>
+    <sys:String x:Key="RemoveSkinConfirm">移除</sys:String>
+
+    <!-- 关于面板 -->
+    <sys:String x:Key="AboutCheckUpdateMessage">当前已是最新版本</sys:String>
+    <sys:String x:Key="AboutCheckUpdateTitle">检查更新</sys:String>
+    <sys:String x:Key="UpdateDialogDownload">前往下载</sys:String>
+    <sys:String x:Key="UpdateDialogSkip">跳过</sys:String>
+    <sys:String x:Key="UpdateDialogNoChangelog">暂无更新说明</sys:String>
+
+    <!-- 其他 -->
+    <sys:String x:Key="IconPickerNone">无</sys:String>
+    <sys:String x:Key="BossBarDefaultName">新BOSS</sys:String>
+
+    <!-- 适配补全 -->
+    <sys:String x:Key="SkinPreviewTitle">皮肤预览</sys:String>
+    <sys:String x:Key="SkinPreviewHint">拖拽旋转 | 点击ViewCube切换视角 | 滚轮缩放</sys:String>
+    <sys:String x:Key="ContextMenuSetCurrentSkin">设置为当前皮肤</sys:String>
+    <sys:String x:Key="ContextMenuRemove">移除</sys:String>
+    <sys:String x:Key="RenameSkinNameEmpty">名称不能为空</sys:String>
+    <sys:String x:Key="RenameSkinInvalidChars">名称只能包含字母、数字、下划线、横杠和空格</sys:String>
+    <sys:String x:Key="RenameSkinNameTooLong">名称长度不能超过32个字符</sys:String>
+    <sys:String x:Key="SlotRenameFailedTitle">重命名失败</sys:String>
+    <sys:String x:Key="SlotRenameExistsMessage">文件 "{0}" 已存在，请使用其他名称。</sys:String>
+    <sys:String x:Key="SlotRenameError">重命名失败：{0}</sys:String>
+    <sys:String x:Key="TooltipFileMissing">文件已丢失</sys:String>
+    <sys:String x:Key="TooltipNoExtension">(无后缀)</sys:String>
+    <sys:String x:Key="CrosshairWindowTitle">准星</sys:String>
+    <sys:String x:Key="GrayOverlayWindowTitle">灰色蒙版</sys:String>
+    <sys:String x:Key="PngFileFilter">PNG 文件 (*.png)|*.png</sys:String>
+</ResourceDictionary>

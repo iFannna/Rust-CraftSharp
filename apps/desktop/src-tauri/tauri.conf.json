@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CraftSharp",
+  "version": "0.1.0",
+  "identifier": "com.craftsharp.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CraftSharp",
+        "width": 1500,
+        "height": 900,
+        "minWidth": 720,
+        "minHeight": 480,
+        "x": 80,
+        "y": 80,
+        "center": false,
+        "resizable": true
+      },
+      {
+        "label": "hud",
+        "title": "CraftSharp HUD",
+        "url": "hud.html",
+        "width": 819,
+        "height": 266,
+        "x": 550,
+        "y": 814,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.ico"]
+  }
+}
