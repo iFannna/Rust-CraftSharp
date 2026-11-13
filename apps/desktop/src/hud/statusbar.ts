@@ -111,6 +111,7 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
 
       const iconLeft = (BASE.margin + index * (BASE.slot + BASE.slotSpacing)) * s;
       ctx.imageSmoothingEnabled = icon.smooth;
+      ctx.imageSmoothingQuality = icon.smooth ? "high" : "low";
       draw(ctx, icon.image, iconLeft, iconTop, iconSize, iconSize);
       ctx.imageSmoothingEnabled = false;
     }

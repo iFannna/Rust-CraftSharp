@@ -11,7 +11,12 @@
 - P1 已验证：生命、饥饿、空气、护甲、伤害吸收、经验条、快捷栏和选中框使用原版 PNG 正常渲染
 - P1 已验证：独立 HUD 窗口透明、无边框、置顶、贴主屏工作区底部居中，尺寸按当前缩放公式计算
 - P1 已加入：快捷栏图标层，文件图标走 HighQuality，占位图走 NearestNeighbor，位置按原 slot 内边距
-- P1 未完成：真实文件图标提取、快捷栏交互、物品栏、3D 玩家预览
+- P1 已完成：真实文件图标提取，Rust 侧 `slot_icon` 命令返回 Data URL，图片直读、其余走 Shell 大图标、文件丢失回退屏障
+- P1 已验证：exe、文件夹、图片、dll、文件丢失、.lnk 快捷方式（含目标图标开关）在画布上显示正确
+- P1 未完成：快捷栏交互、物品栏、3D 玩家预览
+- 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
+- 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读
+- 已知问题：主预览窗口在多窗口启动时被放到屏幕外 -25600，HUD 窗口位置正常
 - 小数倍对齐：4.5x 差异从 9.86% 降到 7.26%，剩余差异来自 WPF 自身的小数布局取整
 - 已知问题：主预览窗口在多窗口启动时被放到屏幕外 -25600，HUD 窗口位置正常
 
@@ -51,6 +56,16 @@ CARGO_NET_OFFLINE=true npm run tauri dev
 ```powershell
 dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rust\CraftSharp\docs\refactor\golden
 ```
+
+### P1 图标提取契约
+
+- 命令：`slot_icon(path, showTargetIcon) -> string | null`，返回 Data URL，路径无效或提取失败返回 `null`
+- 图片文件（png/jpg/jpeg/bmp/gif/tiff/webp）：读原始字节直接给浏览器解码，不预缩放，缩放交给 Canvas 的 HighQuality
+- 其余文件与文件夹：`SHGetFileInfoW` 大图标 32×32，Rust 转 RGBA 后手写 PNG 编码，不引入图像编码依赖
+- `.lnk` 且 `showTargetIcon` 为真：`IShellLinkW` 解析目标路径后取目标图标；为假直接用快捷方式自身图标（带系统角标）
+- 缓存键为「开关 + 路径」，失效条件是文件大小与修改时间变化；前端按同一键缓存 Promise
+- 返回 `null` 时前端回退 `barrier.png` 并 `smooth=false`，对应 WPF 的 NearestNeighbor 占位图
+- 证据：`docs/refactor/icon-workbench.png`、`icon-lnk-shortcut.png`、`icon-lnk-target.png`
 
 ## 1. 目标
 
@@ -174,7 +189,7 @@ scaleFactor = 逻辑屏宽 / 2560 * 6
 | `ScaleService` | 按逻辑屏宽计算小数倍缩放 |
 | `ThemeService` | 系统、浅色、深色主题 |
 | `LocalizationService` | zh-CN、en-US 资源切换 |
-| `IconExtractor` | Windows Shell 图标、快捷方式、图片缩略图 |
+| `IconExtractor` | Windows Shell 图标、快捷方式、图片缩略图；已落到 `src-tauri/src/icons`，`slot_icon` 命令返回 Data URL |
 | `ImageService` | BitmapImage 加载与尺寸读取 |
 | `HotkeyService` | 全局热键注册与冲突处理 |
 
