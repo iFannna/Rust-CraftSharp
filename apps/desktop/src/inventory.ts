@@ -21,6 +21,7 @@ import {
 } from "./hud/slotStore";
 import type { SlotIcon } from "./hud/statusbar";
 import { buildTooltipLines } from "./hud/tooltipContent";
+import { clampToWorkArea } from "./hud/windowPlacement";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -43,6 +44,11 @@ let icons = new Map<string, SlotIcon | null>();
 let iconGeneration = 0;
 let dimmedSlot: string | null = null;
 let interaction: InventoryInteraction | null = null;
+let appliedSize: { width: number; height: number } | null = null;
+let appliedPosition: { x: number; y: number } | null = null;
+let pendingPosition: { x: number; y: number } | null = null;
+let persistTimer = 0;
+let dragScaleFactor = window.devicePixelRatio || 1;
 
 function naturalWidth(image: HTMLImageElement): number {
   return image.naturalWidth || image.width;
@@ -183,7 +189,7 @@ function buildHost(): InventoryHost {
     },
     beginWindowDrag: () => {
       if (config.lockPosition) return;
-      void currentWindow.startDragging();
+      void currentWindow.startDragging().then(flushMoved).catch(() => undefined);
     },
     hoverEnabled: () => config.hoverEffect,
     clickMode: () => config.clickMode,
@@ -236,21 +242,46 @@ function executeShiftMove(slotId: string) {
   clearSlotFor(slotId, slotScope.style, slotScope.shared);
 }
 
+function sameSpot(a: { x: number; y: number } | null, b: { x: number; y: number }) {
+  return a !== null && Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
+}
+
+// 自身 setPosition 也会触发 moved，命中同一点时不再回设，避免来回拉扯
+async function moveWindowTo(target: { x: number; y: number }) {
+  if (!tauriWindow || sameSpot(appliedPosition, target)) return;
+  await currentWindow.setPosition(new LogicalPosition(target.x, target.y));
+  appliedPosition = { x: target.x, y: target.y };
+}
+
 async function applyWindowGeometry() {
   if (!tauriWindow) return;
 
-  await currentWindow.setSize(new LogicalSize(Math.ceil(layout.width), Math.ceil(layout.height)));
+  const width = Math.ceil(layout.width);
+  const height = Math.ceil(layout.height);
+  if (!appliedSize || appliedSize.width !== width || appliedSize.height !== height) {
+    await currentWindow.setSize(new LogicalSize(width, height));
+    appliedSize = { width, height };
+  }
 
   const saved = config.rememberPosition ? config.position : null;
-  if (saved) {
-    await currentWindow.setPosition(new LogicalPosition(saved.x, saved.y));
+  const target = saved ? clampToWorkArea(saved, layout.width, layout.height) : null;
+  if (target) {
+    await moveWindowTo(target);
     return;
   }
 
   const screen = window.screen as Screen & { availTop?: number };
-  const x = Math.round((screen.availWidth - layout.width) / 2);
-  const y = Math.round((screen.availTop ?? 0) + (screen.availHeight - layout.height) / 2);
-  await currentWindow.setPosition(new LogicalPosition(x, y));
+  await moveWindowTo({
+    x: Math.round((screen.availWidth - layout.width) / 2),
+    y: Math.round((screen.availTop ?? 0) + (screen.availHeight - layout.height) / 2)
+  });
+}
+
+function flushMoved() {
+  if (!pendingPosition) return;
+  const position = pendingPosition;
+  pendingPosition = null;
+  updateInventoryConfig({ position });
 }
 
 interaction = new InventoryInteraction(canvas, buildHost());
@@ -267,8 +298,10 @@ subscribeClipboard(() => {
 });
 
 subscribeInventoryConfig(() => {
+  const previous = config;
   const next = getInventoryConfig();
   const styleChanged = next.style !== style.file;
+  const iconsRelevant = next.sharedData !== previous.sharedData;
   config = next;
 
   // 开关或颜色变化后即时生效
@@ -282,24 +315,36 @@ subscribeInventoryConfig(() => {
     void rebuildLayout(findContainerStyle(next.style));
     return;
   }
-  void refreshIcons();
+  // 拖动位置回写不影响图标，避免每次移动重载图标导致卡顿
+  if (iconsRelevant) void refreshIcons();
 });
 
 if (tauriWindow) {
   void applyWindowGeometry();
+  await currentWindow.onScaleChanged(({ payload }) => {
+    dragScaleFactor = payload.scaleFactor;
+  });
 
   // 物品栏窗口被隐藏或最小化时不留悬浮提示
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") hideTooltip();
   });
 
+  // 拖拽期间只记录位置，停下后再落盘，避免写配置触发窗口回位
   void currentWindow.onMoved(({ payload }) => {
-    void (async () => {
-      if (!config.rememberPosition) return;
-      const factor = await currentWindow.scaleFactor();
-      const point = payload as { x: number; y: number };
-      updateInventoryConfig({ position: { x: Math.round(point.x / factor), y: Math.round(point.y / factor) } });
-    })();
+    if (!config.rememberPosition) return;
+    const point = payload as { x: number; y: number };
+    const position = {
+      x: Math.round(point.x / dragScaleFactor),
+      y: Math.round(point.y / dragScaleFactor)
+    };
+    const echo = sameSpot(appliedPosition, position);
+    appliedPosition = position;
+    if (echo) return;
+
+    pendingPosition = position;
+    window.clearTimeout(persistTimer);
+    persistTimer = window.setTimeout(flushMoved, 300);
   });
 }
 

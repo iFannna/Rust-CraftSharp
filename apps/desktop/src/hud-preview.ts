@@ -19,6 +19,7 @@ import {
 } from "./hud/slotStore";
 import { createStatusBarRenderer, type SlotIcon, type StatusBarModel } from "./hud/statusbar";
 import { getConfig, subscribeConfig, updateConfig } from "./config/appConfig";
+import { clampToWorkArea } from "./hud/windowPlacement";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -163,46 +164,103 @@ const tauriWindow = (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAU
 
 if (tauriWindow) {
   const currentWindow = getCurrentWindow();
+  let scaleFactor = await currentWindow.scaleFactor();
+  await currentWindow.onScaleChanged(({ payload }) => {
+    scaleFactor = payload.scaleFactor;
+  });
 
-  const applyWindowGeometry = async () => {
+  let appliedSize: { width: number; height: number } | null = null;
+  let appliedPosition: { x: number; y: number } | null = null;
+  let pendingPosition: { x: number; y: number } | null = null;
+  let persistTimer = 0;
+
+  const sameSpot = (a: { x: number; y: number } | null, b: { x: number; y: number }) =>
+    a !== null && Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
+
+  const defaultPosition = () => {
     const current = layout();
-    await currentWindow.setSize(new LogicalSize(Math.ceil(current.width), Math.ceil(current.height)));
-
-    const saved = getConfig().statusBar.position;
-    if (saved) {
-      await currentWindow.setPosition(new LogicalPosition(saved.x, saved.y));
-      return;
-    }
-
     const screen = window.screen as Screen & { availTop?: number };
-    const x = Math.round((screen.availWidth - current.width) / 2);
-    const y = Math.round((screen.availTop ?? 0) + screen.availHeight - current.height);
-    await currentWindow.setPosition(new LogicalPosition(x, y));
+    return {
+      x: Math.round((screen.availWidth - current.width) / 2),
+      y: Math.round((screen.availTop ?? 0) + screen.availHeight - current.height)
+    };
   };
 
-  await applyWindowGeometry();
+  const applySize = async () => {
+    const current = layout();
+    const width = Math.ceil(current.width);
+    const height = Math.ceil(current.height);
+    if (appliedSize && appliedSize.width === width && appliedSize.height === height) return;
+    await currentWindow.setSize(new LogicalSize(width, height));
+    appliedSize = { width, height };
+  };
+
+  // 自身 setPosition 也会触发 moved，命中同一点时不再回设，避免来回拉扯
+  const moveTo = async (target: { x: number; y: number }) => {
+    if (sameSpot(appliedPosition, target)) return;
+    await currentWindow.setPosition(new LogicalPosition(target.x, target.y));
+    appliedPosition = { x: target.x, y: target.y };
+  };
+
+  const applyConfiguredPosition = async () => {
+    const saved = getConfig().statusBar.position;
+    const current = layout();
+    const target = saved ? clampToWorkArea(saved, current.width, current.height) : null;
+    await moveTo(target ?? defaultPosition());
+  };
+
+  const flushMoved = () => {
+    if (!pendingPosition) return;
+    const position = pendingPosition;
+    pendingPosition = null;
+    updateConfig({ statusBar: { position } });
+  };
+
+  await applySize();
+  await applyConfiguredPosition();
 
   // 未锁定时按住空白区域拖动状态栏
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || getConfig().statusBar.locked) return;
     const rect = canvas.getBoundingClientRect();
     if (slotIndexAtPoint(layout(), event.clientX - rect.left, event.clientY - rect.top) >= 0) return;
-    void currentWindow.startDragging();
+    void currentWindow.startDragging().then(flushMoved).catch(() => undefined);
   });
 
+  // 拖拽期间只记录位置，停下后再落盘，避免写配置触发窗口回位
   await currentWindow.onMoved(({ payload }) => {
-    void (async () => {
-      const factor = await currentWindow.scaleFactor();
-      const point = payload as { x: number; y: number };
-      updateConfig({ statusBar: { position: { x: Math.round(point.x / factor), y: Math.round(point.y / factor) } } });
-    })();
+    const point = payload as { x: number; y: number };
+    const position = {
+      x: Math.round(point.x / scaleFactor),
+      y: Math.round(point.y / scaleFactor)
+    };
+    const echo = sameSpot(appliedPosition, position);
+    appliedPosition = position;
+    if (echo) return;
+
+    pendingPosition = position;
+    window.clearTimeout(persistTimer);
+    persistTimer = window.setTimeout(flushMoved, 300);
   });
+
+  let previousHotbar = getConfig().hotbar;
 
   subscribeConfig(() => {
-    hotbarConfig = getConfig().hotbar;
-    overlay.setColorSetting(hotbarConfig.fileNameColor);
-    void applyWindowGeometry();
-    void refreshIcons();
+    const nextHotbar = getConfig().hotbar;
+    const offhandChanged =
+      nextHotbar.leftOffhand !== previousHotbar.leftOffhand ||
+      nextHotbar.rightOffhand !== previousHotbar.rightOffhand;
+    const iconsChanged = nextHotbar.showTargetIcon !== previousHotbar.showTargetIcon;
+    previousHotbar = nextHotbar;
+    hotbarConfig = nextHotbar;
+    overlay.setColorSetting(nextHotbar.fileNameColor);
+
+    if (offhandChanged) {
+      void applySize().then(applyConfiguredPosition);
+      return;
+    }
+    void applyConfiguredPosition();
+    if (iconsChanged) void refreshIcons();
   });
 
   await currentWindow.onDragDropEvent((event) => {

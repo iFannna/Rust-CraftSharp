@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { HotkeysConfig } from "../../config/appConfig";
 import { defaultConfig, updateConfig } from "../../config/appConfig";
 import { useAppConfig } from "../../config/useAppConfig";
@@ -5,6 +6,17 @@ import { Button, Card, Note, Row, SectionHead } from "../components/controls";
 import { HotkeyInput } from "../components/hotkeyInput";
 
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair";
+
+const FAILURE_KEY = "craftsharp.hotkeyFailures";
+
+function readFailures(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAILURE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 const HOTKEY_ITEMS: { key: HotkeyKey; label: string; description: string }[] = [
   { key: "settings", label: "打开设置面板", description: "显示或隐藏设置面板窗口" },
@@ -15,6 +27,15 @@ const HOTKEY_ITEMS: { key: HotkeyKey; label: string; description: string }[] = [
 
 export function HotkeysSection() {
   const config = useAppConfig();
+  const [failed, setFailed] = useState<string[]>(readFailures);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === FAILURE_KEY) setFailed(readFailures());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const updateHotkey = (key: HotkeyKey, hotkey: string) => {
     const patch: Partial<HotkeysConfig> = {};
@@ -37,6 +58,9 @@ export function HotkeysSection() {
   return (
     <>
       <SectionHead title="快捷键设置" />
+      {failed.length > 0 ? (
+        <Note tone="warning">以下快捷键已被其他程序占用，注册失败：{failed.join("、")}</Note>
+      ) : null}
       {HOTKEY_ITEMS.map((item) => (
         <Row key={item.key} label={item.label} description={item.description}>
           <HotkeyInput

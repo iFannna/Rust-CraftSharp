@@ -7,18 +7,34 @@ import { applyWindowAction } from "./windowControls";
 
 const EVENT_NAME = "craftsharp-hotkey";
 const RELOAD_DEBOUNCE_MS = 300;
+const FAILURE_KEY = "craftsharp.hotkeyFailures";
 
 const actions = ["settings", "statusBar", "inventory", "crosshair"] as const;
 
 let started = false;
 let reloadTimer = 0;
+let appliedSpecs = "";
+
+function specsNow(): string[] {
+  const hotkeys = getConfig().hotkeys;
+  return [hotkeys.settings, hotkeys.statusBar, hotkeys.inventory, hotkeys.crosshair];
+}
 
 async function applyHotkeys() {
-  const hotkeys = getConfig().hotkeys;
-  const specs = [hotkeys.settings, hotkeys.statusBar, hotkeys.inventory, hotkeys.crosshair];
+  const specs = specsNow();
+  const signature = specs.join("|");
+  if (signature === appliedSpecs) return;
+  appliedSpecs = signature;
+
   const failed = await invoke<string[]>("register_hotkeys", { actions: specs }).catch(() => []);
   if (failed.length > 0) {
     console.warn("以下热键注册失败", failed);
+  }
+  // 设置面板在独立窗口，用共享存储转达注册失败项
+  try {
+    localStorage.setItem(FAILURE_KEY, JSON.stringify(failed));
+  } catch {
+    // 存储不可用时只是设置面板看不到提示
   }
 }
 
