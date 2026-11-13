@@ -22,6 +22,7 @@ import {
 import type { SlotIcon } from "./hud/statusbar";
 import { buildTooltipLines } from "./hud/tooltipContent";
 import { clampToWorkArea } from "./hud/windowPlacement";
+import { startWindowDrag } from "./hud/windowDrag";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -187,9 +188,15 @@ function buildHost(): InventoryHost {
         if (action) await runSlotMenuAction(action, slotId, item, scope());
       })();
     },
-    beginWindowDrag: () => {
+    beginWindowDrag: (event) => {
       if (config.lockPosition) return;
-      void currentWindow.startDragging().then(flushMoved).catch(() => undefined);
+      event.preventDefault();
+      void startWindowDrag(event).then((position) => {
+        if (!position) return;
+        appliedPosition = position;
+        pendingPosition = position;
+        flushMoved();
+      });
     },
     hoverEnabled: () => config.hoverEffect,
     clickMode: () => config.clickMode,

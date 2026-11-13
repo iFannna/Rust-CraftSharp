@@ -20,7 +20,7 @@ export interface InventoryHost {
   moveToCategory(slotId: string): void;
   distributeTo(slotId: string, path: string): void;
   openMenu(slotId: string, clientX: number, clientY: number): void;
-  beginWindowDrag(): void;
+  beginWindowDrag(event: PointerEvent): void;
   hoverEnabled(): boolean;
   clickMode(): "single" | "double";
   /** 鼠标停在有文件的格子上，box 为格子画布坐标 */
@@ -143,7 +143,7 @@ export class InventoryInteraction {
 
     if (!slotId) {
       this.clearHover();
-      this.host.beginWindowDrag();
+      this.host.beginWindowDrag(event);
       return;
     }
 

@@ -13,10 +13,21 @@ export interface PositionConfig {
   y: number;
 }
 
+export interface WindowSizeConfig {
+  width: number;
+  height: number;
+}
+
 export interface SystemConfig {
   language: LanguageCode;
   autoStart: boolean;
   defaultOpenSettings: boolean;
+  rememberWindowPosition: boolean;
+  rememberWindowSize: boolean;
+  rememberNavSelection: boolean;
+  windowPosition: PositionConfig | null;
+  windowSize: WindowSizeConfig | null;
+  lastSection: string;
 }
 
 export interface AppearanceConfig {
@@ -97,7 +108,17 @@ export const CONFIG_VERSION = 1;
 
 const DEFAULTS: AppConfig = {
   version: CONFIG_VERSION,
-  system: { language: "zh-CN", autoStart: false, defaultOpenSettings: false },
+  system: {
+    language: "zh-CN",
+    autoStart: false,
+    defaultOpenSettings: false,
+    rememberWindowPosition: true,
+    rememberWindowSize: true,
+    rememberNavSelection: true,
+    windowPosition: null,
+    windowSize: null,
+    lastSection: "system"
+  },
   appearance: { theme: "dark" },
   statusBar: { visible: true, locked: false, position: null },
   hotbar: {

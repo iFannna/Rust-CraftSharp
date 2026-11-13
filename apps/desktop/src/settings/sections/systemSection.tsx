@@ -33,6 +33,27 @@ export function SystemSection() {
           onChange={(defaultOpenSettings) => updateConfig({ system: { defaultOpenSettings } })}
         />
       </Row>
+      <Row label="记住窗口位置" description="下次启动时恢复设置窗口的位置">
+        <Toggle
+          checked={config.system.rememberWindowPosition}
+          label="记住窗口位置"
+          onChange={(rememberWindowPosition) => updateConfig({ system: { rememberWindowPosition } })}
+        />
+      </Row>
+      <Row label="记住窗口大小" description="下次启动时恢复设置窗口的大小">
+        <Toggle
+          checked={config.system.rememberWindowSize}
+          label="记住窗口大小"
+          onChange={(rememberWindowSize) => updateConfig({ system: { rememberWindowSize } })}
+        />
+      </Row>
+      <Row label="记住菜单选项" description="下次启动时恢复上次选中的设置页面">
+        <Toggle
+          checked={config.system.rememberNavSelection}
+          label="记住菜单选项"
+          onChange={(rememberNavSelection) => updateConfig({ system: { rememberNavSelection } })}
+        />
+      </Row>
     </>
   );
 }

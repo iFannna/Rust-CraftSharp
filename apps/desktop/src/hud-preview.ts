@@ -20,6 +20,7 @@ import {
 import { createStatusBarRenderer, type SlotIcon, type StatusBarModel } from "./hud/statusbar";
 import { getConfig, subscribeConfig, updateConfig } from "./config/appConfig";
 import { clampToWorkArea } from "./hud/windowPlacement";
+import { startWindowDrag } from "./hud/windowDrag";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -219,12 +220,18 @@ if (tauriWindow) {
   await applySize();
   await applyConfiguredPosition();
 
-  // 未锁定时按住空白区域拖动状态栏
+  // 未锁定时按住空白区域拖动状态栏；自绘拖动避免无边框窗口的原生偏移
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || getConfig().statusBar.locked) return;
     const rect = canvas.getBoundingClientRect();
     if (slotIndexAtPoint(layout(), event.clientX - rect.left, event.clientY - rect.top) >= 0) return;
-    void currentWindow.startDragging().then(flushMoved).catch(() => undefined);
+    event.preventDefault();
+    void startWindowDrag(event).then((position) => {
+      if (!position) return;
+      appliedPosition = position;
+      pendingPosition = position;
+      flushMoved();
+    });
   });
 
   // 拖拽期间只记录位置，停下后再落盘，避免写配置触发窗口回位

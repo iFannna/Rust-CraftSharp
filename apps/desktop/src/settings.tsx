@@ -1,6 +1,9 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import ReactDOM from "react-dom/client";
+import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getConfig, updateConfig } from "./config/appConfig";
+import { clampToWorkArea } from "./hud/windowPlacement";
 import { useAppConfig } from "./config/useAppConfig";
 import { useResolvedTheme } from "./settings/theme";
 import { AboutSection } from "./settings/sections/aboutSection";
@@ -65,9 +68,26 @@ function windowApi() {
 function SettingsApp() {
   const config = useAppConfig();
   const theme = useResolvedTheme(config.appearance.theme);
-  const [active, setActive] = useState<SectionId>("system");
+  const [active, setActive] = useState<SectionId>(() => {
+    const system = getConfig().system;
+    const saved = system.lastSection as SectionId;
+    if (system.rememberNavSelection && NAV_ITEMS.some((item) => item.id === saved)) return saved;
+    return "system";
+  });
   const [maximized, setMaximized] = useState(false);
+  const maximizedRef = useRef(false);
   const ActiveSection = NAV_ITEMS.find((item) => item.id === active)!.Section;
+
+  useEffect(() => {
+    maximizedRef.current = maximized;
+  }, [maximized]);
+
+  const selectSection = (id: SectionId) => {
+    setActive(id);
+    if (getConfig().system.rememberNavSelection) {
+      updateConfig({ system: { lastSection: id } });
+    }
+  };
 
   useEffect(() => {
     const current = windowApi();
@@ -83,6 +103,81 @@ function SettingsApp() {
     }).catch(() => undefined);
 
     return () => unlisten?.();
+  }, []);
+
+  // 记忆设置窗口的位置、大小与选中页，恢复时夹回当前工作区
+  useEffect(() => {
+    const current = windowApi();
+    if (!current) return;
+
+    let factor = window.devicePixelRatio || 1;
+    let moveTimer = 0;
+    let sizeTimer = 0;
+    let pendingPosition: { x: number; y: number } | null = null;
+    let pendingSize: { width: number; height: number } | null = null;
+    const disposers: Array<() => void> = [];
+
+    const flushPosition = () => {
+      if (!pendingPosition) return;
+      const position = pendingPosition;
+      pendingPosition = null;
+      if (!maximizedRef.current && getConfig().system.rememberWindowPosition) {
+        updateConfig({ system: { windowPosition: position } });
+      }
+    };
+
+    const flushSize = () => {
+      if (!pendingSize) return;
+      const size = pendingSize;
+      pendingSize = null;
+      if (!maximizedRef.current && getConfig().system.rememberWindowSize) {
+        updateConfig({ system: { windowSize: size } });
+      }
+    };
+
+    void (async () => {
+      const system = getConfig().system;
+      if (system.rememberWindowSize && system.windowSize) {
+        await current.setSize(new LogicalSize(system.windowSize.width, system.windowSize.height)).catch(() => undefined);
+      }
+      if (system.rememberWindowPosition && system.windowPosition) {
+        const size = system.windowSize ?? { width: 1080, height: 720 };
+        const target = clampToWorkArea(system.windowPosition, size.width, size.height);
+        if (target) {
+          await current.setPosition(new LogicalPosition(target.x, target.y)).catch(() => undefined);
+        }
+      }
+      factor = await current.scaleFactor().catch(() => factor);
+    })();
+
+    const onMoved = ({ payload }: { payload: { x: number; y: number } }) => {
+      if (!getConfig().system.rememberWindowPosition || maximizedRef.current) return;
+      pendingPosition = { x: Math.round(payload.x / factor), y: Math.round(payload.y / factor) };
+      window.clearTimeout(moveTimer);
+      moveTimer = window.setTimeout(flushPosition, 300);
+    };
+
+    const onResized = ({ payload }: { payload: { width: number; height: number } }) => {
+      if (!getConfig().system.rememberWindowSize || maximizedRef.current) return;
+      pendingSize = {
+        width: Math.round(payload.width / factor),
+        height: Math.round(payload.height / factor)
+      };
+      window.clearTimeout(sizeTimer);
+      sizeTimer = window.setTimeout(flushSize, 300);
+    };
+
+    void current.onMoved(onMoved).then((dispose) => disposers.push(dispose)).catch(() => undefined);
+    void current.onResized(onResized).then((dispose) => disposers.push(dispose)).catch(() => undefined);
+    void current.onScaleChanged(({ payload }) => {
+      factor = payload.scaleFactor;
+    }).then((dispose) => disposers.push(dispose)).catch(() => undefined);
+
+    return () => {
+      window.clearTimeout(moveTimer);
+      window.clearTimeout(sizeTimer);
+      for (const dispose of disposers) dispose();
+    };
   }, []);
 
   const minimize = () => {
@@ -145,7 +240,7 @@ function SettingsApp() {
                 type="button"
                 className={item.id === active ? "nav-item is-active" : "nav-item"}
                 aria-current={item.id === active ? "page" : undefined}
-                onClick={() => setActive(item.id)}
+                onClick={() => selectSection(item.id)}
               >
                 <span className="nav-icon" aria-hidden="true">
                   {item.glyph}
