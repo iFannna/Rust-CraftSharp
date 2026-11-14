@@ -7,6 +7,7 @@ export type ClickMode = "single" | "double";
 export type ThemeMode = "system" | "light" | "dark";
 export type LanguageCode = "zh-CN" | "en-US";
 export type SkinType = "wide" | "slim";
+export type UIFont = "yahei" | "pixel" | "unifont" | "songti" | "kaiti" | "heiti";
 
 export interface PositionConfig {
   x: number;
@@ -25,6 +26,8 @@ export interface SystemConfig {
   rememberWindowPosition: boolean;
   rememberWindowSize: boolean;
   rememberNavSelection: boolean;
+  rememberCardStates: boolean;
+  cardExpandedStates: Record<string, boolean>;
   windowPosition: PositionConfig | null;
   windowSize: WindowSizeConfig | null;
   lastSection: string;
@@ -32,11 +35,14 @@ export interface SystemConfig {
 
 export interface AppearanceConfig {
   theme: ThemeMode;
+  font: UIFont;
+  fontSize: number;
 }
 
 export interface StatusBarConfig {
   visible: boolean;
   locked: boolean;
+  rememberPosition: boolean;
   position: PositionConfig | null;
 }
 
@@ -70,10 +76,51 @@ export interface InventoryConfig {
   fileNameColor: string;
 }
 
+export type HudElementId = "health" | "food" | "air" | "armor" | "absorbing" | "expBar";
+
+export interface HudElementConfig {
+  visible: boolean;
+  iconStyle: string;
+  /** 生命值与空气值的变化动画 */
+  regenAnimation: boolean;
+  /** 饥饿值饱和度 */
+  saturationValue: number;
+  dataMappingEnabled: boolean;
+  dataMappingType: DataMappingType;
+  customValueEnabled: boolean;
+  currentValue: number;
+  maxValue: number;
+}
+
+export interface AttackIndicatorConfig {
+  dataMappingEnabled: boolean;
+  dataMappingType: DataMappingType;
+  customValueEnabled: boolean;
+  currentValue: number;
+}
+
 export interface HudElementsConfig {
   crosshairVisible: boolean;
   attackIndicatorVisible: boolean;
-  bossBarVisible: boolean;
+  crosshairTopMost: boolean;
+  attackIndicator: AttackIndicatorConfig;
+  elements: Record<HudElementId, HudElementConfig>;
+}
+
+export type BossBarColor = "blue" | "green" | "pink" | "purple" | "red" | "white" | "yellow";
+export type BossBarNotch = "notched_6" | "notched_10" | "notched_12" | "notched_20";
+export type DataMappingType = "battery" | "memory" | "cpu" | "gpu";
+
+export interface BossBarConfig {
+  id: string;
+  name: string;
+  color: BossBarColor;
+  notch: BossBarNotch | null;
+  enabled: boolean;
+  dataMappingEnabled: boolean;
+  dataMappingType: DataMappingType;
+  customValueEnabled: boolean;
+  currentValue: number;
 }
 
 export interface HotkeysConfig {
@@ -82,6 +129,7 @@ export interface HotkeysConfig {
   inventory: string;
   crosshair: string;
   dropItem: string;
+  openInventory: string;
 }
 
 export interface PlayerConfig {
@@ -97,14 +145,42 @@ export interface AppConfig {
   hotbar: HotbarConfig;
   inventory: InventoryConfig;
   hudElements: HudElementsConfig;
+  bossBars: BossBarConfig[];
   hotkeys: HotkeysConfig;
   player: PlayerConfig;
 }
+
+export const BOSS_BAR_COLORS: BossBarColor[] = ["blue", "green", "pink", "purple", "red", "white", "yellow"];
+export const BOSS_BAR_NOTCHES: BossBarNotch[] = ["notched_6", "notched_10", "notched_12", "notched_20"];
+export const DATA_MAPPING_TYPES: DataMappingType[] = ["battery", "memory", "cpu", "gpu"];
 
 const STORAGE_KEY = "craftsharp.config.v1";
 const LEGACY_INVENTORY_KEY = "craftsharp.inventory.v1";
 
 export const CONFIG_VERSION = 1;
+
+function defaultHudElement(maxValue = 20): HudElementConfig {
+  return {
+    visible: true,
+    iconStyle: "",
+    regenAnimation: false,
+    saturationValue: 0,
+    dataMappingEnabled: false,
+    dataMappingType: "battery",
+    customValueEnabled: false,
+    currentValue: maxValue,
+    maxValue
+  };
+}
+
+const DEFAULT_ELEMENTS: Record<HudElementId, HudElementConfig> = {
+  health: defaultHudElement(),
+  food: defaultHudElement(),
+  air: defaultHudElement(),
+  armor: defaultHudElement(),
+  absorbing: defaultHudElement(),
+  expBar: { ...defaultHudElement(100), currentValue: 100 }
+};
 
 const DEFAULTS: AppConfig = {
   version: CONFIG_VERSION,
@@ -115,12 +191,14 @@ const DEFAULTS: AppConfig = {
     rememberWindowPosition: true,
     rememberWindowSize: true,
     rememberNavSelection: true,
+    rememberCardStates: true,
+    cardExpandedStates: {},
     windowPosition: null,
     windowSize: null,
     lastSection: "system"
   },
-  appearance: { theme: "dark" },
-  statusBar: { visible: true, locked: false, position: null },
+  appearance: { theme: "dark", font: "yahei", fontSize: 14 },
+  statusBar: { visible: true, locked: false, rememberPosition: true, position: null },
   hotbar: {
     visible: true,
     leftOffhand: false,
@@ -149,13 +227,26 @@ const DEFAULTS: AppConfig = {
     tooltipShowFileType: false,
     fileNameColor: "#FCFCFC"
   },
-  hudElements: { crosshairVisible: true, attackIndicatorVisible: true, bossBarVisible: false },
+  hudElements: {
+    crosshairVisible: true,
+    attackIndicatorVisible: true,
+    crosshairTopMost: false,
+    attackIndicator: {
+      dataMappingEnabled: false,
+      dataMappingType: "battery",
+      customValueEnabled: true,
+      currentValue: 100
+    },
+    elements: DEFAULT_ELEMENTS
+  },
+  bossBars: [],
   hotkeys: {
     settings: "Ctrl+Alt+S",
     statusBar: "Ctrl+Alt+H",
     inventory: "Ctrl+Alt+E",
     crosshair: "Ctrl+Alt+C",
-    dropItem: "Q"
+    dropItem: "Q",
+    openInventory: "E"
   },
   player: { skinPath: "", skinType: "wide" }
 };
@@ -164,15 +255,93 @@ export function defaultConfig(): AppConfig {
   return structuredClone(DEFAULTS);
 }
 
+function mergeHudElements(base: HudElementsConfig, raw?: Partial<HudElementsConfig>): HudElementsConfig {
+  if (!raw) return base;
+  const elements = { ...base.elements };
+  const incoming = raw.elements as Partial<Record<HudElementId, Partial<HudElementConfig>>> | undefined;
+
+  if (incoming) {
+    for (const id of Object.keys(elements) as HudElementId[]) {
+      const item = incoming[id];
+      if (!item) continue;
+      const fallback = elements[id];
+      elements[id] = {
+        visible: item.visible !== false,
+        iconStyle: typeof item.iconStyle === "string" ? item.iconStyle : "",
+        regenAnimation: item.regenAnimation === true,
+        saturationValue: clampInt(item.saturationValue, 0, 9999, fallback.saturationValue),
+        dataMappingEnabled: item.dataMappingEnabled === true,
+        dataMappingType: DATA_MAPPING_TYPES.includes(item.dataMappingType as DataMappingType)
+          ? (item.dataMappingType as DataMappingType)
+          : fallback.dataMappingType,
+        customValueEnabled: item.customValueEnabled === true,
+        currentValue: clampInt(item.currentValue, 0, 9999, fallback.currentValue),
+        maxValue: clampInt(item.maxValue, 1, 9999, fallback.maxValue)
+      };
+    }
+  }
+
+  const indicator = raw.attackIndicator ?? base.attackIndicator;
+  return {
+    crosshairVisible: raw.crosshairVisible !== false,
+    attackIndicatorVisible: raw.attackIndicatorVisible !== false,
+    crosshairTopMost: raw.crosshairTopMost === true,
+    attackIndicator: {
+      dataMappingEnabled: indicator.dataMappingEnabled === true,
+      dataMappingType: DATA_MAPPING_TYPES.includes(indicator.dataMappingType as DataMappingType)
+        ? (indicator.dataMappingType as DataMappingType)
+        : base.attackIndicator.dataMappingType,
+      customValueEnabled: indicator.customValueEnabled !== false,
+      currentValue: clampInt(indicator.currentValue, 0, 100, base.attackIndicator.currentValue)
+    },
+    elements
+  };
+}
+
+function normalizeBossBars(value: unknown): BossBarConfig[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") return [];
+    const raw = entry as Partial<BossBarConfig>;
+    const color = BOSS_BAR_COLORS.includes(raw.color as BossBarColor) ? (raw.color as BossBarColor) : "blue";
+    const notch = BOSS_BAR_NOTCHES.includes(raw.notch as BossBarNotch) ? (raw.notch as BossBarNotch) : null;
+    const mapping = DATA_MAPPING_TYPES.includes(raw.dataMappingType as DataMappingType)
+      ? (raw.dataMappingType as DataMappingType)
+      : "battery";
+    return [{
+      id: typeof raw.id === "string" && raw.id ? raw.id : `boss_${index}`,
+      name: typeof raw.name === "string" ? raw.name : "",
+      color,
+      notch,
+      enabled: raw.enabled !== false,
+      dataMappingEnabled: raw.dataMappingEnabled === true,
+      dataMappingType: mapping,
+      customValueEnabled: raw.customValueEnabled !== false,
+      currentValue: clampInt(raw.currentValue, 0, 100, 100)
+    }];
+  });
+}
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
 function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
   return {
     version: CONFIG_VERSION,
     system: { ...base.system, ...raw.system },
-    appearance: { ...base.appearance, ...raw.appearance },
+    appearance: {
+      theme: raw.appearance?.theme ?? base.appearance.theme,
+      font: raw.appearance?.font ?? base.appearance.font,
+      fontSize: clampInt(raw.appearance?.fontSize, 10, 20, base.appearance.fontSize)
+    },
     statusBar: { ...base.statusBar, ...raw.statusBar },
     hotbar: { ...base.hotbar, ...raw.hotbar },
     inventory: { ...base.inventory, ...raw.inventory },
-    hudElements: { ...base.hudElements, ...raw.hudElements },
+    hudElements: mergeHudElements(base.hudElements, raw.hudElements),
+    bossBars: Array.isArray(raw.bossBars) ? normalizeBossBars(raw.bossBars) : base.bossBars,
     hotkeys: { ...base.hotkeys, ...raw.hotkeys },
     player: { ...base.player, ...raw.player }
   };

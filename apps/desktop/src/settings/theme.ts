@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ThemeMode } from "../config/appConfig";
+import type { ThemeMode } from "@/config/appConfig";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 

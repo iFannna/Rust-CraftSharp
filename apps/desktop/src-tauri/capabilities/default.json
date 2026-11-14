@@ -10,7 +10,8 @@
     "overlay",
     "settings",
     "crosshair",
-    "tooltip"
+    "tooltip",
+    "bossbar"
   ],
   "permissions": [
     "core:default",
@@ -30,6 +31,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-is-maximized",
     "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-always-on-top",
     "core:event:default"
   ]
 }

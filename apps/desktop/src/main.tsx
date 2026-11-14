@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import { initializeHotkeys } from "./hotkeys";
-import "./styles.css";
+import App from "@/App";
+import { initializeHotkeys } from "@/lib/hotkeys";
+import "@/styles.css";
 
 initializeHotkeys();
 

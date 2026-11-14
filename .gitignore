@@ -14,6 +14,6 @@ Thumbs.db
 .vscode/
 
 # Temporary comparison artifacts
-docs/refactor/food-*.png
-docs/refactor/food1-*.png
-docs/refactor/hud-window.png
+docs/refactor/evidence/food-*.png
+docs/refactor/evidence/food1-*.png
+docs/refactor/evidence/hud-window.png

@@ -6,8 +6,8 @@ import {
   isHexColor,
   isPresetColor,
   toColorInputValue
-} from "../fileNameColor";
-import { Select, type Option } from "./controls";
+} from "@/settings/fileNameColor";
+import { Select, type Option } from "@/settings/components/controls";
 
 const CHOICES: Option[] = [
   ...FILE_NAME_COLOR_PRESETS.map((preset) => ({ value: preset.value, label: `${preset.label} ${preset.value}` })),

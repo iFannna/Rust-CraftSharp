@@ -23,7 +23,7 @@
 - P1 已验证：物品栏 6x 与黄金图逐像素一致，差异只在图标内部抗锯齿
 - P1 已完成：物品栏 Tooltip，九宫格背景与边框、Unifont 文本、自动换行、右侧显示超界翻转
 - P1 已完成：准星与攻击指示器，屏幕居中、鼠标穿透、进度裁剪；6x 与黄金图逐像素一致
-- P1 已完成：设置面板，8 个分区，统一配置读写，窗口 1080×720 无边框
+- P1 已完成：设置面板，6 个分区（系统、外观、HUD、物品栏、快捷键、关于），统一配置读写，窗口 1080×720 无边框
 - P1 已完成：全局热键，Win32 RegisterHotKey，四项默认 Ctrl+Alt+S/H/E/C
 - P1 已调整：移除卡片式主界面，改为系统托盘菜单 + 全局热键作为入口，主窗口只留隐藏宿主
 - P1 已完成：统一配置，`src/config/appConfig.ts`，字段对齐 AppSettings，兼容旧物品栏配置迁移
@@ -36,7 +36,22 @@
 - P1 已修复：状态栏与物品栏改为自绘拖动，按指针位移逐帧 setPosition，修掉原生拖动结束后的偏移
 - P1 已补齐：设置面板下拉框改为自绘 Fluent 菜单，选中项左侧蓝条，贴边自动翻转与回收
 - P1 已补齐：系统页记住窗口位置、窗口大小与选中页，恢复时夹回工作区
-- P1 未完成：3D 玩家预览、BOSS 血条窗口、壁纸引擎、皮肤上传、开机自启、单实例
+- P1 已整理：HTML 入口统一到 `pages/`，窗口引导到 `src/windows/`，共享工具到 `src/lib/`，HUD 按状态栏/槽位/物品栏/提示/准星/BOSS 分子目录；导入统一走 `@/` 与 `@assets/` 别名
+- P1 已完成：BOSS 血条窗口，四层贴图叠加、Unifont 逐字符居中、名称行高对齐原版、顶部居中、按启用项显隐
+- P1 已完成：BOSS 血条设置分区，新增/删除/启用、名称、颜色、分段、数据映射、自定义数值
+- P1 已完成：系统指标命令 `system_metrics`，电池、内存、CPU 走 Win32，GPU 走 PDH 3D 引擎占用，1 秒采样
+- P1 已补齐：HUD 像素级穿透，画布不透明区域合并成窗口区域 `SetWindowRgn`，透明像素不再接收鼠标；顶层窗口过程方案对 WebView 子窗口无效，已弃用
+- P1 已修复：窗口拖动改为 Rust 侧按物理像素跟随系统光标，每 4ms 一次 `SetWindowPos`，不再走前端指针位移，修掉 DPI 取整抖动；拖动期间不回写配置，避免写配置触发窗口回位
+- P1 已重做：设置面板按原版 Accordion 结构，HUD 合并为一页，卡片展开 200ms、收起 150ms，下拉菜单淡入，导航与开关补过渡
+- P1 已补齐：HUD 元素配置，生命、饥饿、空气、护甲、吸收、经验条各自支持显隐、数据映射、自定义当前值与最大值；状态栏布局按显隐重力收拢
+- P1 已补齐：准星置顶、攻击指示器数据映射与自定义进度、状态栏记住位置、记住卡片状态
+- P1 已补齐：设置面板字体与字号，原版 6 种字体与 10-20 号字号；开机自启写入 HKCU Run；局部快捷键丢弃与打开物品栏
+- P1 已补齐：元素图标样式，生命/伤害吸收 6 种、饥饿 2 种、经验条普通与跳跃，设置面板内切换并即时预览
+- P1 已修复：状态栏行间距按 WPF 的 Margin 规则重算，行与行间距为 1 基准像素，不再按 -1 的水平图标间距计算；隐藏元素后按 StackPanel 底部堆叠真实下落，最下面一项仍保留自己的下边距
+- P1 已补齐：伤害吸收多行，每行 10 个向上堆叠，行距为 1 减行数偏移，最多减 7，负间距时按原版层叠绘制顺序从最后一个槽位开始画
+- P1 已补齐：生命值动画，数值变化时容器闪烁 200ms、停 100ms、再闪烁 200ms，掉血位置叠加闪烁图标；空气值减少时 bursting 200ms；饥饿值饱和度按自定义值叠加
+- P1 已调整：元素数值判定与原版一致，自定义值关闭时一律走数据映射，数据映射开关只控制设置面板的映射来源展开
+- P1 未完成：3D 玩家预览、壁纸引擎、皮肤上传、单实例
 - 未实测项：右键菜单的打开位置、管理员运行、重命名会真的动桌面文件或弹窗；原生文件拖入需要从资源管理器拖，未自动化。本轮只验证了打开命令与路径判断
 - 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
 - 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读
@@ -69,7 +84,7 @@ CARGO_NET_OFFLINE=true npm run tauri dev
 
 快捷栏图标区修正后（6x，核心区 1092×354）与黄金图比较：容差 8 时差异 528 像素，0.14%，全部在图标内部抗锯齿，框体、空槽、图标位置逐像素一致。
 
-副手槽场景（黄金图 `2560x1440-100-statusbar-offhand.png`）在 6x 下对比：容差 3 时差异 17495/509760 = 3.43%，全部落在图标内部，原因是 Chromium 与 WPF 的大倍数缩放算法不同；框体、空槽、状态区逐像素一致。证据见 `docs/refactor/diff-offhand-6x.png`。
+副手槽场景（黄金图 `2560x1440-100-statusbar-offhand.png`）在 6x 下对比：容差 3 时差异 17495/509760 = 3.43%，全部落在图标内部，原因是 Chromium 与 WPF 的大倍数缩放算法不同；框体、空槽、状态区逐像素一致。证据见 `docs/refactor/evidence/diff-offhand-6x.png`。
 
 采集缺口：4K 场景（9 倍缩放）里 WPF 窗口宽度 2160 超过当前屏幕，副手槽列没有渲染出来，`3840x2160-100-statusbar-offhand.png` 仍是纯核心容器，暂缺 4K 副手基准。
 
@@ -77,10 +92,10 @@ CARGO_NET_OFFLINE=true npm run tauri dev
 
 证据文件：
 
-- `docs/refactor/canvas-6.png`
-- `docs/refactor/diff-6.png`
-- `docs/refactor/canvas-4.5.png`
-- `docs/refactor/diff-4.5.png`
+- `docs/refactor/evidence/canvas-6.png`
+- `docs/refactor/evidence/diff-6.png`
+- `docs/refactor/evidence/canvas-4.5.png`
+- `docs/refactor/evidence/diff-4.5.png`
 
 重新采集基线时，从 WPF 仓库根目录执行：
 
@@ -96,15 +111,15 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 - `.lnk` 且 `showTargetIcon` 为真：`IShellLinkW` 解析目标路径后取目标图标；为假直接用快捷方式自身图标（带系统角标）
 - 缓存键为「开关 + 路径」，失效条件是文件大小与修改时间变化；前端按同一键缓存 Promise
 - 返回 `null` 时前端回退 `barrier.png` 并 `smooth=false`，对应 WPF 的 NearestNeighbor 占位图
-- 证据：`docs/refactor/icon-workbench.png`、`icon-lnk-shortcut.png`、`icon-lnk-target.png`
+- 证据：`docs/refactor/evidence/icon-workbench.png`、`icon-lnk-shortcut.png`、`icon-lnk-target.png`
 
 ### P1 快捷栏交互契约
 
-- 几何：`src/hud/layout.ts` 统一算出状态行、经验条、快捷栏位置；命中区是 20×20 基准外扩 2，图标区 16×16，选中框 24×23 且上沿在 `hotbarTop - scale`
+- 几何：`src/hud/statusbar/layout.ts` 统一算出状态行、经验条、快捷栏位置；命中区是 20×20 基准外扩 2，图标区 16×16，选中框 24×23 且上沿在 `hotbarTop - scale`
 - 图标尺寸：`layout.slotSize` 是格子图标边长（16 MC 像素），与状态行 `iconSize`（9 MC 像素）分开；绘制走 `drawUniform` 等比居中，对应 WPF 的 `Stretch="Uniform"`，非正方形图片会留边而不是被拉伸
-- 状态机：`src/hud/hotbarInteraction.ts`，按下启动 150ms 定时，定时器触发后再移动超过 10 像素才进拖拽；未进拖拽的松开一律按点击处理，与 WPF 等价
-- 数据：`src/hud/slotStore.ts`，键为 `hotbar_0` 到 `hotbar_8`，暂存 localStorage `craftsharp.slots.v1`，两个窗口用 storage 事件同步；迁移 settings.json 时只替换这一层
-- 文件操作：`src/hud/slotActions.ts` + Rust `platform` 模块，命令是 `open_path`、`reveal_path`、`run_path_as_admin`、`path_exists`、`copy_to_clipboard`、`read_clipboard_paths`、`rename_path`
+- 状态机：`src/hud/statusbar/interaction.ts`，按下启动 150ms 定时，定时器触发后再移动超过 10 像素才进拖拽；未进拖拽的松开一律按点击处理，与 WPF 等价
+- 数据：`src/hud/slots/store.ts`，键为 `hotbar_0` 到 `hotbar_8`，暂存 localStorage `craftsharp.slots.v1`，两个窗口用 storage 事件同步；迁移 settings.json 时只替换这一层
+- 文件操作：`src/hud/slots/actions.ts` + Rust `platform` 模块，命令是 `open_path`、`reveal_path`、`run_path_as_admin`、`path_exists`、`copy_to_clipboard`、`read_clipboard_paths`、`rename_path`
 - 菜单：独立 `slot-menu` 窗口，`menu.html?items=` 传菜单项，点击后 emit `menu:select` 并关闭；失焦或 Esc 关闭，可以超出 HUD 边界
 - 文件名：DOM 覆盖层，Unifont `8×scale`，距底 `50×scale`，阴影为文字色 50%，偏移 `0.53×scale`，2000ms 后 500ms 线性渐隐
 - 自动配色：.NET 字符串哈希每个进程随机，这里改用 FNV-1a 稳定哈希，预设色表与原实现一致
@@ -113,43 +128,67 @@ dotnet run --project .\CraftSharp.csproj -- --golden-capture D:\develop\code\rus
 - 窗口宽度固定为 240 倍缩放（副手槽列始终占位），隐藏副手槽时两侧是透明区域
 - 长按判定同时看定时器和按下时间戳，后台窗口被节流时仍能按时进入拖拽
 - 副手槽显隐暂时由 URL 参数 `?offhand=both|left|right` 控制，设置面板接入后改读配置
-- 证据：`docs/refactor/hud-interaction-select.png`、`hud-context-menu.png`、`hud-drag-swap.png`、`hud-offhand-6x.png`、`hud-icons-6x.png`、`diff-icons-6x.png`
+- 证据：`docs/refactor/evidence/hud-interaction-select.png`、`hud-context-menu.png`、`hud-drag-swap.png`、`hud-offhand-6x.png`、`hud-icons-6x.png`、`diff-icons-6x.png`
 
 ### P1 物品栏契约
 
 - 入口：`inventory.html` + `src/inventory.ts`，独立窗口 `inventory`，默认隐藏，桌面上由工作台按钮或后续全局热键显隐
-- 样式：`src/hud/inventoryStyles.ts` 静态导入 15 张容器图与 14 份坐标 JSON；`tab_inventory.png` 没有独立坐标，回退到 `inventory.json`，与原实现一致
-- 布局：`src/hud/inventoryLayout.ts` 按容器图片原始像素乘缩放，格子位置直接取自 JSON 的 x/y/width/height；`player` 坐标不生成格子
-- 渲染：`src/hud/inventoryRenderer.ts`，背景 `NearestNeighbor` 铺满，图标 16 MC 像素等比居中，hover 白色 50% 与绿色 44% 用 `fillRect` 叠在格子上
-- 交互：`src/hud/inventoryInteraction.ts`，hover 250ms 转绿，点击打开跟随单击/双击配置（双击阈值 500ms），长按 150ms 加 10 像素进入拖拽交换
+- 样式：`src/hud/inventory/styles.ts` 静态导入 15 张容器图与 14 份坐标 JSON；`tab_inventory.png` 没有独立坐标，回退到 `inventory.json`，与原实现一致
+- 布局：`src/hud/inventory/layout.ts` 按容器图片原始像素乘缩放，格子位置直接取自 JSON 的 x/y/width/height；`player` 坐标不生成格子
+- 渲染：`src/hud/inventory/renderer.ts`，背景 `NearestNeighbor` 铺满，图标 16 MC 像素等比居中，hover 白色 50% 与绿色 44% 用 `fillRect` 叠在格子上
+- 交互：`src/hud/inventory/interaction.ts`，hover 250ms 转绿，点击打开跟随单击/双击配置（双击阈值 500ms），长按 150ms 加 10 像素进入拖拽交换
 - Shift 批量：从快捷栏与背包互换首个空位，装备、合成、副手移到背包首个空位；扫过已填充的格子会继续搬运，与原实现的扫格行为一致
 - 中键分发：按住中键扫过空格子会复制同一文件，源格子保留
 - Q 丢弃：按下时丢弃当前悬浮格子，按住扫过其他格子继续丢弃，松开重置
 - 数据：共享模式复用 `craftsharp.slots.v1`，独立模式写 `craftsharp.styleSlots.v1`，按样式隔离；快捷栏格子与 HUD 共用同一份数据
-- 配置：`src/hud/inventoryConfig.ts` 暂存 localStorage，字段对齐 `AppSettings.Inventory`；锁定位置默认开启，未锁定时按住容器空白拖动窗口
+- 配置：`src/hud/inventory/config.ts` 暂存 localStorage，字段对齐 `AppSettings.Inventory`；锁定位置默认开启，未锁定时按住容器空白拖动窗口
 - 灰色蒙版：独立 `overlay` 窗口，覆盖主屏，背景黑 75%，`setIgnoreCursorEvents` 鼠标穿透，显隐与物品栏联动
 - 窗口：打开时按记住的位置恢复，无效则居中；位置变化即写入配置
 - 未实现：Tooltip 窗口、3D 玩家预览、灰底联动隐藏状态栏、全局热键、设置面板
-- 证据：`docs/refactor/inventory-6x.png`、`diff-inventory-6x.png`、`inventory-hover-green.png`
+- 证据：`docs/refactor/evidence/inventory-6x.png`、`diff-inventory-6x.png`、`inventory-hover-green.png`
+
+### P1 BOSS 血条契约
+
+- 入口：`pages/bossbar.html` + `src/windows/bossbar.ts`，窗口 `bossbar`，默认隐藏，透明无边框、不进任务栏
+- 位置：贴主屏顶部水平居中，宽度固定 182 倍缩放，不记忆位置、不可拖动
+- 布局：名称行占 16/3 基准像素，名称上边距 3、下边距 1、条高 5、条间距 4；首条顶部在 9.33 基准像素
+- 绘制：四层叠加，底层背景、分段背景、进度、分段进度；进度按百分比裁剪宽度，图标用 NearestNeighbor
+- 名称：Unifont `8×scale` 逐字符绘制，字间距 `1×scale`，整体水平居中，黑色阴影偏移 `0.53×scale`
+- 数值：自定义值优先，取 `current/100`，与原版一致；否则走数据映射，最后回退 100%
+- 数据映射：Rust `system_metrics` 返回 0-1 的电池、内存、CPU、GPU 占用；CPU 用 GetSystemTimes 差值，GPU 用 PDH `GPU Engine` 3D 引擎累加后截断
+- 刷新：有数据映射时每秒刷新一次，配置变化立即重算尺寸、位置与显隐
+- 验证：6x 画布 1092×196 与黄金图对齐后差异 2.2%，全部在文字字形；血条与分段部分逐像素一致；4.5x 差异 8.6%，9x 差异 7.3%，后两者来自 WPF 文本行高按缩放产生的 1-3 像素出入
+- 证据：`docs/refactor/evidence/bossbar-canvas-6x.png`、`bossbar-canvas-4.5x.png`、`bossbar-canvas-9x.png`、`settings-bossbar.png`
 
 ### P1 设置面板与桌面外壳契约
 
-- 统一配置：`src/config/appConfig.ts`，键 `craftsharp.config.v1`，分区 system、appearance、statusBar、hotbar、inventory、hudElements、hotkeys、player；旧 `craftsharp.inventory.v1` 首次启动自动迁移
-- 窗口：`main`、`hud`、`inventory`、`overlay`、`settings`、`crosshair`、`tooltip`，除 main 外全部无边框透明；main 是隐藏宿主，只负责初始化与托盘事件，不再显示界面
-- 窗口控制：`src/windowControls.ts`，显隐与配置持久化集中在这里，主界面、设置面板、热键共用
-- 设置面板：`src/settings/`，八个分区，左栏导航加右侧滚动内容，无边框自绘标题栏；所有修改立即写配置，窗口显隐联动走 windowControls
-- 准星：`src/hud/crosshairLayout.ts` 与 `crosshairRenderer.ts`，整屏透明窗口 + 鼠标穿透，准星 15×15、攻击指示器 16×4/16×16，间距 1 MC 像素，进度默认 100%
+- 统一配置：`src/config/appConfig.ts`，键 `craftsharp.config.v1`，分区 system、appearance、statusBar、hotbar、inventory、hudElements、bossBars、hotkeys、player；旧 `craftsharp.inventory.v1` 首次启动自动迁移
+- 窗口：`main`、`hud`、`inventory`、`overlay`、`settings`、`crosshair`、`tooltip`、`bossbar`，除 main 外全部无边框透明；main 是隐藏宿主，只负责初始化与托盘事件，不再显示界面
+- 页面入口：`apps/desktop/pages/*.html`，窗口引导在 `src/windows/`，设置是唯一 React 应用入口 `src/settings/index.tsx`
+- 窗口控制：`src/lib/windowControls.ts`，显隐与配置持久化集中在这里，主界面、设置面板、热键共用
+- 设置面板：`src/settings/`，六个分区，左栏导航加右侧滚动内容，无边框自绘标题栏；所有修改立即写配置，窗口显隐联动走 windowControls
+- 折叠卡片：`components/accordion.tsx`，HUD 与物品栏按原版分成可折叠卡片，头部 56 高，内容区高度动画，卡片状态跟随“记住卡片状态”
+- HUD 页：状态栏、快捷栏、生命值、饥饿值、空气值、护甲值、伤害吸收、经验条、准星、攻击指示器、BOSS 血条；元素配置写在 `hudElements.elements`
+- 显隐重力：`computeLayout` 接受显隐配置，隐藏元素后上方行下落，快捷栏与经验条也可隐藏，窗口尺寸随之重算
+- 像素穿透：`src-tauri/src/hitmask.rs` + `src/lib/hitMask.ts`，画布 alpha 合并成矩形后 `SetWindowRgn`；文件名文字矩形单独并入形状，拖动期间临时恢复整窗形状避免图标被裁剪
+- 拖动：物理像素位移，缩放系数从 Tauri scaleFactor 读取，拖回逻辑坐标后落盘；拖动开始立即放开整窗区域，指针移出可见像素仍能收到事件
+- 准星：`src/hud/crosshair/layout.ts` 与 `src/hud/crosshair/renderer.ts`，整屏透明窗口 + 鼠标穿透，准星 15×15、攻击指示器 16×4/16×16，间距 1 MC 像素，进度默认 100%
 - 准星像素验证：6x、进度 50% 时内容裁剪 96×102，与黄金图逐像素一致，差异 0
 - Tooltip：独立窗口，九宫格边框 3 MC 像素、内边距 3、字号 8、最大宽 150、阴影为文字色 50% 偏移 0.53；显示在格子右侧，超右翻转、超上下贴边
-- 热键：Rust `src-tauri/src/hotkeys.rs` 用 RegisterHotKey 加独立消息线程，命令 `register_hotkeys(actions)`，事件 `craftsharp-hotkey`；前端 `src/hotkeys.ts` 监听并调用窗口开关
+- 热键：Rust `src-tauri/src/hotkeys.rs` 用 RegisterHotKey 加独立消息线程，命令 `register_hotkeys(actions)`，事件 `craftsharp-hotkey`；前端 `src/lib/hotkeys.ts` 监听并调用窗口开关
 - 入口：系统托盘菜单（打开设置、状态栏、物品栏、准星、退出），左键托盘打开设置；主窗口隐藏且不进任务栏
+- 目录：`src/config` 统一配置，`src/lib` 热键与窗口控制，`src/hud/{shared,statusbar,slots,inventory,tooltip,crosshair,bossbar}` 按职责拆分，`src/windows` 只做窗口引导
 - 宿主：`src/App.tsx` 无界面，启动恢复窗口显隐、监听托盘动作、按配置决定是否自动打开设置
 - 设置面板视觉：对齐原版 WPF-UI Fluent，深色底 #202020、卡片 #2D2D2D、强调色 #0078D4、微软雅黑 14、220 侧栏加 Segoe Fluent 图标、每项独立卡片、40×20 开关；亮色 #F3F3F3 底加白卡片，主题只作用于设置面板
 - 设置窗口：不透明、`decorations: false`、可调整大小（最小 720×480）、不置顶、进任务栏，标题栏自绘最小化/最大化/关闭，关闭只隐藏
 - 已验证：设置面板三个分区截图、准星逐像素、Tooltip 渲染、物品栏样式热切换（漏斗 705×533）、配置跨窗口传播、热键命令返回空失败列表
 - 已验证：全局热键真实按键切换设置窗口；设置面板深色与浅色主题、热键输入捕获与即时重注册
-- 未实测：托盘图标在系统托盘区的实际展示与菜单点击（UIA 查不到，Windows 11 默认收进溢出区）、真实窗口拖动与缩放、开机自启
-- 证据：`docs/refactor/settings-v3-system.png`、`settings-v3-inventory.png`、`settings-v3-about.png`、`settings-v3-light.png`、`crosshair-6x.png`、`tooltip-6x.png`
+- 未实测：托盘图标在系统托盘区的实际展示与菜单点击（UIA 查不到，Windows 11 默认收进溢出区）、真实窗口拖动与缩放、开机自启注册表写入
+- 已实测：窗口区域为复杂区域，四角与空白处不在区域内（`GetWindowRgn` 返回 COMPLEXREGION，`PtInRegion` 为假）
+- 已验证：状态栏行间距重写后，6x 状态行区域与黄金图差异 0 像素；伤害吸收 6 行场景画布 1440×474，饱和度与半心位置正确，证据 `docs/refactor/evidence/statusbar-multirow-6x.png`
+- 未实测：真实桌面上的点击穿透手感与窗口拖动，按用户要求不再启动可见窗口做交互测试
+- 原版基线：`docs/refactor/evidence/wpf-settings-*.png`，8 个页面离屏采集
+- 证据：`docs/refactor/evidence/hud-icon-styles.png`、`settings-hud-v4.png`、`settings-hud-light-v4.png`、`settings-inventory-v4.png`、`settings-hotkeys-v4.png`、`settings-appearance-v4.png`、`hud-visibility.png`、`settings-v3-system.png`、`crosshair-6x.png`、`tooltip-6x.png`、`settings-bossbar.png`
 
 ## 1. 目标
 

@@ -14,6 +14,7 @@
       {
         "label": "main",
         "title": "CraftSharp",
+        "url": "pages/index.html",
         "width": 1500,
         "height": 900,
         "minWidth": 720,
@@ -28,7 +29,7 @@
       {
         "label": "hud",
         "title": "CraftSharp HUD",
-        "url": "hud.html",
+        "url": "pages/hud.html",
         "width": 819,
         "height": 266,
         "x": 550,
@@ -44,7 +45,7 @@
       {
         "label": "inventory",
         "title": "物品栏",
-        "url": "inventory.html",
+        "url": "pages/inventory.html",
         "width": 1056,
         "height": 996,
         "x": 420,
@@ -60,7 +61,7 @@
       {
         "label": "overlay",
         "title": "灰色蒙版",
-        "url": "overlay.html",
+        "url": "pages/overlay.html",
         "width": 800,
         "height": 600,
         "x": 0,
@@ -77,7 +78,7 @@
       {
         "label": "settings",
         "title": "CraftSharp 设置",
-        "url": "settings.html",
+        "url": "pages/settings.html",
         "width": 1080,
         "height": 720,
         "minWidth": 720,
@@ -91,7 +92,7 @@
       {
         "label": "crosshair",
         "title": "准星",
-        "url": "crosshair.html",
+        "url": "pages/crosshair.html",
         "width": 800,
         "height": 600,
         "x": 0,
@@ -108,9 +109,24 @@
       {
         "label": "tooltip",
         "title": "提示框",
-        "url": "tooltip.html",
+        "url": "pages/tooltip.html",
         "width": 200,
         "height": 80,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "visible": false,
+        "shadow": false
+      },
+      {
+        "label": "bossbar",
+        "title": "BOSS 血条",
+        "url": "pages/bossbar.html",
+        "width": 800,
+        "height": 200,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

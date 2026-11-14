@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { getConfig } from "./config/appConfig";
-import { applyConfiguredVisibility, applyWindowAction, setSettingsVisible, type WindowAction } from "./windowControls";
+import { getConfig } from "@/config/appConfig";
+import { applyConfiguredVisibility, applyWindowAction, setSettingsVisible, type WindowAction } from "@/lib/windowControls";
 
 const ACTIONS: WindowAction[] = ["settings", "statusBar", "inventory", "crosshair"];
 

@@ -5,9 +5,18 @@ import react from "@vitejs/plugin-react";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
+/** 每个桌面窗口一个 HTML 入口，统一放在 pages/ */
+const pages = ["index", "hud", "menu", "inventory", "overlay", "settings", "crosshair", "tooltip", "bossbar"];
+
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  resolve: {
+    alias: {
+      "@": resolve(rootDir, "src"),
+      "@assets": resolve(rootDir, "../../assets")
+    }
+  },
   server: {
     port: 1420,
     strictPort: true,
@@ -21,16 +30,9 @@ export default defineConfig({
     minify: "esbuild",
     sourcemap: false,
     rollupOptions: {
-      input: {
-        main: resolve(rootDir, "index.html"),
-        hud: resolve(rootDir, "hud.html"),
-        menu: resolve(rootDir, "menu.html"),
-        inventory: resolve(rootDir, "inventory.html"),
-        overlay: resolve(rootDir, "overlay.html"),
-        settings: resolve(rootDir, "settings.html"),
-        crosshair: resolve(rootDir, "crosshair.html"),
-        tooltip: resolve(rootDir, "tooltip.html")
-      }
+      input: Object.fromEntries(
+        pages.map((page) => [page === "index" ? "main" : page, resolve(rootDir, `pages/${page}.html`)])
+      )
     }
   }
 });

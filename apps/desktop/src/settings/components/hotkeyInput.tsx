@@ -1,15 +1,18 @@
 import { useRef, useState } from "react";
-import { captureHotkey, isModifierCode } from "../hotkey";
+import { captureHotkey, isModifierCode } from "@/settings/hotkey";
 
-/** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空、必须有修饰键 */
+/** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空，可配置是否必须带修饰键 */
 export function HotkeyInput({
   value,
   onChange,
-  label
+  label,
+  allowSingle = false
 }: {
   value: string;
   onChange: (next: string) => void;
   label: string;
+  /** 本地快捷键允许单键，如 Q / E */
+  allowSingle?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState(false);
@@ -26,6 +29,11 @@ export function HotkeyInput({
     inputRef.current?.blur();
   };
 
+  const clear = () => {
+    onChange("");
+    setError(null);
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recording) return;
     event.preventDefault();
@@ -37,7 +45,7 @@ export function HotkeyInput({
     }
 
     if (event.code === "Backspace") {
-      onChange("");
+      clear();
       finishAndBlur();
       return;
     }
@@ -51,7 +59,7 @@ export function HotkeyInput({
       return;
     }
 
-    if (!captured.hasModifier) {
+    if (!captured.hasModifier && !allowSingle) {
       setError("至少需要一个修饰键（Ctrl / Alt / Shift）");
       return;
     }
@@ -62,23 +70,35 @@ export function HotkeyInput({
 
   return (
     <div className="hotkey-field">
-      <input
-        ref={inputRef}
-        type="text"
-        readOnly
-        className={["shortcut-input", recording ? "is-recording" : "", error ? "is-invalid" : ""]
-          .filter(Boolean)
-          .join(" ")}
-        aria-label={label}
-        value={recording ? "" : value}
-        placeholder={recording ? "请按下组合键…" : "未设置"}
-        onFocus={() => {
-          setRecording(true);
-          setError(null);
-        }}
-        onBlur={stopRecording}
-        onKeyDown={handleKeyDown}
-      />
+      <div className="hotkey-line">
+        <input
+          ref={inputRef}
+          type="text"
+          readOnly
+          className={["shortcut-input", recording ? "is-recording" : "", error ? "is-invalid" : ""]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label={label}
+          value={recording ? "" : value}
+          placeholder={recording ? (allowSingle ? "请按下按键…" : "请按下组合键…") : "未设置"}
+          onFocus={() => {
+            setRecording(true);
+            setError(null);
+          }}
+          onBlur={stopRecording}
+          onKeyDown={handleKeyDown}
+        />
+        <button
+          type="button"
+          className="hotkey-clear"
+          aria-label="清除快捷键"
+          title="清除快捷键"
+          disabled={!value}
+          onClick={clear}
+        >
+          <span aria-hidden="true">{"\uE711"}</span>
+        </button>
+      </div>
       {error ? <span className="inline-error">{error}</span> : null}
     </div>
   );

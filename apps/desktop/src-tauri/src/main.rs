@@ -1,7 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod icons;
+mod metrics;
 mod platform;
+mod windowdrag;
+
+#[cfg(windows)]
+mod hitmask;
 
 #[cfg(windows)]
 mod hotkeys;
@@ -58,6 +64,39 @@ fn read_clipboard_paths() -> Vec<String> {
 #[tauri::command]
 fn rename_path(from: String, to: String) -> Result<(), String> {
     platform::rename(&from, &to)
+}
+
+/// BOSS 血条数据映射：电池、内存、CPU、GPU 占用，取值 0-1。
+#[tauri::command]
+fn system_metrics() -> metrics::SystemMetrics {
+    metrics::collect()
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<(), String> {
+    autostart::set(enabled)
+}
+
+/// 更新 HUD 窗口的可命中矩形，透明像素穿透到桌面。
+#[tauri::command]
+fn set_hit_mask(app: tauri::AppHandle, label: String, runs: Vec<[i32; 4]>) {
+    #[cfg(windows)]
+    hitmask::update(&app, &label, runs);
+    #[cfg(not(windows))]
+    let _ = (app, label, runs);
+}
+
+/// 自绘窗口拖动，返回拖动结束后的物理像素位置。
+#[tauri::command]
+async fn drag_window(app: tauri::AppHandle, label: String) -> Option<[i32; 2]> {
+    use tauri::Manager;
+
+    let window = app.get_webview_window(&label)?;
+    tauri::async_runtime::spawn_blocking(move || windowdrag::drag(&window))
+        .await
+        .ok()
+        .flatten()
+        .map(|(x, y)| [x, y])
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -123,7 +162,11 @@ fn main() {
             copy_to_clipboard,
             read_clipboard_paths,
             rename_path,
-            register_hotkeys
+            register_hotkeys,
+            system_metrics,
+            set_hit_mask,
+            drag_window,
+            set_autostart
         ])
         .run(tauri::generate_context!())
         .expect("error while running CraftSharp");

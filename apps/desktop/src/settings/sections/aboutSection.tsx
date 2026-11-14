@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { resetConfig } from "../../config/appConfig";
-import { Button, Card, Note, SectionHead } from "../components/controls";
+import { resetConfig } from "@/config/appConfig";
+import { Button, Card, Note, SectionHead } from "@/settings/components/controls";
 
 const ABOUT_ROWS: { label: string; value: string }[] = [
   { label: "作者", value: "iFannna" },

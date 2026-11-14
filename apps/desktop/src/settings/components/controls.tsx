@@ -13,20 +13,28 @@ export function Card({ children, className }: { children: ReactNode; className?:
   return <section className={className ? `card ${className}` : "card"}>{children}</section>;
 }
 
+export function SectionSubhead({ children }: { children: ReactNode }) {
+  return <div className="section-subhead">{children}</div>;
+}
+
 /** 单个设置项：每项独立卡片，与原版 ui:Card 一致 */
 export function Row({
   label,
   description,
   disabled = false,
+  plain = false,
   children
 }: {
   label: string;
   description?: ReactNode;
   disabled?: boolean;
+  /** 折叠卡片内部的紧凑行，不再套一层卡片 */
+  plain?: boolean;
   children: ReactNode;
 }) {
+  const Tag = plain ? "div" : "section";
   return (
-    <section className={disabled ? "card is-disabled" : "card"}>
+    <Tag className={plain ? (disabled ? "setting-row is-disabled" : "setting-row") : disabled ? "card is-disabled" : "card"}>
       <div className="row">
         <div className="row-text">
           <div className="row-label">{label}</div>
@@ -34,7 +42,7 @@ export function Row({
         </div>
         <div className="row-control">{children}</div>
       </div>
-    </section>
+    </Tag>
   );
 }
 
@@ -227,42 +235,62 @@ export function Select<T extends string>({
   );
 }
 
-export function SliderRow({
+export function TextField({
+  value,
+  onChange,
+  ariaLabel,
+  placeholder,
+  disabled = false
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  ariaLabel: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <input
+      type="text"
+      className="text-field"
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+export function NumberField({
   value,
   min,
   max,
-  step = 1,
   onChange,
-  disabled = false,
   ariaLabel,
-  suffix = ""
+  disabled = false
 }: {
   value: number;
   min: number;
   max: number;
-  step?: number;
   onChange: (next: number) => void;
-  disabled?: boolean;
   ariaLabel: string;
-  suffix?: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="slider-row">
-      <input
-        type="range"
-        aria-label={ariaLabel}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <span className="slider-value">
-        {value}
-        {suffix}
-      </span>
-    </div>
+    <input
+      type="number"
+      className="number-field"
+      aria-label={ariaLabel}
+      min={min}
+      max={max}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => {
+        const next = Number(event.target.value);
+        if (!Number.isFinite(next)) return;
+        onChange(Math.min(max, Math.max(min, Math.round(next))));
+      }}
+    />
   );
 }
 
