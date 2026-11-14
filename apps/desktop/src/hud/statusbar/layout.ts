@@ -88,6 +88,7 @@ export interface StatusBarLayout {
   absorbing: AbsorbingLayout;
   offhand: OffhandConfig;
   visible: StatusBarVisibility;
+  maxAbsorption: number;
 }
 
 /**
@@ -204,8 +205,17 @@ export function computeLayout(
       rowGap: absorbingRowGap
     },
     offhand,
-    visible
+    visible,
+    maxAbsorption
   };
+}
+
+/**
+ * 画布与 WebView 固定使用的最大尺寸：全部元素可见，两侧副手列都占位。
+ * 视图尺寸不随元素显隐变化，窗口只做裁剪，WebView 就不会重排。
+ */
+export function maxLayout(scale: number, maxAbsorption = 20): StatusBarLayout {
+  return computeLayout(scale, { left: true, right: true }, ALL_VISIBLE, maxAbsorption);
 }
 
 /** 主快捷栏第 index 个格子（0-8）的可命中区域，含 2 像素外扩 */

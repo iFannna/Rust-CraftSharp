@@ -3,6 +3,7 @@ import { draw, drawUniform } from "@/hud/shared/canvas";
 import {
   BASE,
   computeLayout,
+  maxLayout,
   offhandBoxRect,
   offhandIconRect,
   selectionRect,
@@ -91,10 +92,16 @@ function drawStatusBar(canvas: HTMLCanvasElement, images: HudImages, model: Stat
   const coreRight = coreLeft + layout.coreWidth;
   const { coreWidth, hotbarTop, hotbarHeight, expTop, expHeight, healthTop, armorTop, foodTop, airTop, iconSize, slotSize, gap } = layout;
 
-  canvas.width = Math.ceil(layout.width);
-  canvas.height = Math.ceil(layout.height);
-  canvas.style.width = `${layout.width}px`;
-  canvas.style.height = `${layout.height}px`;
+  // 画布固定为最大内容尺寸，窗口变小时只裁剪，画布本身不重建
+  const view = maxLayout(model.scale, model.maxAbsorption);
+  const width = Math.ceil(view.width);
+  const height = Math.ceil(view.height);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("无法创建 Canvas 2D 上下文");

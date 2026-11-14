@@ -32,13 +32,23 @@ export async function showSlotMenu(
   clientX: number,
   clientY: number
 ): Promise<string | null> {
+  const current = getCurrentWindow();
+  const outer = await current.outerPosition();
+  const scale = await current.scaleFactor();
+  return showSlotMenuAt(items, outer.x + clientX * scale, outer.y + clientY * scale);
+}
+
+/** 按屏幕物理像素弹出菜单，供原生状态栏使用。 */
+export async function showSlotMenuAt(
+  items: MenuItemSpec[],
+  physicalXIn: number,
+  physicalYIn: number
+): Promise<string | null> {
   const existing = await WebviewWindow.getByLabel(MENU_LABEL);
   if (existing) await existing.close().catch(() => undefined);
 
   const current = getCurrentWindow();
-  const outer = await current.outerPosition();
   const scale = await current.scaleFactor();
-
   const width = MENU_WIDTH;
   const height = menuHeight(items);
   const physicalWidth = width * scale;
@@ -48,8 +58,8 @@ export async function showSlotMenu(
   const workTop = ((window.screen as Screen & { availTop?: number }).availTop ?? 0) * scale;
   const workBottom = workTop + window.screen.availHeight * scale;
 
-  let physicalX = outer.x + clientX * scale;
-  let physicalY = outer.y + clientY * scale;
+  let physicalX = physicalXIn;
+  let physicalY = physicalYIn;
 
   if (physicalX + physicalWidth > workRight - 4) {
     physicalX = Math.max(4, workRight - physicalWidth - 4);

@@ -2,6 +2,7 @@
 
 mod autostart;
 mod desktop;
+mod hud;
 mod icons;
 mod metrics;
 mod platform;
@@ -108,9 +109,8 @@ fn toggle_desktop_icons() -> Result<(), String> {
     desktop::toggle()
 }
 
-/// 一次性设置窗口位置与尺寸，参数为物理像素；dx/dy 用于同步平移已有窗口区域。
+/// 一次性设置窗口位置与尺寸，参数为物理像素。
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 fn set_window_bounds(
     app: tauri::AppHandle,
     label: String,
@@ -118,15 +118,25 @@ fn set_window_bounds(
     y: i32,
     width: i32,
     height: i32,
-    dx: i32,
-    dy: i32,
 ) -> bool {
     use tauri::Manager;
 
     match app.get_webview_window(&label) {
-        Some(window) => windowbounds::set(&window, x, y, width, height, dx, dy),
+        Some(window) => windowbounds::set(&window, x, y, width, height),
         None => false,
     }
+}
+
+/// 前端推送状态栏配置，Rust 侧重绘并同步窗口几何。
+#[tauri::command]
+fn hud_apply(app: tauri::AppHandle, config: hud::HudConfig) {
+    hud::apply(&app, config);
+}
+
+/// 显示或隐藏原生状态栏窗口。
+#[tauri::command]
+fn hud_visible(visible: bool) {
+    hud::set_visible(visible);
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -187,6 +197,7 @@ fn main() {
         .setup(|app| {
             create_tray(app.handle())?;
             singleinstance::watch(app.handle().clone());
+            hud::init(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -204,6 +215,8 @@ fn main() {
             drag_window,
             toggle_desktop_icons,
             set_window_bounds,
+            hud_apply,
+            hud_visible,
             set_autostart
         ])
         .run(tauri::generate_context!())

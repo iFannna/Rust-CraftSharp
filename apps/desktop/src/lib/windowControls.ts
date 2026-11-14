@@ -1,5 +1,6 @@
 /** 窗口显隐统一入口，主界面、设置面板、全局热键共用 */
 
+import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
 
@@ -23,8 +24,13 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
 
 let statusBarHiddenByInventory = false;
 
+/** 状态栏由 Rust 原生窗口绘制，显隐走独立命令 */
+async function setHudVisible(visible: boolean) {
+  await invoke("hud_visible", { visible }).catch(() => undefined);
+}
+
 export async function setStatusBarVisible(visible: boolean, persist = true) {
-  await setVisible("hud", visible);
+  await setHudVisible(visible);
   if (persist) updateConfig({ statusBar: { visible } });
 }
 
@@ -45,7 +51,7 @@ export async function setInventoryVisible(visible: boolean, persist = true) {
 
     if (config.hideStatusBar && getConfig().statusBar.visible) {
       statusBarHiddenByInventory = true;
-      await setVisible("hud", false);
+      await setHudVisible(false);
     }
   } else {
     await setVisible("inventory", false);
@@ -53,7 +59,7 @@ export async function setInventoryVisible(visible: boolean, persist = true) {
 
     if (statusBarHiddenByInventory) {
       statusBarHiddenByInventory = false;
-      await setVisible("hud", getConfig().statusBar.visible);
+      await setHudVisible(getConfig().statusBar.visible);
     }
   }
 
@@ -109,7 +115,7 @@ export async function applyWindowAction(action: WindowAction) {
 /** 启动时按配置恢复各窗口显隐 */
 export async function applyConfiguredVisibility() {
   const config = getConfig();
-  await setVisible("hud", config.statusBar.visible);
+  await setHudVisible(config.statusBar.visible);
   // 准星窗口自己铺满屏幕后按配置显示，这里不抢先 show
   if (config.inventory.visible) {
     await setInventoryVisible(true, false);

@@ -34,8 +34,11 @@ export class FileNameOverlay {
     Object.assign(element.style, {
       position: "fixed",
       left: "0",
-      right: "0",
-      bottom: `${50 * scale}px`,
+      top: "0",
+      boxSizing: "border-box",
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center",
       textAlign: "center",
       pointerEvents: "none",
       fontFamily: `"${UNIFONT_FAMILY}", monospace`,
@@ -46,6 +49,18 @@ export class FileNameOverlay {
       whiteSpace: "nowrap"
     });
     element.style.setProperty("--shadow-depth", `${depth}px`);
+  }
+
+  /**
+   * 画布是最大尺寸、内容贴左上绘制，文件名按内容区域居中并贴底，
+   * 而不是跟着整个视图走。
+   */
+  setFrame(contentWidth: number, contentHeight: number): void {
+    this.element.style.width = `${contentWidth}px`;
+    this.element.style.height = `${contentHeight}px`;
+    // 内容很矮时把文字收进可视区域，避免落到窗口上方
+    const gap = Math.min(50 * this.scale, Math.max(0, contentHeight - 10 * this.scale));
+    this.element.style.paddingBottom = `${gap}px`;
   }
 
   /** 设置面板切换文件名颜色后即时生效 */

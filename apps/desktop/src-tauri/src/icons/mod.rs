@@ -70,25 +70,45 @@ fn stamp_of(path: &str) -> Option<(u64, u64)> {
 }
 
 fn build(path: &str, show_target_icon: bool) -> Option<String> {
+    let (mime, bytes) = build_bytes(path, show_target_icon)?;
+    Some(format!("data:{};base64,{}", mime, base64::encode(&bytes)))
+}
+
+/// 图标原始编码字节，原生 HUD 直接解码绘制，不经过 Data URL。
+pub fn slot_icon_bytes(path: &str, show_target_icon: bool) -> Option<Vec<u8>> {
+    let path = path.trim().trim_matches('"');
+    if path.is_empty() {
+        return None;
+    }
+    build_bytes(path, show_target_icon).map(|(_, bytes)| bytes)
+}
+
+fn build_bytes(path: &str, show_target_icon: bool) -> Option<(&'static str, Vec<u8>)> {
     let metadata = fs::metadata(path).ok()?;
     let is_dir = metadata.is_dir();
     let extension = extension_of(path);
 
     if !is_dir && IMAGE_EXTENSIONS.contains(&extension.as_str()) {
-        if let Some(data_url) = image_data_url(path, &extension) {
-            return Some(data_url);
+        if let Some(mime) = mime_of(&extension) {
+            if let Ok(bytes) = fs::read(path) {
+                if !bytes.is_empty() {
+                    return Some((mime, bytes));
+                }
+            }
         }
     }
 
     if !is_dir && extension == "lnk" && show_target_icon {
         if let Some(target) = shell_windows::shortcut_target(path) {
             if fs::metadata(&target).is_ok() {
-                return shell_icon(&target).or_else(|| shell_icon(path));
+                if let Some(icon) = shell_icon_bytes(&target).or_else(|| shell_icon_bytes(path)) {
+                    return Some(("image/png", icon));
+                }
             }
         }
     }
 
-    shell_icon(path)
+    shell_icon_bytes(path).map(|bytes| ("image/png", bytes))
 }
 
 fn extension_of(path: &str) -> String {
@@ -98,27 +118,19 @@ fn extension_of(path: &str) -> String {
         .unwrap_or_default()
 }
 
-fn image_data_url(path: &str, extension: &str) -> Option<String> {
-    let bytes = fs::read(path).ok()?;
-    if bytes.is_empty() {
-        return None;
+fn mime_of(extension: &str) -> Option<&'static str> {
+    match extension {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "bmp" => Some("image/bmp"),
+        "gif" => Some("image/gif"),
+        "tiff" => Some("image/tiff"),
+        "webp" => Some("image/webp"),
+        _ => None,
     }
-
-    let mime = match extension {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "bmp" => "image/bmp",
-        "gif" => "image/gif",
-        "tiff" => "image/tiff",
-        "webp" => "image/webp",
-        _ => return None,
-    };
-
-    Some(format!("data:{};base64,{}", mime, base64::encode(&bytes)))
 }
 
-fn shell_icon(path: &str) -> Option<String> {
+fn shell_icon_bytes(path: &str) -> Option<Vec<u8>> {
     let (width, height, rgba) = shell_windows::icon_rgba(path)?;
-    let encoded = png::encode_rgba(width, height, &rgba);
-    Some(format!("data:image/png;base64,{}", base64::encode(&encoded)))
+    Some(png::encode_rgba(width, height, &rgba))
 }
