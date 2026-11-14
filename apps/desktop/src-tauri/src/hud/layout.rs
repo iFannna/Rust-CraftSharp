@@ -17,6 +17,8 @@ pub const OFFHAND_SIZE: f32 = 22.0;
 pub const OFFHAND_SPACING: f32 = 7.0;
 pub const ABSORBING_PER_ROW: f32 = 10.0;
 pub const ABSORBING_MAX_GAP_ADJUSTMENT: f32 = 7.0;
+/// 左右各留 1 MC 像素，容纳比格子宽 4 像素的选中框
+pub const SIDE_PADDING: f32 = 1.0;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Rect {
@@ -83,8 +85,9 @@ pub fn compute(scale: f32, offhand: Offhand, visible: Visibility, max_absorption
     let exp_height = EXP_HEIGHT * scale;
     let exp_margin = EXP_MARGIN * scale;
     let offhand_width = (OFFHAND_SIZE + OFFHAND_SPACING) * scale;
-    let core_left = if offhand.left { offhand_width } else { 0.0 };
-    let width = core_width + core_left + if offhand.right { offhand_width } else { 0.0 };
+    let padding = SIDE_PADDING * scale;
+    let core_left = padding + if offhand.left { offhand_width } else { 0.0 };
+    let width = core_width + core_left + if offhand.right { offhand_width } else { 0.0 } + padding;
 
     let absorbing_slots = (max_absorption / 2).max(0);
     let rows = ((absorbing_slots as f32 / ABSORBING_PER_ROW).ceil() as i32).max(1);
@@ -208,8 +211,9 @@ impl Layout {
 
     pub fn offhand_box_rect(&self, side: usize) -> Rect {
         let size = OFFHAND_SIZE * self.scale;
+        let padding = SIDE_PADDING * self.scale;
         Rect {
-            left: if side == 0 { 0.0 } else { self.width - size },
+            left: if side == 0 { padding } else { self.width - size - padding },
             top: self.hotbar_top,
             width: size,
             height: size,

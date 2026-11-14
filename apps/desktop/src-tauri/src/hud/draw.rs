@@ -182,7 +182,14 @@ pub fn draw(frame: &mut Frame, layout: &Layout, style: &FrameStyle, config: &Hud
         frame.draw(&style.exp_background, core_left, layout.exp_top, layout.core_width, layout.exp_height);
         let progress = (config.elements.exp_bar.value / 100.0).clamp(0.0, 1.0);
         if progress > 0.0 {
-            draw_clipped(frame, &style.exp_progress, core_left, layout.exp_top, layout.core_width, layout.exp_height, core_left + layout.core_width * progress);
+            frame.draw_column_clipped(
+                &style.exp_progress,
+                core_left,
+                layout.exp_top,
+                layout.core_width,
+                layout.exp_height,
+                core_left + layout.core_width * progress,
+            );
         }
     }
     if visible.hotbar {
@@ -334,20 +341,4 @@ fn draw_saturation(frame: &mut Frame, full: &Rc<Sprite>, half: &Rc<Sprite>, righ
             frame.draw(half, x, top, icon, icon);
         }
     }
-}
-
-fn draw_clipped(frame: &mut Frame, sprite: &Rc<Sprite>, left: f32, top: f32, width: f32, height: f32, clip_right: f32) {
-    let visible_width = (clip_right - left).max(0.0);
-    if visible_width <= 0.0 {
-        return;
-    }
-    let ratio = visible_width / width;
-    let source_width = sprite.width as f32 * ratio;
-    // 进度条只在右侧裁切，左侧保持不变
-    let copy = Sprite {
-        width: (source_width.round() as u32).max(1),
-        height: sprite.height,
-        pixels: sprite.pixels.clone(),
-    };
-    frame.draw(&copy, left, top, visible_width, height);
 }

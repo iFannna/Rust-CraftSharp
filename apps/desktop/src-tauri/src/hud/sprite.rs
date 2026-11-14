@@ -212,6 +212,52 @@ impl Frame {
         }
     }
 
+    /// 按整条宽度映射源坐标，只画到裁剪线为止。
+    /// 不改变行跨距，进度不足时也不会错位。
+    pub fn draw_column_clipped(
+        &mut self,
+        sprite: &Sprite,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        clip_right: f32,
+    ) {
+        let left = x.round() as i32;
+        let top = y.round() as i32;
+        let right = (x + width).round() as i32;
+        let bottom = (y + height).round() as i32;
+        let draw_width = (right - left).max(1);
+        let draw_height = (bottom - top).max(1);
+        let limit = clip_right.round() as i32;
+        if sprite.width == 0 || sprite.height == 0 {
+            return;
+        }
+
+        for row in 0..draw_height {
+            let dy = top + row;
+            if dy < 0 || dy >= self.height as i32 {
+                continue;
+            }
+            let sy = (row as u32 * sprite.height / draw_height as u32).min(sprite.height - 1);
+            for col in 0..draw_width {
+                let dx = left + col;
+                if dx >= limit {
+                    break;
+                }
+                if dx < 0 || dx >= self.width as i32 {
+                    continue;
+                }
+                let sx = (col as u32 * sprite.width / draw_width as u32).min(sprite.width - 1);
+                let color = sprite.pixels[(sy * sprite.width + sx) as usize];
+                if color == 0 {
+                    continue;
+                }
+                blend(&mut self.pixels[(dy as u32 * self.width + dx as u32) as usize], color);
+            }
+        }
+    }
+
     /// 等比缩放后居中绘制，等价于 WPF 的 Uniform。
     pub fn draw_uniform(&mut self, sprite: &Sprite, x: f32, y: f32, box_width: f32, box_height: f32) {
         if sprite.width == 0 || sprite.height == 0 {
