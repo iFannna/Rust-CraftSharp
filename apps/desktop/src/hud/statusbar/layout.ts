@@ -107,7 +107,10 @@ export function computeLayout(
   const hotbarHeight = BASE.hotbarHeight * scale;
   const expHeight = BASE.expHeight * scale;
   const expMargin = BASE.expMargin * scale;
-  const coreLeft = (BASE.offhandSize + BASE.offhandSpacing) * scale;
+  const offhandWidth = (BASE.offhandSize + BASE.offhandSpacing) * scale;
+  // 副手槽隐藏时整列不留占位，窗口宽度跟随可见内容
+  const coreLeft = offhand.left ? offhandWidth : 0;
+  const width = coreWidth + coreLeft + (offhand.right ? offhandWidth : 0);
 
   // 伤害吸收每行 10 个向上堆叠，行距随行数递减，最多减 7
   const absorbingSlots = Math.max(0, Math.floor(maxAbsorption / 2));
@@ -177,7 +180,7 @@ export function computeLayout(
     scale,
     coreWidth,
     coreLeft,
-    width: coreWidth + coreLeft * 2,
+    width,
     height,
     iconSize: icon,
     slotSize: BASE.slot * scale,

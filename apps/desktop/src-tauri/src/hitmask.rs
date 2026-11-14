@@ -47,7 +47,8 @@ pub fn update(app: &AppHandle, label: &str, runs: Vec<[i32; 4]>) {
     // 形状必须由窗口线程设置
     let _ = app.run_on_main_thread(move || {
         let region = build_region(&runs);
-        let applied = unsafe { SetWindowRgn(hwnd, region, 1) };
+        // redraw 传 0：只换裁剪区域，不触发整窗重绘，避免显隐元素时闪一下
+        let applied = unsafe { SetWindowRgn(hwnd, region, 0) };
         if applied == 0 {
             unsafe {
                 DeleteObject(region);

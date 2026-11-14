@@ -1,4 +1,3 @@
-import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { HUD_ASSETS, loadImage } from "@/hud/statusbar/assets";
@@ -38,7 +37,6 @@ import {
   type HudElementConfig,
   type HudElementId
 } from "@/config/appConfig";
-import { clampToWorkArea } from "@/hud/shared/windowPlacement";
 import { startWindowDrag } from "@/hud/shared/windowDrag";
 import { createHitMask } from "@/lib/hitMask";
 
@@ -73,7 +71,7 @@ if (!canvas || !fileNameElement) {
 
 const renderer = await createStatusBarRenderer(canvas);
 const overlay = new FileNameOverlay(fileNameElement, scale, hotbarConfig.fileNameColor);
-let refreshHitMask: ((full?: boolean) => void) | null = null;
+let refreshHitMask: ((full?: boolean, immediate?: boolean) => void) | null = null;
 
 const baseModel: StatusBarModel = {
   scale,
@@ -357,13 +355,24 @@ if (tauriWindow) {
     return rect.width > 0 ? [{ x: rect.left, y: rect.top, w: rect.width, h: rect.height }] : [];
   };
   refreshHitMask = createHitMask(canvas, currentWindow.label, fileNameRects);
-  refreshHitMask();
   let scaleFactor = await currentWindow.scaleFactor();
   await currentWindow.onScaleChanged(({ payload }) => {
     scaleFactor = payload.scaleFactor;
   });
 
+  const boundsOf = () => {
+    const current = layout();
+    return {
+      size: {
+        width: Math.max(1, Math.ceil(current.width)),
+        height: Math.max(1, Math.ceil(current.height))
+      },
+      coreLeft: current.coreLeft
+    };
+  };
+
   let appliedSize: { width: number; height: number } | null = null;
+  let appliedCoreLeft = boundsOf().coreLeft;
   let appliedPosition: { x: number; y: number } | null = null;
   let pendingPosition: { x: number; y: number } | null = null;
   let persistTimer = 0;
@@ -373,36 +382,71 @@ if (tauriWindow) {
     a !== null && Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
 
   const defaultPosition = () => {
-    const current = layout();
     const screen = window.screen as Screen & { availTop?: number };
+    const top = screen.availTop ?? 0;
+    const { size } = boundsOf();
     return {
-      x: Math.round((screen.availWidth - current.width) / 2),
-      y: Math.round((screen.availTop ?? 0) + screen.availHeight - current.height)
+      x: Math.round((screen.availWidth - size.width) / 2),
+      y: Math.round(Math.max(top, top + screen.availHeight - size.height))
     };
   };
 
-  const applySize = async () => {
-    const current = layout();
-    const width = Math.max(1, Math.ceil(current.width));
-    const height = Math.max(1, Math.ceil(current.height));
-    if (appliedSize && appliedSize.width === width && appliedSize.height === height) return;
-    await currentWindow.setSize(new LogicalSize(width, height));
-    appliedSize = { width, height };
+  // 位置与尺寸一次提交，避免先改尺寸再改位置的中间态；
+  // dx/dy 是内容在窗口内的位移，后端据此同步平移已有窗口区域
+  const setBounds = async (
+    target: { x: number; y: number },
+    size: { width: number; height: number },
+    dx = 0,
+    dy = 0
+  ) => {
+    const factor = scaleFactor;
+    await invoke("set_window_bounds", {
+      label: currentWindow.label,
+      x: Math.round(target.x * factor),
+      y: Math.round(target.y * factor),
+      width: Math.round(size.width * factor),
+      height: Math.round(size.height * factor),
+      dx: Math.round(dx * factor),
+      dy: Math.round(dy * factor)
+    }).catch(() => false);
+    appliedPosition = target;
+    appliedSize = size;
   };
 
-  // 自身 setPosition 也会触发 moved，命中同一点时不再回设，避免来回拉扯
   const moveTo = async (target: { x: number; y: number }) => {
     if (sameSpot(appliedPosition, target)) return;
-    await currentWindow.setPosition(new LogicalPosition(target.x, target.y));
-    appliedPosition = { x: target.x, y: target.y };
+    await setBounds(target, appliedSize ?? boundsOf().size);
+  };
+
+  const applySize = async () => {
+    const { size, coreLeft } = boundsOf();
+    if (appliedSize && appliedSize.width === size.width && appliedSize.height === size.height) return;
+
+    const previous = appliedSize;
+    const base = appliedPosition ?? defaultPosition();
+    // 底边与核心容器为基准：高度变矮时顶边下移，副手槽显隐时核心位置不动
+    const target = previous
+      ? { x: base.x + appliedCoreLeft - coreLeft, y: base.y + previous.height - size.height }
+      : base;
+
+    await setBounds(
+      target,
+      size,
+      previous ? coreLeft - appliedCoreLeft : 0,
+      previous ? size.height - previous.height : 0
+    );
+    appliedCoreLeft = coreLeft;
+
+    if (previous && getConfig().statusBar.rememberPosition) {
+      pendingPosition = target;
+      flushMoved();
+    }
   };
 
   const applyConfiguredPosition = async () => {
     const statusConfig = getConfig().statusBar;
     const saved = statusConfig.rememberPosition ? statusConfig.position : null;
-    const current = layout();
-    const target = saved ? clampToWorkArea(saved, current.width, current.height) : null;
-    await moveTo(target ?? defaultPosition());
+    await moveTo(saved ?? defaultPosition());
   };
 
   const flushMoved = () => {
@@ -410,11 +454,28 @@ if (tauriWindow) {
     if (!pendingPosition || !getConfig().statusBar.rememberPosition) return;
     const position = pendingPosition;
     pendingPosition = null;
-    updateConfig({ statusBar: { position } });
+    updateConfig({ statusBar: { position, positionHeight: boundsOf().size.height } });
   };
 
+  // 旧配置按底边换算：位置记录的是左上角，窗口高度可能已经不同
+  const migratePosition = () => {
+    const status = getConfig().statusBar;
+    const height = boundsOf().size.height;
+    if (!status.position || status.positionHeight === height) return;
+    const bottom = status.position.y + (status.positionHeight ?? height);
+    updateConfig({
+      statusBar: {
+        position: { x: status.position.x, y: Math.round(bottom - height) },
+        positionHeight: height
+      }
+    });
+  };
+
+  migratePosition();
+  appliedPosition = getConfig().statusBar.rememberPosition ? getConfig().statusBar.position : null;
   await applySize();
   await applyConfiguredPosition();
+  refreshHitMask(undefined, true);
 
   // 未锁定时按住空白区域拖动状态栏；自绘拖动避免无边框窗口的原生偏移
   canvas.addEventListener("pointerdown", (event) => {
@@ -473,8 +534,8 @@ if (tauriWindow) {
       ? { left: offhandParam === "both" || offhandParam === "left", right: offhandParam === "both" || offhandParam === "right" }
       : { left: hotbar.leftOffhand, right: hotbar.rightOffhand };
 
-  const heightOf = (hud: typeof hudConfig, hotbar: typeof hotbarConfig) =>
-    computeLayout(scale, offhandOf(hotbar), {
+  const sizeOf = (hud: typeof hudConfig, hotbar: typeof hotbarConfig) => {
+    const size = computeLayout(scale, offhandOf(hotbar), {
       health: hud.elements.health.visible,
       food: hud.elements.food.visible,
       air: hud.elements.air.visible,
@@ -482,7 +543,9 @@ if (tauriWindow) {
       absorbing: hud.elements.absorbing.visible,
       expBar: hud.elements.expBar.visible,
       hotbar: hotbar.visible
-    }, hud.elements.absorbing.maxValue).height;
+    }, hud.elements.absorbing.maxValue);
+    return `${Math.ceil(size.width)}x${Math.ceil(size.height)}`;
+  };
 
   subscribeConfig(() => {
     const nextHotbar = getConfig().hotbar;
@@ -491,20 +554,25 @@ if (tauriWindow) {
       nextHotbar.leftOffhand !== previousHotbar.leftOffhand ||
       nextHotbar.rightOffhand !== previousHotbar.rightOffhand;
     const iconsChanged = nextHotbar.showTargetIcon !== previousHotbar.showTargetIcon;
-    const sizeChanged = heightOf(nextHud, nextHotbar) !== heightOf(previousHud, previousHotbar);
     const elementsChanged = JSON.stringify(nextHud.elements) !== JSON.stringify(previousHud.elements);
+    const sizeChanged = sizeOf(nextHud, nextHotbar) !== sizeOf(previousHud, previousHotbar);
     previousHotbar = nextHotbar;
     previousHud = nextHud;
     hotbarConfig = nextHotbar;
     hudConfig = nextHud;
     overlay.setColorSetting(nextHotbar.fileNameColor);
 
-    if (offhandChanged || sizeChanged) {
-      void applySize().then(applyConfiguredPosition);
+    if (sizeChanged) {
+      // 先一次性改窗口尺寸再重绘画布，底边保持不动
+      void applySize().then(() => {
+        render();
+        refreshHitMask?.(undefined, true);
+      });
     } else {
       void applyConfiguredPosition();
+      render();
+      if (elementsChanged || offhandChanged) refreshHitMask?.(undefined, true);
     }
-    render();
     if (iconsChanged) void refreshIcons();
     if (elementsChanged) {
       void refreshMetrics();
@@ -523,8 +591,9 @@ if (tauriWindow) {
     if (event.payload.type !== "drop") return;
 
     const ratio = window.devicePixelRatio || 1;
-    const dropX = event.payload.position.x / ratio;
-    const dropY = event.payload.position.y / ratio;
+    const rect = canvas.getBoundingClientRect();
+    const dropX = event.payload.position.x / ratio - rect.left;
+    const dropY = event.payload.position.y / ratio - rect.top;
     const index = slotIndexAtPoint(layout(), dropX, dropY);
     const path = event.payload.paths[0];
 

@@ -66,7 +66,7 @@ export function createHitMask(
   canvas: HTMLCanvasElement,
   label: string,
   extraRects: () => MaskRect[] = () => []
-): (full?: boolean) => void {
+): (full?: boolean, immediate?: boolean) => void {
   if (!("__TAURI_INTERNALS__" in window)) return () => undefined;
 
   let timer = 0;
@@ -86,13 +86,19 @@ export function createHitMask(
     publishing = true;
 
     const dpr = window.devicePixelRatio || 1;
+    // 画布在窗口内贴底，命中区域要换算成窗口坐标
+    const box = canvas.getBoundingClientRect();
+    const baseX = Math.round(box.left);
+    const baseY = Math.round(box.top);
     let rects: MaskRect[];
 
     if (fullMode) {
-      rects = [{ x: 0, y: 0, w: canvas.width, h: canvas.height }];
+      rects = [{ x: baseX, y: baseY, w: canvas.width, h: canvas.height }];
     } else {
       const image = context.getImageData(0, 0, canvas.width, canvas.height);
-      rects = collectRects(image).concat(extraRects());
+      rects = collectRects(image)
+        .map((rect) => ({ ...rect, x: rect.x + baseX, y: rect.y + baseY }))
+        .concat(extraRects());
     }
 
     const runs = rects.map((rect) => {
@@ -108,7 +114,7 @@ export function createHitMask(
     });
   };
 
-  const schedule = (full = false) => {
+  const schedule = (full = false, immediate = false) => {
     fullMode = full;
     if (full) {
       // 拖动期间每帧都会重绘，形状已经是整窗时不再重复提交
@@ -127,6 +133,14 @@ export function createHitMask(
       return;
     }
     publishedFull = false;
+    if (immediate) {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = 0;
+      }
+      publish();
+      return;
+    }
     if (timer) return;
     timer = window.setTimeout(publish, MIN_INTERVAL_MS);
   };

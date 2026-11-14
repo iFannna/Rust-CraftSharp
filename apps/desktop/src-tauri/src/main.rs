@@ -1,9 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autostart;
+mod desktop;
 mod icons;
 mod metrics;
 mod platform;
+mod singleinstance;
+mod windowbounds;
 mod windowdrag;
 
 #[cfg(windows)]
@@ -99,6 +102,33 @@ async fn drag_window(app: tauri::AppHandle, label: String) -> Option<[i32; 2]> {
         .map(|(x, y)| [x, y])
 }
 
+/// 显示或隐藏 Windows 桌面图标。
+#[tauri::command]
+fn toggle_desktop_icons() -> Result<(), String> {
+    desktop::toggle()
+}
+
+/// 一次性设置窗口位置与尺寸，参数为物理像素；dx/dy 用于同步平移已有窗口区域。
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn set_window_bounds(
+    app: tauri::AppHandle,
+    label: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    dx: i32,
+    dy: i32,
+) -> bool {
+    use tauri::Manager;
+
+    match app.get_webview_window(&label) {
+        Some(window) => windowbounds::set(&window, x, y, width, height, dx, dy),
+        None => false,
+    }
+}
+
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -148,9 +178,15 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 fn main() {
+    // 第二个实例只负责唤醒已有实例打开设置，不再初始化任何窗口
+    if !singleinstance::acquire() {
+        return;
+    }
+
     tauri::Builder::default()
         .setup(|app| {
             create_tray(app.handle())?;
+            singleinstance::watch(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -166,6 +202,8 @@ fn main() {
             system_metrics,
             set_hit_mask,
             drag_window,
+            toggle_desktop_icons,
+            set_window_bounds,
             set_autostart
         ])
         .run(tauri::generate_context!())

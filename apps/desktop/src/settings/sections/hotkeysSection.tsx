@@ -5,7 +5,7 @@ import { useAppConfig } from "@/config/useAppConfig";
 import { Button, Card, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { HotkeyInput } from "@/settings/components/hotkeyInput";
 
-type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "dropItem" | "openInventory";
+type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons" | "dropItem" | "openInventory";
 
 const FAILURE_KEY = "craftsharp.hotkeyFailures";
 
@@ -23,6 +23,7 @@ const HOTKEY_ITEMS: { key: HotkeyKey; label: string; description: string; single
   { key: "statusBar", label: "打开状态栏", description: "显示或隐藏状态栏窗口" },
   { key: "inventory", label: "打开物品栏", description: "显示或隐藏物品栏窗口" },
   { key: "crosshair", label: "打开准星", description: "显示或隐藏准星窗口" },
+  { key: "desktopIcons", label: "显示桌面图标", description: "显示/隐藏 Windows 桌面图标" },
   { key: "dropItem", label: "丢弃物品", description: "丢弃物品栏窗口中鼠标悬浮格子内的物品", single: true },
   { key: "openInventory", label: "打开物品栏", description: "显示/隐藏物品栏窗口，仅在应用窗口聚焦时生效", single: true }
 ];
@@ -53,6 +54,7 @@ export function HotkeysSection() {
         statusBar: defaults.statusBar,
         inventory: defaults.inventory,
         crosshair: defaults.crosshair,
+        desktopIcons: defaults.desktopIcons,
         dropItem: defaults.dropItem,
         openInventory: defaults.openInventory
       }

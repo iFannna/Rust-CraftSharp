@@ -10,6 +10,7 @@ const RELOAD_DEBOUNCE_MS = 300;
 const FAILURE_KEY = "craftsharp.hotkeyFailures";
 
 const actions = ["settings", "statusBar", "inventory", "crosshair"] as const;
+const DESKTOP_ICONS_INDEX = 4;
 
 let started = false;
 let reloadTimer = 0;
@@ -17,7 +18,7 @@ let appliedSpecs = "";
 
 function specsNow(): string[] {
   const hotkeys = getConfig().hotkeys;
-  return [hotkeys.settings, hotkeys.statusBar, hotkeys.inventory, hotkeys.crosshair];
+  return [hotkeys.settings, hotkeys.statusBar, hotkeys.inventory, hotkeys.crosshair, hotkeys.desktopIcons];
 }
 
 async function applyHotkeys() {
@@ -46,6 +47,10 @@ export function initializeHotkeys() {
   void applyHotkeys();
 
   void listen<number>(EVENT_NAME, (event) => {
+    if (event.payload === DESKTOP_ICONS_INDEX) {
+      void invoke("toggle_desktop_icons").catch(() => undefined);
+      return;
+    }
     const action = actions[event.payload];
     if (action) void applyWindowAction(action);
   });

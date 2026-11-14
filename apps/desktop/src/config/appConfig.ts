@@ -44,6 +44,8 @@ export interface StatusBarConfig {
   locked: boolean;
   rememberPosition: boolean;
   position: PositionConfig | null;
+  /** 记录位置时的窗口高度，换缩放比例时用它换算底边 */
+  positionHeight?: number;
 }
 
 export interface HotbarConfig {
@@ -128,6 +130,7 @@ export interface HotkeysConfig {
   statusBar: string;
   inventory: string;
   crosshair: string;
+  desktopIcons: string;
   dropItem: string;
   openInventory: string;
 }
@@ -245,6 +248,7 @@ const DEFAULTS: AppConfig = {
     statusBar: "Ctrl+Alt+H",
     inventory: "Ctrl+Alt+E",
     crosshair: "Ctrl+Alt+C",
+    desktopIcons: "Ctrl+Alt+D",
     dropItem: "Q",
     openInventory: "E"
   },
