@@ -8,6 +8,7 @@ mod icons;
 mod metrics;
 mod platform;
 mod singleinstance;
+mod slots;
 mod windowdrag;
 
 #[cfg(windows)]
@@ -74,6 +75,18 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
     platform::rename(&from, &to)
 }
 
+/// 原生确认框，隐藏的 WebView 里也能显示。
+#[tauri::command]
+fn confirm_dialog(text: String) -> bool {
+    platform::confirm(&text)
+}
+
+/// 原生提示框。
+#[tauri::command]
+fn alert_dialog(text: String) {
+    platform::alert(&text);
+}
+
 /// BOSS 血条数据映射：电池、内存、CPU、GPU 占用，取值 0-1。
 #[tauri::command]
 async fn system_metrics() -> metrics::SystemMetrics {
@@ -127,16 +140,70 @@ fn hud_visible(visible: bool) {
     hud::set_visible(visible);
 }
 
+/// 前端推送物品栏配置，原生窗口重建布局并按需显隐。
+#[tauri::command]
+fn inventory_apply(config: hud::inventory::InventoryCfg) {
+    hud::inventory::apply(config);
+}
+
+#[tauri::command]
+fn inventory_visible(visible: bool) {
+    hud::inventory::set_visible(visible);
+}
+
+/// 前端推送准星与攻击指示器配置。
+#[tauri::command]
+fn crosshair_apply(config: hud::crosshair::CrosshairCfg) {
+    hud::crosshair::apply(config);
+}
+
+/// 前端推送 BOSS 血条配置。
+#[tauri::command]
+fn bossbar_apply(bars: Vec<hud::bossbar::BossBarCfg>) {
+    hud::bossbar::apply(bars);
+}
+
+/// Tooltip 内容、锚点与工作区，坐标均为屏幕物理像素。
+#[tauri::command]
+fn tooltip_show(
+    lines: Vec<hud::tooltip::TooltipLineCfg>,
+    unit: f32,
+    anchor: hud::tooltip::TooltipAnchor,
+    work: hud::tooltip::TooltipWork,
+) {
+    let lines = hud::tooltip::parse_lines(lines);
+    let anchor = hud::tooltip::RectF {
+        left: anchor.x,
+        top: anchor.y,
+        right: anchor.x + anchor.width,
+        bottom: anchor.y + anchor.height,
+    };
+    let work = hud::tooltip::RectF {
+        left: work.left,
+        top: work.top,
+        right: work.right,
+        bottom: work.bottom,
+    };
+    hud::tooltip::show(&lines, unit, &anchor, &work);
+}
+
+#[tauri::command]
+fn tooltip_hide() {
+    hud::tooltip::hide();
+}
+
 /// 拖入悬停：快捷栏在原生层直接画，其余窗口交给前端画蒙版。
 fn install_drag_hover(app: &tauri::AppHandle) {
     use tauri::Emitter;
 
     let handle = app.clone();
     dragdrop::set_hover_handler(move |label, zone| {
-        if label == "hud" {
-            hud::set_drop_hover(zone);
-        } else {
-            let _ = handle.emit_to(label, "drag-hover", zone.map(str::to_string));
+        match label {
+            "hud" => hud::set_drop_hover(zone),
+            "inventory" => hud::inventory::set_drop_hover(zone),
+            _ => {
+                let _ = handle.emit_to(label, "drag-hover", zone.map(str::to_string));
+            }
         }
     });
 }
@@ -156,6 +223,58 @@ fn begin_file_drag(
     source_zone: Option<String>,
 ) -> dragdrop::DragResult {
     dragdrop::begin_file_drag(path, size.unwrap_or(32), source_window.zip(source_zone))
+}
+
+/// 前端读取一份格子数据快照，窗口只读。
+#[tauri::command]
+fn slots_snapshot() -> slots::Snapshot {
+    slots::snapshot()
+}
+
+/// 旧 localStorage 数据一次性迁入，返回是否真的导入。
+#[tauri::command]
+fn slots_import_legacy(
+    slots_json: Option<serde_json::Value>,
+    styles_json: Option<serde_json::Value>,
+) -> bool {
+    let flat = slots_json
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
+    let styles = styles_json
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
+    slots::import(flat, styles)
+}
+
+/// 窗口注册自己的格子作用域，物品栏切换样式或共享开关时更新。
+#[tauri::command]
+fn slots_register_scope(label: String, style: String, shared: bool) {
+    slots::register_scope(&label, &style, shared);
+}
+
+#[tauri::command]
+fn slots_set(slot_id: String, item: slots::SlotItem, style: String, shared: bool) {
+    slots::set(&slots::Scope::new(style, shared), &slot_id, item);
+}
+
+#[tauri::command]
+fn slots_clear(slot_id: String, style: String, shared: bool) {
+    slots::clear(&slots::Scope::new(style, shared), &slot_id);
+}
+
+#[tauri::command]
+fn slots_swap(from: String, to: String, style: String, shared: bool) {
+    slots::swap(&slots::Scope::new(style, shared), &from, &to);
+}
+
+#[tauri::command]
+fn slots_clear_by_path(path: String, style: String, shared: bool) {
+    slots::clear_by_path(&slots::Scope::new(style, shared), &path);
+}
+
+#[tauri::command]
+fn slots_replace_path(from: String, to: String, style: String, shared: bool) {
+    slots::replace_path(&slots::Scope::new(style, shared), &from, &to);
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -218,7 +337,13 @@ fn main() {
 
             create_tray(app.handle())?;
             singleinstance::watch(app.handle().clone());
+
+            let slots_path = app.path().app_config_dir().unwrap_or_default().join("slots.json");
+            slots::init(app.handle(), slots_path);
+
             hud::init(app.handle());
+            hud::inventory::init(app.handle());
+            slots::on_changed(hud::inventory::slots_changed);
             install_drag_hover(app.handle());
             // MC 窗口与快捷栏一样直接显隐，不做系统过渡动画
             for window in app.webview_windows().values() {
@@ -238,6 +363,8 @@ fn main() {
             copy_to_clipboard,
             read_clipboard_paths,
             rename_path,
+            confirm_dialog,
+            alert_dialog,
             register_hotkeys,
             system_metrics,
             set_hit_mask,
@@ -245,8 +372,22 @@ fn main() {
             toggle_desktop_icons,
             hud_apply,
             hud_visible,
+            inventory_apply,
+            inventory_visible,
+            crosshair_apply,
+            bossbar_apply,
+            tooltip_show,
+            tooltip_hide,
             set_drop_zones,
             begin_file_drag,
+            slots_snapshot,
+            slots_import_legacy,
+            slots_register_scope,
+            slots_set,
+            slots_clear,
+            slots_swap,
+            slots_clear_by_path,
+            slots_replace_path,
             set_autostart
         ])
         .run(tauri::generate_context!())

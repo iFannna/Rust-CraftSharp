@@ -1,6 +1,5 @@
 /** 局部快捷键：应用窗口聚焦时生效，状态栏由 Rust 原生输入处理 */
 
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig } from "@/config/appConfig";
 import { setInventoryVisible, toggleInventory } from "@/lib/windowControls";
 
@@ -11,8 +10,7 @@ function typingInField(target: EventTarget | null): boolean {
 }
 
 async function closeInventory(): Promise<boolean> {
-  const inventory = await WebviewWindow.getByLabel("inventory");
-  if (!inventory || !(await inventory.isVisible())) return false;
+  if (!getConfig().inventory.visible) return false;
   await setInventoryVisible(false);
   return true;
 }

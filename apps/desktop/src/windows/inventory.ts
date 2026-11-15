@@ -1,6 +1,6 @@
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { invoke } from "@tauri-apps/api/core";
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { loadImage } from "@/hud/statusbar/assets";
@@ -70,6 +70,7 @@ interface DragResult {
   window?: string | null;
   zone?: string | null;
   sameSource: boolean;
+  handled: boolean;
 }
 
 function naturalWidth(image: HTMLImageElement): number {
@@ -84,14 +85,13 @@ function scope(): SlotScope {
   return { style: style.file, shared: config.sharedData };
 }
 
-const TOOLTIP_LABEL = "tooltip";
 let tooltipGeneration = 0;
 
-/** tooltip 是独立窗口，浏览器预览时没有它，直接跳过 */
+/** Tooltip 由 Rust 原生窗口绘制，这里只发内容与物理像素坐标 */
 function hideTooltip() {
   tooltipGeneration += 1;
   if (!tauriWindow) return;
-  void emitTo(TOOLTIP_LABEL, "tooltip:hide").catch(() => undefined);
+  void invoke("tooltip_hide").catch(() => undefined);
 }
 
 async function showTooltip(slotId: string, box: SlotBox) {
@@ -118,22 +118,27 @@ async function showTooltip(slotId: string, box: SlotBox) {
     const origin = await currentWindow.outerPosition();
     if (generation !== tooltipGeneration) return;
 
-    // 物品栏窗口原点 + 格子画布坐标，全部为逻辑像素
-    const left = origin.x / factor;
-    const top = origin.y / factor;
+    // 物品栏窗口原点、格子画布坐标与工作区统一换算成屏幕物理像素
+    const physicalLeft = (origin.x + box.left * factor);
+    const physicalTop = (origin.y + box.top * factor);
     const screen = window.screen as Screen & { availLeft?: number; availTop?: number };
-    const areaLeft = screen.availLeft ?? 0;
-    const areaTop = screen.availTop ?? 0;
+    const areaLeft = (screen.availLeft ?? 0) * factor;
+    const areaTop = (screen.availTop ?? 0) * factor;
 
-    await emitTo(TOOLTIP_LABEL, "tooltip:content", {
+    await invoke("tooltip_show", {
       lines,
-      scale,
-      anchor: { x: left + box.left, y: top + box.top, width: box.width, height: box.height },
-      screen: {
+      unit: scale * factor,
+      anchor: {
+        x: physicalLeft,
+        y: physicalTop,
+        width: box.width * factor,
+        height: box.height * factor
+      },
+      work: {
         left: areaLeft,
         top: areaTop,
-        right: areaLeft + screen.availWidth,
-        bottom: areaTop + screen.availHeight
+        right: areaLeft + screen.availWidth * factor,
+        bottom: areaTop + screen.availHeight * factor
       }
     });
   } catch (error) {
@@ -193,12 +198,25 @@ async function refreshIcons() {  const generation = ++iconGeneration;
   );
 
   if (generation !== iconGeneration) return;
-  icons = new Map(entries);
+  icons = new Map(
+    entries.map(([slotId, icon]) => [slotId, slotId === dragOutSlot ? null : icon] as const)
+  );
   render();
+}
+
+/** 当前窗口的格子作用域随样式与共享开关变化，拖放搬移由 Rust 按它读写 */
+function registerScope() {
+  if (!tauriWindow) return;
+  void invoke("slots_register_scope", {
+    label: currentWindow.label,
+    style: style.file,
+    shared: config.sharedData
+  }).catch(() => undefined);
 }
 
 async function rebuildLayout(next: ContainerStyle) {
   style = next;
+  registerScope();
   background = await loadImage(style.url);
   layout = computeInventoryLayout(scale, style, naturalWidth(background), naturalHeight(background));
   hideTooltip();
@@ -234,6 +252,8 @@ function buildHost(): InventoryHost {
       // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
       const hidden = icons.get(slotId) ?? null;
       dragOutSlot = slotId;
+      // 作废在途的图标刷新，避免它把源格图标又装回去
+      iconGeneration += 1;
       icons.delete(slotId);
       render();
 
@@ -246,8 +266,10 @@ function buildHost(): InventoryHost {
       })
         .then((result) => {
           dragOutSlot = null;
+          iconGeneration += 1;
           if (result.dropped && !result.sameSource) {
-            clearSlotFor(slotId, style.file, config.sharedData);
+            // 落点已由 Rust 原子搬移时不再二次清空
+            if (!result.handled) clearSlotFor(slotId, style.file, config.sharedData);
             return;
           }
           // 取消或落回原格子：图标还回去，格子数据本来就没动
@@ -258,6 +280,7 @@ function buildHost(): InventoryHost {
         })
         .catch(() => {
           dragOutSlot = null;
+          iconGeneration += 1;
           if (hidden) {
             icons.set(slotId, hidden);
             render();
@@ -382,6 +405,7 @@ function flushMoved() {
 
 interaction = new InventoryInteraction(canvas, buildHost());
 interaction.attach();
+registerScope();
 
 subscribeSlots(() => {
   void refreshIcons().then(() => interaction?.refreshTooltip());
@@ -391,12 +415,6 @@ subscribeClipboard(() => {
   const clipboard = getClipboard();
   dimmedSlot = clipboard && clipboard.cut ? clipboard.slotId : null;
   render();
-});
-
-void listen<{ window: string; zone: string; paths: string[] }>("file-dropped", (event) => {
-  const { window: source, zone, paths } = event.payload;
-  if (source !== "inventory" || !zone || paths.length === 0) return;
-  setSlotFor(zone, { path: paths[0] }, style.file, config.sharedData);
 });
 
 void listen<string | null>("drag-hover", ({ payload }) => {
@@ -426,6 +444,7 @@ subscribeInventoryConfig(() => {
   const styleChanged = next.style !== style.file;
   const iconsRelevant = next.sharedData !== previous.sharedData;
   config = next;
+  registerScope();
 
   // 开关或颜色变化后即时生效
   if (!getConfig().inventory.showTooltip) {

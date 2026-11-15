@@ -6,6 +6,7 @@
     "main",
     "hud",
     "slot-menu",
+    "rename-dialog",
     "inventory",
     "overlay",
     "settings",

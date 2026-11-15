@@ -29,6 +29,7 @@ extern "system" {
     fn GetClipboardData(format: u32) -> isize;
     fn SetClipboardData(format: u32, handle: isize) -> isize;
     fn IsClipboardFormatAvailable(format: u32) -> i32;
+    fn MessageBoxW(hwnd: isize, text: *const u16, caption: *const u16, flags: u32) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -48,8 +49,31 @@ extern "system" {
 const CF_UNICODETEXT: u32 = 13;
 const CF_HDROP: u32 = 15;
 const GMEM_MOVEABLE: u32 = 0x0002;
+const MB_YESNO: u32 = 0x0004;
+const MB_ICONQUESTION: u32 = 0x0020;
+const MB_ICONWARNING: u32 = 0x0030;
+const MB_TOPMOST: u32 = 0x0004_0000;
+const IDYES: i32 = 6;
 // dwmapi.h 中 NCRENDERING_POLICY 是 2，TRANSITIONS_FORCEDISABLED 是 3，写错 2 会关掉非客户区渲染
 const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
+
+/// 原生确认框，隐藏的 WebView 里也能正常显示。
+pub fn confirm(text: &str) -> bool {
+    let title = wide("CraftSharp");
+    let body = wide(text);
+    // SAFETY: 文本缓冲区在调用期间有效，对话框是同步的
+    unsafe { MessageBoxW(0, body.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONQUESTION | MB_TOPMOST) == IDYES }
+}
+
+/// 原生提示框，用于重命名冲突等失败信息。
+pub fn alert(text: &str) {
+    let title = wide("CraftSharp");
+    let body = wide(text);
+    // SAFETY: 同上
+    unsafe {
+        MessageBoxW(0, body.as_ptr(), title.as_ptr(), MB_ICONWARNING | MB_TOPMOST);
+    }
+}
 
 /// 关闭窗口显隐时的 DWM 过渡，让 MC 窗口和快捷栏一样直接出现。
 pub fn disable_transitions(hwnd: isize) {

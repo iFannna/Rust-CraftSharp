@@ -11,5 +11,14 @@ mod text;
 mod win32;
 mod window;
 
+pub mod bossbar;
+pub mod crosshair;
+pub mod inventory;
+mod inventory_draw;
+pub mod overlay;
+pub mod tooltip;
+
 pub use config::HudConfig;
-pub use window::{apply, init, set_drop_hover, set_visible};
+pub use window::{
+    apply, hidden_by_inventory, init, set_drop_hover, set_hidden_by_inventory, set_visible,
+};

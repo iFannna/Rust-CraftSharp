@@ -91,6 +91,78 @@ pub fn draw_label(frame: &mut Frame, layout: &Layout, text: &str, color: u32, al
     }
 }
 
+/// 按行顶对齐绘制单行文字，x 是行首，top 是行盒顶部。
+pub fn draw_line(frame: &mut Frame, x: f32, top: f32, text: &str, px: f32, color: u32, alpha: u8) {
+    let Some(glyphs) = with_font(|font| rasterize(font, text, px)) else { return };
+    if glyphs.is_empty() {
+        return;
+    }
+    // rasterize 的 top 已经按同一基线换算，逐行对齐不会随首字符高低跳动
+    for glyph in &glyphs {
+        let ink_top = top + glyph.top;
+        blit(frame, &glyph.bitmap, glyph.width, glyph.height, x + glyph.x, ink_top, color, alpha);
+    }
+}
+
+/// 逐字符测量整行宽度，BOSS 条名称居中用。
+pub fn spaced_width(text: &str, px: f32, spacing: f32) -> f32 {
+    with_font(|font| {
+        let mut width = 0.0;
+        let mut count = 0;
+        for ch in text.chars() {
+            let metrics = font.rasterize(ch, px).0;
+            width += metrics.advance_width;
+            count += 1;
+        }
+        if count > 1 {
+            width + spacing * (count - 1) as f32
+        } else {
+            width
+        }
+    })
+    .unwrap_or(0.0)
+}
+
+/// 逐字符居中绘制，字符之间加固定间距，带黑色阴影，BOSS 条名称用。
+pub fn draw_centered(
+    frame: &mut Frame,
+    center_x: f32,
+    top: f32,
+    text: &str,
+    px: f32,
+    color: u32,
+    spacing: f32,
+    shadow: f32,
+    alpha: u8,
+) {
+    let total = spaced_width(text, px, spacing);
+    let start = center_x - total / 2.0;
+    let Some(glyphs) = with_font(|font| {
+        let ascent = font.horizontal_line_metrics(px).map(|metrics| metrics.ascent).unwrap_or(px * 0.8);
+        let mut glyphs = Vec::new();
+        let mut pen = start;
+        for ch in text.chars() {
+            let (metrics, bitmap) = font.rasterize(ch, px);
+            if metrics.width > 0 && metrics.height > 0 {
+                let ink_top = top + ascent - (metrics.height as f32 + metrics.ymin as f32);
+                glyphs.push((pen + metrics.xmin as f32, ink_top, metrics.width, metrics.height, bitmap));
+            }
+            pen += metrics.advance_width + spacing;
+        }
+        glyphs
+    }) else {
+        return;
+    };
+
+    let shadow_color = 0xff00_0000;
+    for (x, y, width, height, bitmap) in &glyphs {
+        if shadow > 0.0 {
+            blit(frame, bitmap, *width, *height, *x + shadow, *y + shadow, shadow_color, alpha);
+        }
+        blit(frame, bitmap, *width, *height, *x, *y, color, alpha);
+    }
+}
+
 struct Glyph {
     bitmap: Vec<u8>,
     width: usize,

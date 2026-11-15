@@ -133,16 +133,25 @@ fn drag_out(state: &mut State) {
     };
 
     // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
+    // 同时固定源格，拖放期间任何图标刷新都不再命中它
+    state.drag_source = drag.source;
     let hidden = state.icons.get_mut(drag.source as usize).and_then(Option::take);
     window::render(state);
 
     let source = ("hud".to_string(), crate::hud::layout::slot_id(drag.source));
     let result = crate::dragdrop::begin_file_drag(path, size, Some(source));
     if result.dropped && !result.same_source {
-        let _ = state.app.emit("hud-drop", drag.source);
-    } else if let Some(icon) = hidden {
+        // 落点已由 Rust 原子搬移时不再二次清空；否则交给前端清空源格。
+        // 两种情况下源格都保持固定，直到新配置确认它已经为空。
+        if !result.handled {
+            let _ = state.app.emit("hud-drop", drag.source);
+        }
+    } else {
         // 取消或落回原格子：图标还回去，格子数据本来就没动
-        state.icons[drag.source as usize] = Some(icon);
+        if let Some(icon) = hidden {
+            state.icons[drag.source as usize] = Some(icon);
+        }
+        state.drag_source = -1;
         window::render(state);
     }
 }

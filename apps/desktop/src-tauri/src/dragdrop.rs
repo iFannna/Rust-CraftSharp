@@ -10,9 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Deserialize;
-use tauri::{AppHandle, Emitter};
-
-pub const EVENT_NAME: &str = "file-dropped";
+use tauri::AppHandle;
 
 const S_OK: i32 = 0;
 const CLSCTX_INPROC_SERVER: u32 = 1;
@@ -114,7 +112,7 @@ fn report_hover(label: &str, zone: Option<&str>) {
 }
 
 /// 拖出结果：是否落地、落在哪个窗口与区域、是否落回发起拖出的原格子。
-/// 原格子被放置时必须还原图标并保留数据，不能当成移动。
+/// `handled` 表示数据已由 Rust 在落点处一次搬移，发起方不要再次清空格子。
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DragResult {
@@ -122,6 +120,7 @@ pub struct DragResult {
     pub window: Option<String>,
     pub zone: Option<String>,
     pub same_source: bool,
+    pub handled: bool,
 }
 
 /// 本次拖出的来源（窗口标签、格子 id），只用于识别落回原格子。
@@ -131,9 +130,13 @@ fn drag_source() -> &'static Mutex<Option<(String, String)>> {
 }
 
 /// 拖出过程中最后一次在我们自己窗口里的落点。
-fn last_drop() -> &'static Mutex<Option<(String, String, bool)>> {
-    static DROP: OnceLock<Mutex<Option<(String, String, bool)>>> = OnceLock::new();
+fn last_drop() -> &'static Mutex<Option<(String, String, bool, bool)>> {
+    static DROP: OnceLock<Mutex<Option<(String, String, bool, bool)>>> = OnceLock::new();
     DROP.get_or_init(|| Mutex::new(None))
+}
+
+fn drag_source_pair() -> Option<(String, String)> {
+    drag_source().lock().unwrap_or_else(|error| error.into_inner()).clone()
 }
 
 fn is_drag_source(label: &str, zone: &str) -> bool {
@@ -543,21 +546,30 @@ unsafe extern "system" fn target_drop(this: *mut c_void, data: *mut c_void, _key
 
     if let Some(zone) = zone {
         if !paths.is_empty() {
-            if let Ok(mut drop) = last_drop().lock() {
-                *drop = Some((target.label.clone(), zone.clone(), same_source));
-            }
+            let mut handled = false;
             // 落回发起拖出的原格子等价于取消，不写回也别覆盖原数据
             if !same_source {
-                let _ = target.app.emit(
-                    EVENT_NAME,
-                    serde_json::json!({
-                        "window": target.label,
-                        "zone": zone,
-                        "paths": paths,
-                        "x": client.x,
-                        "y": client.y,
-                    }),
-                );
+                match drag_source_pair() {
+                    // 跨窗口拖动：源格到目标格一次原子搬移，发起方不再二次清空
+                    Some((source_window, source_zone)) => {
+                        crate::slots::move_slot(
+                            &source_window,
+                            &source_zone,
+                            &target.label,
+                            &zone,
+                            &paths[0],
+                        );
+                        handled = true;
+                    }
+                    // 资源管理器拖入：只写目标格
+                    None => {
+                        crate::slots::drop_paths(&target.label, &zone, &paths[0]);
+                        handled = true;
+                    }
+                }
+            }
+            if let Ok(mut drop) = last_drop().lock() {
+                *drop = Some((target.label.clone(), zone.clone(), same_source, handled));
             }
         }
     }
@@ -620,13 +632,14 @@ pub fn begin_file_drag(path: String, size: u32, source: Option<(String, String)>
     *drag_source().lock().unwrap_or_else(|error| error.into_inner()) = None;
 
     match report {
-        Some((window, zone, same_source)) => DragResult {
+        Some((window, zone, same_source, handled)) => DragResult {
             dropped,
             window: Some(window),
             zone: Some(zone),
             same_source,
+            handled,
         },
-        None => DragResult { dropped, window: None, zone: None, same_source: false },
+        None => DragResult { dropped, window: None, zone: None, same_source: false, handled: false },
     }
 }
 

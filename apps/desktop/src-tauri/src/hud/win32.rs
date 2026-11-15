@@ -120,11 +120,14 @@ extern "system" {
     pub fn ClientToScreen(hwnd: Hwnd, point: *mut Point) -> i32;
     pub fn GetDpiForWindow(hwnd: Hwnd) -> u32;
     pub fn MonitorFromWindow(hwnd: Hwnd, flags: u32) -> isize;
+    pub fn MonitorFromPoint(point: Point, flags: u32) -> isize;
     pub fn GetMonitorInfoW(monitor: isize, info: *mut MonitorInfo) -> i32;
     pub fn SetTimer(hwnd: Hwnd, id: usize, interval: u32, proc: usize) -> usize;
     pub fn KillTimer(hwnd: Hwnd, id: usize) -> i32;
     pub fn SetCapture(hwnd: Hwnd) -> Hwnd;
     pub fn ReleaseCapture() -> i32;
+    pub fn SetForegroundWindow(hwnd: Hwnd) -> i32;
+    pub fn GetAsyncKeyState(key: i32) -> i16;
     pub fn ValidateRect(hwnd: Hwnd, rect: *const Rect) -> i32;
     pub fn TrackMouseEvent(data: *mut TrackMouseEventData) -> i32;
     pub fn LoadCursorW(instance: isize, name: *const u16) -> isize;
@@ -153,20 +156,23 @@ pub const WS_EX_TRANSPARENT: u32 = 0x0000_0020;
 pub const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
 pub const SW_HIDE: i32 = 0;
-const HWND_TOPMOST: isize = -1;
-const SWP_NOSIZE: u32 = 0x0001;
-const SWP_NOMOVE: u32 = 0x0002;
-const SWP_NOACTIVATE: u32 = 0x0010;
+pub const HWND_TOPMOST: isize = -1;
+pub const HWND_NOTOPMOST: isize = -2;
+pub const SWP_NOSIZE: u32 = 0x0001;
+pub const SWP_NOMOVE: u32 = 0x0002;
+pub const SWP_NOACTIVATE: u32 = 0x0010;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
 
 pub const WM_PAINT: u32 = 0x000F;
 pub const WM_KEYDOWN: u32 = 0x0100;
+pub const WM_KEYUP: u32 = 0x0101;
 pub const WM_MOUSEMOVE: u32 = 0x0200;
 pub const WM_LBUTTONDOWN: u32 = 0x0201;
 pub const WM_LBUTTONUP: u32 = 0x0202;
 pub const WM_RBUTTONUP: u32 = 0x0205;
+pub const WM_MBUTTONDOWN: u32 = 0x0207;
 pub const WM_MOUSEWHEEL: u32 = 0x020A;
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
 pub const WM_MOUSEACTIVATE: u32 = 0x0021;
@@ -268,6 +274,18 @@ pub fn update_layered(hwnd: Hwnd, dib: &Dib, x: i32, y: i32) {
     }
 }
 
+/// 把帧像素拷进 DIB 后一次提交，避免只提交空位图。
+pub fn present(hwnd: Hwnd, frame: &crate::hud::sprite::Frame, dib: &Dib, x: i32, y: i32) {
+    if frame.width != dib.width || frame.height != dib.height {
+        return;
+    }
+    // SAFETY: 帧与 DIB 尺寸已核对，像素数量一致
+    unsafe {
+        std::ptr::copy_nonoverlapping(frame.pixels.as_ptr(), dib.bits, frame.pixels.len());
+    }
+    update_layered(hwnd, dib, x, y);
+}
+
 /// 把浮层提到置顶窗口带的最前面。不带激活的显示会落在最底下，
 /// 不重新排序就会被同样置顶的状态栏盖住。
 pub fn raise_overlay(hwnd: Hwnd) {
@@ -279,29 +297,53 @@ pub fn raise_overlay(hwnd: Hwnd) {
 
 /// 拖动时跟随光标的浮层：置顶、鼠标穿透、不抢焦点。
 pub fn create_overlay() -> Hwnd {
-    let class_name: Vec<u16> = "CraftSharpDragIcon\0".encode_utf16().collect();
-    let title: Vec<u16> = "CraftSharp Drag\0".encode_utf16().collect();
-    // SAFETY: 注册类名与创建窗口都为固定参数
-    unsafe {
-        let instance = GetModuleHandleW(ptr::null());
-        let class = WndClassW {
-            style: 0,
-            wnd_proc: Some(DefWindowProcW),
-            cls_extra: 0,
-            wnd_extra: 0,
-            instance,
-            icon: 0,
-            cursor: 0,
-            background: 0,
-            menu_name: ptr::null(),
-            class_name: class_name.as_ptr(),
-        };
-        RegisterClassW(&class);
+    create_named_window(
+        "CraftSharpDragIcon",
+        "CraftSharp Drag",
+        DefWindowProcW,
+        WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
+    )
+}
 
+unsafe fn register_class(
+    class_name: &[u16],
+    proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize,
+    background: isize,
+) {
+    let instance = GetModuleHandleW(ptr::null());
+    let cursor = LoadCursorW(0, 32512usize as *const u16);
+    let class = WndClassW {
+        style: 0,
+        wnd_proc: Some(proc_),
+        cls_extra: 0,
+        wnd_extra: 0,
+        instance,
+        icon: 0,
+        cursor,
+        background,
+        menu_name: ptr::null(),
+        class_name: class_name.as_ptr(),
+    };
+    RegisterClassW(&class);
+}
+
+/// 通用分层窗口，类名区分窗口用途，样式按需组合。
+pub fn create_named_window(
+    class_name: &str,
+    title: &str,
+    proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize,
+    ex_style: u32,
+) -> Hwnd {
+    let class: Vec<u16> = format!("{class_name}\0").encode_utf16().collect();
+    let caption: Vec<u16> = format!("{title}\0").encode_utf16().collect();
+    // SAFETY: 固定类名与样式，窗口创建后由调用方持有
+    unsafe {
+        register_class(&class, proc_, 0);
+        let instance = GetModuleHandleW(ptr::null());
         CreateWindowExW(
-            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
-            class_name.as_ptr(),
-            title.as_ptr(),
+            ex_style | WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            class.as_ptr(),
+            caption.as_ptr(),
             WS_POPUP,
             0,
             0,
@@ -316,47 +358,7 @@ pub fn create_overlay() -> Hwnd {
 }
 
 pub fn create_window(proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize) -> Hwnd {
-    let class_name: [u16; 14] = [
-        'C' as u16, 'r' as u16, 'a' as u16, 'f' as u16, 't' as u16, 'S' as u16, 'h' as u16,
-        'a' as u16, 'r' as u16, 'p' as u16, 'H' as u16, 'u' as u16, 'd' as u16, 0,
-    ];
-    let title: [u16; 15] = [
-        'C' as u16, 'r' as u16, 'a' as u16, 'f' as u16, 't' as u16, 'S' as u16, 'h' as u16,
-        'a' as u16, 'r' as u16, 'p' as u16, ' ' as u16, 'H' as u16, 'U' as u16, 'D' as u16, 0,
-    ];
-    // SAFETY: 注册类名与创建窗口都为固定参数
-    unsafe {
-        let instance = GetModuleHandleW(ptr::null());
-        let cursor = LoadCursorW(0, 32512usize as *const u16);
-        let class = WndClassW {
-            style: 0,
-            wnd_proc: Some(proc_),
-            cls_extra: 0,
-            wnd_extra: 0,
-            instance,
-            icon: 0,
-            cursor,
-            background: 0,
-            menu_name: ptr::null(),
-            class_name: class_name.as_ptr(),
-        };
-        RegisterClassW(&class);
-
-        CreateWindowExW(
-            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-            class_name.as_ptr(),
-            title.as_ptr(),
-            WS_POPUP,
-            0,
-            0,
-            1,
-            1,
-            0,
-            0,
-            instance,
-            ptr::null_mut(),
-        )
-    }
+    create_named_window("CraftSharpHud", "CraftSharp HUD", proc_, 0)
 }
 
 pub fn dpi_of(hwnd: Hwnd) -> f32 {
@@ -384,6 +386,47 @@ pub fn work_area(hwnd: Hwnd) -> Rect {
         }
     }
     Rect { left: 0, top: 0, right: 1920, bottom: 1080 }
+}
+
+/// 主显示器矩形，准星、BOSS 条、灰色蒙版都以它为准。
+pub fn primary_rect() -> Rect {
+    let mut info = MonitorInfo {
+        size: std::mem::size_of::<MonitorInfo>() as u32,
+        monitor: Rect::default(),
+        work: Rect::default(),
+        flags: 0,
+    };
+    // SAFETY: 只读取主显示器矩形
+    unsafe {
+        let monitor = MonitorFromPoint(Point { x: 0, y: 0 }, MONITOR_DEFAULTTONEAREST);
+        if monitor != 0 && GetMonitorInfoW(monitor, &mut info) != 0 {
+            return info.monitor;
+        }
+    }
+    Rect { left: 0, top: 0, right: 1920, bottom: 1080 }
+}
+
+/// 窗口所在显示器的完整矩形，物品栏缩放按屏幕宽度计算。
+pub fn monitor_rect(hwnd: Hwnd) -> Rect {
+    let mut info = MonitorInfo {
+        size: std::mem::size_of::<MonitorInfo>() as u32,
+        monitor: Rect::default(),
+        work: Rect::default(),
+        flags: 0,
+    };
+    // SAFETY: 只读取当前显示器矩形
+    unsafe {
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor != 0 && GetMonitorInfoW(monitor, &mut info) != 0 {
+            return info.monitor;
+        }
+    }
+    Rect { left: 0, top: 0, right: 1920, bottom: 1080 }
+}
+
+pub fn key_down(key: i32) -> bool {
+    // SAFETY: 只读全局键态
+    unsafe { GetAsyncKeyState(key) & 0x8000u16 as i16 != 0 }
 }
 
 pub fn cursor_pos() -> Point {

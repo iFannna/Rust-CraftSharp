@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
 
-export type WindowLabel = "main" | "hud" | "inventory" | "overlay" | "settings" | "crosshair";
+export type WindowLabel = "main" | "settings";
 
 async function windowOf(label: WindowLabel): Promise<WebviewWindow | null> {
   return WebviewWindow.getByLabel(label);
@@ -22,8 +22,6 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
   }
 }
 
-let statusBarHiddenByInventory = false;
-
 /** 状态栏由 Rust 原生窗口绘制，显隐走独立命令 */
 async function setHudVisible(visible: boolean) {
   await invoke("hud_visible", { visible }).catch(() => undefined);
@@ -39,30 +37,8 @@ export async function toggleStatusBar() {
 }
 
 export async function setInventoryVisible(visible: boolean, persist = true) {
-  const config = getConfig().inventory;
-  const overlay = await windowOf("overlay");
-
-  if (visible) {
-    if (config.grayOverlay && overlay) {
-      await overlay.show();
-    }
-
-    await setVisible("inventory", true, true);
-
-    if (config.hideStatusBar && getConfig().statusBar.visible) {
-      statusBarHiddenByInventory = true;
-      await setHudVisible(false);
-    }
-  } else {
-    await setVisible("inventory", false);
-    if (overlay) await overlay.hide();
-
-    if (statusBarHiddenByInventory) {
-      statusBarHiddenByInventory = false;
-      await setHudVisible(getConfig().statusBar.visible);
-    }
-  }
-
+  // 原生物品栏自己管理蒙版与状态栏隐藏
+  await invoke("inventory_visible", { visible }).catch(() => undefined);
   if (persist) updateConfig({ inventory: { visible } });
 }
 
@@ -82,7 +58,6 @@ export async function toggleSettings() {
 }
 
 export async function setCrosshairVisible(visible: boolean) {
-  await setVisible("crosshair", visible);
   updateConfig({ hudElements: { crosshairVisible: visible } });
 }
 
@@ -116,7 +91,6 @@ export async function applyWindowAction(action: WindowAction) {
 export async function applyConfiguredVisibility() {
   const config = getConfig();
   await setHudVisible(config.statusBar.visible);
-  // 准星窗口自己铺满屏幕后按配置显示，这里不抢先 show
   if (config.inventory.visible) {
     await setInventoryVisible(true, false);
   }

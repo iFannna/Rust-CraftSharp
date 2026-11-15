@@ -251,6 +251,121 @@ impl Frame {
         }
     }
 
+    /// 用半透明色铺满矩形，悬停蒙版用。
+    pub fn fill(&mut self, x: f32, y: f32, width: f32, height: f32, color: u32) {
+        let left = x.round() as i32;
+        let top = y.round() as i32;
+        let right = (x + width).round() as i32;
+        let bottom = (y + height).round() as i32;
+        for dy in top..bottom {
+            if dy < 0 || dy >= self.height as i32 {
+                continue;
+            }
+            for dx in left..right {
+                if dx < 0 || dx >= self.width as i32 {
+                    continue;
+                }
+                blend(&mut self.pixels[(dy as u32 * self.width + dx as u32) as usize], color);
+            }
+        }
+    }
+
+    /// 从源图指定区域取样，缩放绘制到目标区域，九宫格边角用。
+    pub fn draw_source(
+        &mut self,
+        sprite: &Sprite,
+        source_x: u32,
+        source_y: u32,
+        source_width: u32,
+        source_height: u32,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) {
+        if source_width == 0 || source_height == 0 || sprite.width == 0 {
+            return;
+        }
+        let left = x.round() as i32;
+        let top = y.round() as i32;
+        let right = (x + width).round() as i32;
+        let bottom = (y + height).round() as i32;
+        let draw_width = (right - left).max(1);
+        let draw_height = (bottom - top).max(1);
+
+        for row in 0..draw_height {
+            let dy = top + row;
+            if dy < 0 || dy >= self.height as i32 {
+                continue;
+            }
+            let sy = source_y + (row as u32 * source_height / draw_height as u32).min(source_height - 1);
+            if sy >= sprite.height {
+                continue;
+            }
+            for col in 0..draw_width {
+                let dx = left + col;
+                if dx < 0 || dx >= self.width as i32 {
+                    continue;
+                }
+                let sx = source_x + (col as u32 * source_width / draw_width as u32).min(source_width - 1);
+                if sx >= sprite.width {
+                    continue;
+                }
+                let color = sprite.pixels[(sy * sprite.width + sx) as usize];
+                if color == 0 {
+                    continue;
+                }
+                blend(&mut self.pixels[(dy as u32 * self.width + dx as u32) as usize], color);
+            }
+        }
+    }
+}
+
+/// 九宫格贴图：四角不拉伸，边单向拉伸，中心双向拉伸。
+pub fn draw_nine_slice(
+    frame: &mut Frame,
+    sprite: &Sprite,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    source_border: u32,
+    target_border: u32,
+) {
+    let border = source_border;
+    if border == 0 || sprite.width <= border * 2 || sprite.height <= border * 2 {
+        return;
+    }
+    let target = target_border.max(1);
+    if width < (target * 2) as f32 || height < (target * 2) as f32 {
+        return;
+    }
+
+    let source_x = [0, border, sprite.width - border];
+    let source_w = [border, sprite.width - border * 2, border];
+    let target_x = [x, x + target as f32, x + width - target as f32];
+    let target_w = [target as f32, width - (target * 2) as f32, target as f32];
+
+    let source_y = [0, border, sprite.height - border];
+    let source_h = [border, sprite.height - border * 2, border];
+    let target_y = [y, y + target as f32, y + height - target as f32];
+    let target_h = [target as f32, height - (target * 2) as f32, target as f32];
+
+    for row in 0..3 {
+        for column in 0..3 {
+            frame.draw_source(
+                sprite,
+                source_x[column],
+                source_y[row],
+                source_w[column],
+                source_h[row],
+                target_x[column],
+                target_y[row],
+                target_w[column],
+                target_h[row],
+            );
+        }
+    }
 }
 
 fn blend(dst: &mut u32, src: u32) {

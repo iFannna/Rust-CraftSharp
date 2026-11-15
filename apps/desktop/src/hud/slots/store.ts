@@ -1,4 +1,7 @@
-/** 格子数据。当前存在 localStorage，后续迁移到 settings.json 时只换这一层。 */
+/** 格子数据：Rust 是唯一写入者，这里只是本窗口的只读镜像。 */
+
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface SlotItem {
   path: string;
@@ -10,6 +13,15 @@ export type StyleSlotMap = Record<string, SlotMap>;
 
 const STORAGE_KEY = "craftsharp.slots.v1";
 const STYLE_STORAGE_KEY = "craftsharp.styleSlots.v1";
+const HOTBAR_STYLE = "inventory.png";
+const inTauri = typeof window !== "undefined"
+  && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
+interface Snapshot {
+  rev: number;
+  slots: unknown;
+  styleSlots?: unknown;
+}
 
 export function hotbarSlotId(index: number): string {
   return `hotbar_${index}`;
@@ -33,22 +45,37 @@ export function hotbarIndexFromGlobal(slotIndex: number): number {
 
 let slots: SlotMap = loadSlots();
 let styleSlots: StyleSlotMap = loadStyleSlots();
+let lastRev = -1;
 const listeners = new Set<() => void>();
+
+function normalizeSlotMap(raw: unknown): SlotMap {
+  const result: SlotMap = {};
+  if (!raw || typeof raw !== "object") return result;
+
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object") continue;
+    const item = value as SlotItem;
+    if (typeof item.path !== "string" || item.path.length === 0) continue;
+    result[key] = {
+      path: item.path,
+      displayName: typeof item.displayName === "string" ? item.displayName : undefined
+    };
+  }
+  return result;
+}
+
+function normalizeStyleSlots(raw: unknown): StyleSlotMap {
+  const result: StyleSlotMap = {};
+  if (!raw || typeof raw !== "object") return result;
+  for (const [style, value] of Object.entries(raw as Record<string, unknown>)) {
+    result[style] = normalizeSlotMap(value);
+  }
+  return result;
+}
 
 function parseSlotMap(raw: string | null): SlotMap {
   try {
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return {};
-
-    const result: SlotMap = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!value || typeof value !== "object") continue;
-      const item = value as SlotItem;
-      if (typeof item.path !== "string" || item.path.length === 0) continue;
-      result[key] = { path: item.path, displayName: item.displayName };
-    }
-    return result;
+    return normalizeSlotMap(raw ? JSON.parse(raw) : null);
   } catch {
     return {};
   }
@@ -60,15 +87,7 @@ function loadSlots(): SlotMap {
 
 function loadStyleSlots(): StyleSlotMap {
   try {
-    const raw = localStorage.getItem(STYLE_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return {};
-    const result: StyleSlotMap = {};
-    for (const [style, value] of Object.entries(parsed as Record<string, unknown>)) {
-      result[style] = parseSlotMap(JSON.stringify(value));
-    }
-    return result;
+    return normalizeStyleSlots(localStorage.getItem(STYLE_STORAGE_KEY));
   } catch {
     return {};
   }
@@ -79,19 +98,70 @@ export function slotMapFor(style: string, shared: boolean): SlotMap {
   return shared ? slots : styleSlots[style] ?? {};
 }
 
-function persist() {
+function persistPreview() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
     localStorage.setItem(STYLE_STORAGE_KEY, JSON.stringify(styleSlots));
   } catch {
-    // 存储不可用时保持内存态，HUD 仍可运行
+    // 浏览器预览不可用时保持内存态
   }
 }
 
 function notify() {
-  persist();
+  if (!inTauri) persistPreview();
   for (const listener of listeners) listener();
 }
+
+function applySnapshot(snapshot: Snapshot, force = false) {
+  const rev = Number(snapshot.rev) || 0;
+  if (!force && rev <= lastRev) return;
+  lastRev = rev;
+  slots = normalizeSlotMap(snapshot.slots);
+  styleSlots = normalizeStyleSlots(snapshot.styleSlots);
+  for (const listener of listeners) listener();
+}
+
+async function syncFromRust(force = false) {
+  if (!inTauri) return;
+  try {
+    const snapshot = await invoke<Snapshot>("slots_snapshot");
+    applySnapshot(snapshot, force);
+  } catch {
+    // 原生侧不可用时保留当前内存镜像
+  }
+}
+
+function send(command: string, args: Record<string, unknown>) {
+  if (!inTauri) return;
+  void invoke(command, args).catch(() => {
+    void syncFromRust(true);
+  });
+}
+
+async function bootstrap() {
+  if (!inTauri) return;
+
+  void listen<Snapshot>("slots-changed", ({ payload }) => applySnapshot(payload)).catch(() => undefined);
+
+  // 旧版 localStorage 只在首次启动、没有 slots.json 时导入一次
+  try {
+    const flat = localStorage.getItem(STORAGE_KEY);
+    const styles = localStorage.getItem(STYLE_STORAGE_KEY);
+    if (flat || styles) {
+      await invoke("slots_import_legacy", {
+        slotsJson: flat ? JSON.parse(flat) : null,
+        stylesJson: styles ? JSON.parse(styles) : null
+      });
+    }
+    await syncFromRust();
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STYLE_STORAGE_KEY);
+  } catch {
+    await syncFromRust();
+  }
+}
+
+void bootstrap();
 
 function updateMap(style: string, shared: boolean, mutation: (map: SlotMap) => SlotMap | null) {
   const current = slotMapFor(style, shared);
@@ -112,21 +182,23 @@ export function getSlot(slotId: string): SlotItem | undefined {
 }
 
 export function setSlot(slotId: string, item: SlotItem) {
-  updateMap("inventory.png", true, (map) => ({ ...map, [slotId]: item }));
+  updateMap(HOTBAR_STYLE, true, (map) => ({ ...map, [slotId]: item }));
+  send("slots_set", { slotId, item, style: HOTBAR_STYLE, shared: true });
 }
 
 export function clearSlot(slotId: string) {
-  updateMap("inventory.png", true, (map) => {
+  updateMap(HOTBAR_STYLE, true, (map) => {
     if (!map[slotId]) return null;
     const next = { ...map };
     delete next[slotId];
     return next;
   });
+  send("slots_clear", { slotId, style: HOTBAR_STYLE, shared: true });
 }
 
 /** 所有使用该路径的格子一起清空，对应原 SlotFileValidator.ClearAllSlotsByPath */
 export function clearSlotsByPath(path: string) {
-  updateMap("inventory.png", true, (map) => {
+  updateMap(HOTBAR_STYLE, true, (map) => {
     const next: SlotMap = {};
     let changed = false;
     for (const [key, item] of Object.entries(map)) {
@@ -138,11 +210,12 @@ export function clearSlotsByPath(path: string) {
     }
     return changed ? next : null;
   });
+  send("slots_clear_by_path", { path, style: HOTBAR_STYLE, shared: true });
 }
 
 /** 文件重命名后同步所有使用该路径的格子 */
 export function replaceSlotsPath(from: string, to: string) {
-  updateMap("inventory.png", true, (map) => {
+  updateMap(HOTBAR_STYLE, true, (map) => {
     let changed = false;
     const next: SlotMap = {};
     for (const [key, item] of Object.entries(map)) {
@@ -155,10 +228,12 @@ export function replaceSlotsPath(from: string, to: string) {
     }
     return changed ? next : null;
   });
+  send("slots_replace_path", { from, to, style: HOTBAR_STYLE, shared: true });
 }
 
 export function swapSlots(fromId: string, toId: string) {
-  updateMap("inventory.png", true, (map) => swapInMap(map, fromId, toId));
+  updateMap(HOTBAR_STYLE, true, (map) => swapInMap(map, fromId, toId));
+  send("slots_swap", { from: fromId, to: toId, style: HOTBAR_STYLE, shared: true });
 }
 
 /** 按样式与共享模式取格子，对应原 SlotDataService.GetSlot(slotId, style, shared) */
@@ -168,6 +243,7 @@ export function getSlotFor(slotId: string, style: string, shared: boolean): Slot
 
 export function setSlotFor(slotId: string, item: SlotItem, style: string, shared: boolean) {
   updateMap(style, shared, (map) => ({ ...map, [slotId]: item }));
+  send("slots_set", { slotId, item, style, shared });
 }
 
 export function clearSlotFor(slotId: string, style: string, shared: boolean) {
@@ -177,6 +253,7 @@ export function clearSlotFor(slotId: string, style: string, shared: boolean) {
     delete next[slotId];
     return next;
   });
+  send("slots_clear", { slotId, style, shared });
 }
 
 export function clearSlotsByPathFor(path: string, style: string, shared: boolean) {
@@ -192,6 +269,7 @@ export function clearSlotsByPathFor(path: string, style: string, shared: boolean
     }
     return changed ? next : null;
   });
+  send("slots_clear_by_path", { path, style, shared });
 }
 
 export function replaceSlotsPathFor(from: string, to: string, style: string, shared: boolean) {
@@ -208,10 +286,12 @@ export function replaceSlotsPathFor(from: string, to: string, style: string, sha
     }
     return changed ? next : null;
   });
+  send("slots_replace_path", { from, to, style, shared });
 }
 
 export function swapSlotsFor(fromId: string, toId: string, style: string, shared: boolean) {
   updateMap(style, shared, (map) => swapInMap(map, fromId, toId));
+  send("slots_swap", { from: fromId, to: toId, style, shared });
 }
 
 function swapInMap(map: SlotMap, fromId: string, toId: string): SlotMap {
@@ -233,18 +313,20 @@ export function subscribeSlots(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-// 多窗口共享同一份 localStorage，另一个窗口写入后同步刷新
-window.addEventListener("storage", (event) => {
-  if (event.key === STORAGE_KEY) {
-    slots = loadSlots();
-  } else if (event.key === STYLE_STORAGE_KEY) {
-    styleSlots = loadStyleSlots();
-  } else {
-    return;
-  }
+// 浏览器预览没有 Rust 侧，窗口之间仍靠 localStorage 同步
+if (!inTauri) {
+  window.addEventListener("storage", (event) => {
+    if (event.key === STORAGE_KEY) {
+      slots = loadSlots();
+    } else if (event.key === STYLE_STORAGE_KEY) {
+      styleSlots = loadStyleSlots();
+    } else {
+      return;
+    }
 
-  for (const listener of listeners) listener();
-});
+    for (const listener of listeners) listener();
+  });
+}
 
 export function displayNameOf(item: SlotItem): string {
   if (item.displayName) return item.displayName;

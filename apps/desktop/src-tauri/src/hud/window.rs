@@ -72,6 +72,8 @@ pub struct State {
     pub drop_hover: i32,
     pub press: Option<Press>,
     pub drag: Option<Drag>,
+    /// 已交给系统拖放的源格，拖放结束前固定为空，图标刷新跳过它
+    pub drag_source: i32,
     pub moving: Option<Move>,
     pub label: Option<Label>,
     pub metrics: Metrics,
@@ -85,6 +87,8 @@ pub struct State {
     pub tracked: bool,
     pub shown: bool,
     pub visible: bool,
+    /// 物品栏打开期间临时隐藏状态栏，配置里的可见性不变
+    pub hidden_by_inventory: bool,
     /// 拖放接受区域的布局指纹，变化时才重算
     pub zones_key: String,
 }
@@ -128,6 +132,7 @@ pub fn init(app: &AppHandle) {
         drop_hover: -1,
         press: None,
         drag: None,
+        drag_source: -1,
         moving: None,
         label: None,
         metrics: Metrics::default(),
@@ -141,6 +146,7 @@ pub fn init(app: &AppHandle) {
         tracked: false,
         shown: false,
         visible: true,
+        hidden_by_inventory: false,
         zones_key: String::new(),
     };
 
@@ -171,6 +177,8 @@ fn start_metrics(app: &AppHandle) {
         let failed = app
             .run_on_main_thread(move || {
                 with_state(|state| tick_metrics(state, values));
+                crate::hud::crosshair::set_metrics(values);
+                crate::hud::bossbar::set_metrics(values);
             })
             .is_err();
         if failed {
@@ -206,8 +214,14 @@ fn apply_inner(state: &mut State, config: HudConfig) {
         if style_changed || state.style.is_none() {
             state.style = Some(FrameStyle::load(&config));
         }
-        state.visible = config.visible;
+        state.visible = config.visible && !state.hidden_by_inventory;
         state.config = Some(config);
+        // 拖放结束且源格已按新数据清空后，解除源格固定
+        if state.drag_source >= 0
+            && state.config.as_ref().and_then(|config| config.slot(state.drag_source)).is_none()
+        {
+            state.drag_source = -1;
+        }
         if !state.config.as_ref().map(|config| config.hover_effect).unwrap_or(false) {
             state.drop_hover = -1;
         }
@@ -249,6 +263,10 @@ fn refresh_icons(state: &mut State) {
     let mut changed = false;
 
     for (index, path) in paths.into_iter().enumerate() {
+        // 正在拖出的源格固定为空，后台解码完成也不装回去
+        if index as i32 == state.drag_source {
+            continue;
+        }
         let key = match &path {
             Some(path) => format!("{size}|{show_target}|{}|{path}", file_stamp(path)),
             None => String::new(),
@@ -296,6 +314,9 @@ fn install_icon_value(state: &mut State, key: &str, entry: Option<Arc<crate::ico
     let mut changed = false;
     for index in 0..state.icon_keys.len() {
         if state.icon_keys[index] != key {
+            continue;
+        }
+        if index as i32 == state.drag_source {
             continue;
         }
         changed = true;
@@ -449,6 +470,7 @@ fn update_drag_icon(state: &State) {
 /// 状态栏整体显隐，设置面板与物品栏遮罩期间都走这里。
 pub fn set_visible(value: bool) {
     with_state(|state| {
+        let value = value && !state.hidden_by_inventory;
         if state.visible == value {
             return;
         }
@@ -464,6 +486,35 @@ pub fn set_visible(value: bool) {
             }
         }
     });
+}
+
+/// 物品栏打开时临时隐藏状态栏，关闭后按配置恢复。
+pub fn set_hidden_by_inventory(hidden: bool) {
+    with_state(|state| {
+        if state.hidden_by_inventory == hidden {
+            return;
+        }
+        state.hidden_by_inventory = hidden;
+        state.visible = state
+            .config
+            .as_ref()
+            .map(|config| config.visible && !hidden)
+            .unwrap_or(false);
+        if state.visible {
+            render(state);
+        } else if state.shown {
+            state.shown = false;
+            dragicon::hide();
+            // SAFETY: 只是隐藏窗口
+            unsafe {
+                w::ShowWindow(state.hwnd, 0);
+            }
+        }
+    });
+}
+
+pub fn hidden_by_inventory() -> bool {
+    with_state(|state| state.hidden_by_inventory).unwrap_or(false)
 }
 
 fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32) -> (i32, i32) {
