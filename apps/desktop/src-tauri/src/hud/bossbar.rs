@@ -61,6 +61,7 @@ fn with_window<T>(f: impl FnOnce(&mut BossBarWindow) -> T) -> Option<T> {
             );
             // BOSS 条和状态栏一样属于桌面层
             w::set_desktop_style(hwnd);
+            w::set_desktop_owner(hwnd);
             w::park_desktop(hwnd);
             BossBarWindow {
                 hwnd,
@@ -96,17 +97,6 @@ pub fn apply(bars: Vec<BossBarCfg>) {
     with_window(|window| {
         window.bars = bars.into_iter().filter(|bar| bar.enabled).collect();
         render(window);
-    });
-}
-
-/// 显示桌面状态变化时同步本窗口层级。
-pub fn apply_desktop_layer() {
-    WINDOW.with(|cell| {
-        if let Some(window) = cell.borrow_mut().as_mut() {
-            if window.shown {
-                w::apply_desktop_layer(window.hwnd);
-            }
-        }
     });
 }
 
@@ -234,7 +224,7 @@ fn render(window: &mut BossBarWindow) {
         unsafe {
             w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
         }
-        w::apply_desktop_layer(window.hwnd);
+        w::park_desktop(window.hwnd);
     }
 }
 

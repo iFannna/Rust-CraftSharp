@@ -19,7 +19,6 @@ use crate::hud::win32 as w;
 use crate::hud::win32::Dib;
 
 pub const TIMER_ANIM: usize = 2;
-pub const TIMER_DESKTOP: usize = 3;
 
 pub struct Press {
     pub slot: i32,
@@ -113,15 +112,12 @@ pub fn init(app: &AppHandle) {
     if hwnd == 0 {
         return;
     }
-    // 状态栏属于桌面层：顶层窗口置底，点击不激活
+    // 状态栏属于桌面层：顶层窗口置底、点击不激活，所有者设为桌面以随显示桌面保留
     w::set_desktop_style(hwnd);
+    w::set_desktop_owner(hwnd);
     w::park_desktop(hwnd);
     crate::dragdrop::install(app, "hud", hwnd);
     crate::hud::input::install_desktop_hooks();
-    // SAFETY: 启动桌面层守护定时器，监测显示桌面状态
-    unsafe {
-        w::SetTimer(hwnd, TIMER_DESKTOP, 100, 0);
-    }
 
     let state = State {
         app: app.clone(),
@@ -445,7 +441,7 @@ pub fn render(state: &mut State) {
             unsafe {
                 w::ShowWindow(state.hwnd, w::SW_SHOWNOACTIVATE);
             }
-            w::apply_desktop_layer(state.hwnd);
+            w::park_desktop(state.hwnd);
         }
     } else if state.shown {
         state.shown = false;
@@ -526,52 +522,6 @@ pub fn set_hidden_by_inventory(hidden: bool) {
 
 pub fn hidden_by_inventory() -> bool {
     with_state(|state| state.hidden_by_inventory).unwrap_or(false)
-}
-
-fn apply_desktop_layers(state: &State) {
-    if state.shown {
-        w::apply_desktop_layer(state.hwnd);
-    }
-    crate::hud::bossbar::apply_desktop_layer();
-    crate::hud::crosshair::apply_desktop_layer();
-}
-
-/// 快捷栏中心点，用于探测桌面是否盖住了它。
-fn hotbar_center(state: &State) -> Option<w::Point> {
-    if !state.shown {
-        return None;
-    }
-    let rect = state.rect.as_ref()?;
-    let layout = state.layout.as_ref()?;
-    Some(w::Point {
-        x: rect.x + (layout.width / 2.0) as i32,
-        y: rect.y + rect.height as i32 / 2,
-    })
-}
-
-/// 守护桌面层：显示桌面（Win+D 或任务栏按钮）把桌面抬到窗口之上时临时置顶，
-/// 前台回到应用后压回底部。只在状态变化时调整层级，避免反复重排闪烁。
-fn tick_desktop(state: &mut State) {
-    let desktop = w::desktop_window();
-    // SAFETY: 只读取前台窗口
-    let foreground = unsafe { w::GetForegroundWindow() };
-    let mut target = false;
-    if desktop != 0 && foreground == desktop {
-        match hotbar_center(state) {
-            Some(center) => {
-                let hit = w::window_from_point(center);
-                // 桌面盖住快捷栏说明处于显示桌面状态；被应用盖住则保持置底
-                if hit != state.hwnd && w::is_desktop_window(hit, desktop) {
-                    target = true;
-                }
-            }
-            None => target = w::desktop_floating(),
-        }
-    }
-    if target != w::desktop_floating() {
-        w::set_desktop_floating(target);
-        apply_desktop_layers(state);
-    }
 }
 
 fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32) -> (i32, i32) {
@@ -850,8 +800,6 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
         w::WM_TIMER => {
             if wparam == TIMER_ANIM {
                 with_state(tick_anim);
-            } else if wparam == TIMER_DESKTOP {
-                with_state(tick_desktop);
             }
             return 0;
         }

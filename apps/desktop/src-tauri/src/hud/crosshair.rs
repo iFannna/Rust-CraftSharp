@@ -85,34 +85,24 @@ pub fn apply(config: CrosshairCfg) {
     with_window(|window| {
         window.config = Some(config);
         let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
+        w::set_desktop_owner(window.hwnd);
         if topmost {
             w::raise_overlay(window.hwnd);
         } else {
             w::set_desktop_style(window.hwnd);
-            w::apply_desktop_layer(window.hwnd);
+            w::park_desktop(window.hwnd);
         }
         render(window);
     });
 }
 
-/// 置顶时提到置顶层，桌面层时按显示桌面状态置底或临时置顶。
+/// 置顶时提到置顶层，桌面层时置底。
 fn raise_layer(window: &CrosshairWindow) {
     if window.config.as_ref().map(|config| config.top_most).unwrap_or(false) {
         w::raise_overlay(window.hwnd);
     } else {
-        w::apply_desktop_layer(window.hwnd);
+        w::park_desktop(window.hwnd);
     }
-}
-
-/// 显示桌面状态变化时同步本窗口层级。
-pub fn apply_desktop_layer() {
-    WINDOW.with(|cell| {
-        if let Some(window) = cell.borrow_mut().as_mut() {
-            if window.shown {
-                raise_layer(window);
-            }
-        }
-    });
 }
 
 pub fn set_metrics(metrics: Metrics) {

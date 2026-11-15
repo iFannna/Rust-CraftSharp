@@ -4,7 +4,6 @@
 
 use std::ffi::c_void;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 pub type Hwnd = isize;
 pub type Hdc = isize;
@@ -135,10 +134,10 @@ extern "system" {
     pub fn TrackMouseEvent(data: *mut TrackMouseEventData) -> i32;
     pub fn LoadCursorW(instance: isize, name: *const u16) -> isize;
     pub fn GetShellWindow() -> Hwnd;
-    pub fn GetForegroundWindow() -> Hwnd;
-    pub fn GetAncestor(hwnd: Hwnd, flags: u32) -> Hwnd;
+    pub fn FindWindowExW(parent: Hwnd, after: Hwnd, class: *const u16, title: *const u16) -> Hwnd;
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
+    pub fn SetWindowLongPtrW(hwnd: Hwnd, index: i32, value: isize) -> isize;
     pub fn WindowFromPoint(point: Point) -> Hwnd;
     pub fn SetWinEventHook(
         event_min: u32,
@@ -191,12 +190,12 @@ pub const HWND_BOTTOM: isize = 1;
 pub const HWND_TOPMOST: isize = -1;
 pub const HWND_NOTOPMOST: isize = -2;
 pub const GWL_EXSTYLE: i32 = -20;
+pub const GWL_HWNDPARENT: i32 = -8;
 pub const SWP_NOSIZE: u32 = 0x0001;
 pub const SWP_NOMOVE: u32 = 0x0002;
 pub const SWP_NOACTIVATE: u32 = 0x0010;
 pub const WH_KEYBOARD_LL: i32 = 13;
 pub const WH_MOUSE_LL: i32 = 14;
-pub const GA_ROOT: u32 = 2;
 pub const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
 pub const WINEVENT_OUTOFCONTEXT: u32 = 0x0000;
 pub const WINEVENT_SKIPOWNPROCESS: u32 = 0x0002;
@@ -426,41 +425,29 @@ pub fn park_desktop(hwnd: Hwnd) {
     }
 }
 
-/// 显示桌面期间临时提到置顶层，让窗口留在桌面上。
-/// 系统显示桌面时可能把窗口最小化，这里先恢复再置顶。
-pub fn float_desktop(hwnd: Hwnd) {
-    // SAFETY: 只恢复显示并调整层级，不改位置尺寸
+/// 把窗口所有者设为桌面图标视图，窗口便随桌面一起显示：
+/// 显示桌面（Win+D / 任务栏按钮）时不会被最小化或盖住，无需再切换层级，也就不会闪。
+pub fn set_desktop_owner(hwnd: Hwnd) {
+    let desktop = desktop_window();
+    if desktop == 0 {
+        return;
+    }
+    let class: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+    // SAFETY: 只查找桌面图标视图并设置窗口所有者
     unsafe {
-        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
-}
-
-/// 命中窗口是否属于桌面（Progman 及其图标层子窗口）。
-pub fn is_desktop_window(hwnd: Hwnd, desktop: Hwnd) -> bool {
-    if hwnd == 0 || desktop == 0 {
-        return false;
-    }
-    // SAFETY: 只查询祖先窗口
-    unsafe { GetAncestor(hwnd, GA_ROOT) == desktop }
-}
-
-static DESKTOP_FLOATING: AtomicBool = AtomicBool::new(false);
-
-pub fn set_desktop_floating(on: bool) {
-    DESKTOP_FLOATING.store(on, Ordering::Relaxed);
-}
-
-pub fn desktop_floating() -> bool {
-    DESKTOP_FLOATING.load(Ordering::Relaxed)
-}
-
-/// 按当前是否处于显示桌面状态，决定窗口临时置顶还是置底。
-pub fn apply_desktop_layer(hwnd: Hwnd) {
-    if desktop_floating() {
-        float_desktop(hwnd);
-    } else {
-        park_desktop(hwnd);
+        let mut owner = FindWindowExW(desktop, 0, class.as_ptr(), ptr::null());
+        if owner == 0 {
+            // 部分 Windows 11 版本图标视图挂在 WorkerW 下
+            let worker_class: Vec<u16> = "WorkerW\0".encode_utf16().collect();
+            let mut worker = FindWindowExW(0, 0, worker_class.as_ptr(), ptr::null());
+            while worker != 0 && owner == 0 {
+                owner = FindWindowExW(worker, 0, class.as_ptr(), ptr::null());
+                worker = FindWindowExW(0, worker, worker_class.as_ptr(), ptr::null());
+            }
+        }
+        if owner != 0 {
+            SetWindowLongPtrW(hwnd, GWL_HWNDPARENT, owner);
+        }
     }
 }
 
