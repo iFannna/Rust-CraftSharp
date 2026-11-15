@@ -7,12 +7,7 @@
     "hud",
     "slot-menu",
     "rename-dialog",
-    "inventory",
-    "overlay",
-    "settings",
-    "crosshair",
-    "tooltip",
-    "bossbar"
+    "settings"
   ],
   "permissions": [
     "core:default",
