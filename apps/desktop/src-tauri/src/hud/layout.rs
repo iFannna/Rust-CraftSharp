@@ -250,6 +250,25 @@ impl Layout {
         }
     }
 
+    /// 拖出判定范围：快捷栏整行含副手，不含上方的状态行
+    pub fn drag_out_rect(&self) -> Rect {
+        let mut left = self.core_left;
+        let mut right = self.core_left + self.core_width;
+        if self.offhand.left {
+            left = left.min(self.offhand_box_rect(0).left);
+        }
+        if self.offhand.right {
+            let rect = self.offhand_box_rect(1);
+            right = right.max(rect.left + rect.width);
+        }
+        Rect {
+            left,
+            top: self.hotbar_top,
+            width: right - left,
+            height: self.hotbar_height,
+        }
+    }
+
     /// 命中测试，返回全局格子索引：0 左副手、1 右副手、2-10 主快捷栏，未命中 -1。
     pub fn slot_at(&self, x: f32, y: f32) -> i32 {
         if !self.visible.hotbar {

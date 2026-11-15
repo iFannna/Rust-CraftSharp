@@ -12,6 +12,7 @@ use crate::hud::draw::{self, FrameStyle, Overlay, SlotIcon};
 use crate::hud::layout::{self, Layout};
 use crate::hud::sprite::{self, Frame};
 use crate::hud::text;
+use crate::hud::dragicon;
 use crate::hud::win32 as w;
 use crate::hud::win32::Dib;
 
@@ -330,6 +331,7 @@ pub fn render(state: &mut State) {
     if resized && state.moving.is_none() {
         persist_position(state);
     }
+    update_drag_icon(state);
 
     if state.visible {
         if !state.shown {
@@ -345,8 +347,28 @@ pub fn render(state: &mut State) {
         unsafe {
             w::ShowWindow(state.hwnd, 0);
         }
+        dragicon::hide();
     }
     schedule_anim(state);
+}
+
+/// 拖动浮层用独立窗口跟随光标，不画进状态栏帧里。
+fn update_drag_icon(state: &State) {
+    let Some(rect) = &state.rect else { return };
+    let icon = state
+        .drag
+        .as_ref()
+        .and_then(|drag| state.icons.get(drag.source as usize))
+        .and_then(|icon| icon.as_ref());
+
+    match (state.drag.as_ref(), icon) {
+        (Some(drag), Some(icon)) => dragicon::show(
+            &icon.sprite,
+            rect.x + drag.x.round() as i32,
+            rect.y + drag.y.round() as i32,
+        ),
+        _ => dragicon::hide(),
+    }
 }
 
 /// 状态栏整体显隐，设置面板与物品栏遮罩期间都走这里。
@@ -360,6 +382,7 @@ pub fn set_visible(value: bool) {
             render(state);
         } else if state.shown {
             state.shown = false;
+            dragicon::hide();
             // SAFETY: 只是隐藏窗口
             unsafe {
                 w::ShowWindow(state.hwnd, 0);
@@ -419,8 +442,6 @@ fn build_overlay<'a>(
         drag: icon,
         drag_source: drag.map(|drag| drag.source).unwrap_or(-1),
         drag_target: drag.map(|drag| drag.target).unwrap_or(-1),
-        drag_x: drag.map(|drag| drag.x).unwrap_or(0.0),
-        drag_y: drag.map(|drag| drag.y).unwrap_or(0.0),
         heart_flash,
         air_burst,
     }

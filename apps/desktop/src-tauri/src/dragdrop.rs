@@ -528,15 +528,14 @@ unsafe fn read_paths(data: *mut c_void) -> Option<Vec<String>> {
     Some(paths)
 }
 
-/// 把格子文件拖到窗口外，向系统发起拖放，只提供复制。
+/// 把格子文件拖到窗口外，向系统发起拖放，只复制文件本身。
 /// OLE 拖放会接管鼠标直到松手，必须在有消息循环的线程上调用，期间会被阻塞。
-pub fn begin_file_drag(path: String, size: u32) {
+/// 返回是否已在别处放下一份副本，调用方据此清空格子。
+pub fn begin_file_drag(path: String, size: u32) -> bool {
     // 发起侧在主线程，这里的按键状态可靠，用来判断是不是真的按着拖
     let pressed = button_down();
     // SAFETY: 调用线程已初始化 OLE，拖放结束后自行释放
-    unsafe {
-        drag_out(&path, size, pressed);
-    }
+    unsafe { drag_out(&path, size, pressed) }
 }
 
 fn button_down() -> bool {
@@ -631,18 +630,23 @@ unsafe fn release(session: DragSession) {
     }
 }
 
-unsafe fn drag_out(path: &str, size: u32, pressed: bool) {
+/// 发起系统拖放，返回文件是否已经被放到别处。取消时返回 false。
+/// 只提供复制，原路径文件不动；落点为复制时调用方清空格子。
+unsafe fn drag_out(path: &str, size: u32, pressed: bool) -> bool {
     if OleInitialize(ptr::null_mut()) < 0 {
-        return;
+        return false;
     }
 
+    let mut dropped = false;
     if let Some(session) = prepare(path, size, pressed) {
         let mut effect = DROPEFFECT_COPY;
         DoDragDrop(session.data, session.source, DROPEFFECT_COPY, &mut effect);
+        dropped = effect & DROPEFFECT_COPY != 0;
         release(session);
     }
 
     OleUninitialize();
+    dropped
 }
 
 unsafe fn create_source_helper() -> Option<isize> {

@@ -294,15 +294,24 @@ export class InventoryInteraction {
     this.host.requestRender();
   }
 
-  /** 拖到窗口外就转成系统拖放，格子数据保持不变 */
+  /** 离开格子区域就转成系统拖放，不用等鼠标走出整个容器 */
   private outside(point: { x: number; y: number }): boolean {
-    const margin = 2;
-    return (
-      point.x < -margin ||
-      point.y < -margin ||
-      point.x > this.canvas.clientWidth + margin ||
-      point.y > this.canvas.clientHeight + margin
-    );
+    const slots = this.host.layout().slots;
+    if (slots.length === 0) return false;
+
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const slot of slots) {
+      left = Math.min(left, slot.left);
+      top = Math.min(top, slot.top);
+      right = Math.max(right, slot.left + slot.width);
+      bottom = Math.max(bottom, slot.top + slot.height);
+    }
+
+    const margin = 4;
+    return point.x < left - margin || point.y < top - margin || point.x > right + margin || point.y > bottom + margin;
   }
 
   private dragOut(pointerId: number) {

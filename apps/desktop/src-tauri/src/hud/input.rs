@@ -67,7 +67,7 @@ fn on_move(state: &mut State, lparam: isize) {
     }
 
     if state.drag.is_some() {
-        if outside_window(state, x, y) {
+        if outside_hotbar(state, x, y) {
             drag_out(state);
             return;
         }
@@ -94,15 +94,18 @@ fn on_move(state: &mut State, lparam: isize) {
     update_hover(state, slot_at(state, x, y));
 }
 
-fn outside_window(state: &State, x: f32, y: f32) -> bool {
+/// 离开格子行就转成系统拖放，不用把鼠标拖出整块状态栏窗口
+fn outside_hotbar(state: &State, x: f32, y: f32) -> bool {
     state
         .layout
         .as_ref()
         .map(|layout| {
-            x < -DRAG_OUT_MARGIN
-                || y < -DRAG_OUT_MARGIN
-                || x > layout.width + DRAG_OUT_MARGIN
-                || y > layout.height + DRAG_OUT_MARGIN
+            let rect = layout.drag_out_rect();
+            let margin = DRAG_OUT_MARGIN * layout.scale;
+            x < rect.left - margin
+                || y < rect.top - margin
+                || x > rect.left + rect.width + margin
+                || y > rect.top + rect.height + margin
         })
         .unwrap_or(false)
 }
@@ -124,10 +127,21 @@ fn drag_out(state: &mut State) {
         .filter(|path| !path.trim().is_empty() && !missing);
     let size = state.layout.as_ref().map(|layout| layout.slot_size.round().max(1.0) as u32).unwrap_or(32);
 
+    let Some(path) = path else {
+        window::render(state);
+        return;
+    };
+
+    // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
+    let hidden = state.icons.get_mut(drag.source as usize).and_then(Option::take);
     window::render(state);
 
-    if let Some(path) = path {
-        crate::dragdrop::begin_file_drag(path, size);
+    if crate::dragdrop::begin_file_drag(path, size) {
+        let _ = state.app.emit("hud-drop", drag.source);
+    } else if let Some(icon) = hidden {
+        // 取消拖放，图标还回格子
+        state.icons[drag.source as usize] = Some(icon);
+        window::render(state);
     }
 }
 

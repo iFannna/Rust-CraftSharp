@@ -148,7 +148,10 @@ pub const WS_POPUP: u32 = 0x8000_0000;
 pub const WS_EX_LAYERED: u32 = 0x0008_0000;
 pub const WS_EX_TOPMOST: u32 = 0x0000_0008;
 pub const WS_EX_TOOLWINDOW: u32 = 0x0000_0080;
+pub const WS_EX_TRANSPARENT: u32 = 0x0000_0020;
+pub const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
+pub const SW_HIDE: i32 = 0;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
@@ -257,6 +260,44 @@ pub fn update_layered(hwnd: Hwnd, dib: &Dib, x: i32, y: i32) {
     // SAFETY: 句柄与缓冲区均有效，生命周期覆盖整次调用
     unsafe {
         UpdateLayeredWindow(hwnd, 0, &dst, &size, dib.dc, &src, 0, &blend, ULW_ALPHA);
+    }
+}
+
+/// 拖动时跟随光标的浮层：置顶、鼠标穿透、不抢焦点。
+pub fn create_overlay() -> Hwnd {
+    let class_name: Vec<u16> = "CraftSharpDragIcon\0".encode_utf16().collect();
+    let title: Vec<u16> = "CraftSharp Drag\0".encode_utf16().collect();
+    // SAFETY: 注册类名与创建窗口都为固定参数
+    unsafe {
+        let instance = GetModuleHandleW(ptr::null());
+        let class = WndClassW {
+            style: 0,
+            wnd_proc: Some(DefWindowProcW),
+            cls_extra: 0,
+            wnd_extra: 0,
+            instance,
+            icon: 0,
+            cursor: 0,
+            background: 0,
+            menu_name: ptr::null(),
+            class_name: class_name.as_ptr(),
+        };
+        RegisterClassW(&class);
+
+        CreateWindowExW(
+            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
+            class_name.as_ptr(),
+            title.as_ptr(),
+            WS_POPUP,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            instance,
+            ptr::null_mut(),
+        )
     }
 }
 

@@ -17,8 +17,6 @@ pub struct Overlay<'a> {
     pub drag: Option<&'a SlotIcon>,
     pub drag_source: i32,
     pub drag_target: i32,
-    pub drag_x: f32,
-    pub drag_y: f32,
     /// 生命值变化前的数值，用于闪烁
     pub heart_flash: Option<f32>,
     /// 空气破裂的槽位区间 [from, to)
@@ -34,8 +32,6 @@ impl Default for Overlay<'_> {
             drag: None,
             drag_source: -1,
             drag_target: -1,
-            drag_x: 0.0,
-            drag_y: 0.0,
             heart_flash: None,
             air_burst: None,
         }
@@ -226,10 +222,6 @@ pub fn draw(frame: &mut Frame, layout: &Layout, style: &FrameStyle, config: &Hud
         frame.draw(&style.hotbar_selection, rect.left, rect.top, rect.width, rect.height);
     }
 
-    if let Some(drag) = overlay.drag {
-        let size = layout::SLOT * layout.scale;
-        frame.draw_uniform(&drag.sprite, overlay.drag_x - size / 2.0, overlay.drag_y - size / 2.0, size, size);
-    }
 }
 
 fn draw_slot_icon(frame: &mut Frame, icons: &[Option<SlotIcon>], overlay: &Overlay, index: i32, left: f32, top: f32, size: f32) {

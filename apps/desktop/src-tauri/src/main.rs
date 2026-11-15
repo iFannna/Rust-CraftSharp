@@ -127,10 +127,10 @@ fn set_drop_zones(label: String, zones: Vec<dragdrop::Zone>) {
     dragdrop::set_zones(&label, zones);
 }
 
-/// 把格子文件拖出窗口，交给系统拖放，只提供复制。
+/// 把格子文件拖出窗口，交给系统拖放，返回文件是否被移走。
 #[tauri::command]
-fn begin_file_drag(path: String, size: Option<u32>) {
-    dragdrop::begin_file_drag(path, size.unwrap_or(32));
+fn begin_file_drag(path: String, size: Option<u32>) -> bool {
+    dragdrop::begin_file_drag(path, size.unwrap_or(32))
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {

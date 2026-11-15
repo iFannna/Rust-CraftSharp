@@ -258,16 +258,6 @@ impl Frame {
         }
     }
 
-    /// 等比缩放后居中绘制，等价于 WPF 的 Uniform。
-    pub fn draw_uniform(&mut self, sprite: &Sprite, x: f32, y: f32, box_width: f32, box_height: f32) {
-        if sprite.width == 0 || sprite.height == 0 {
-            return;
-        }
-        let ratio = (box_width / sprite.width as f32).min(box_height / sprite.height as f32);
-        let width = sprite.width as f32 * ratio;
-        let height = sprite.height as f32 * ratio;
-        self.draw(sprite, x + (box_width - width) / 2.0, y + (box_height - height) / 2.0, width, height);
-    }
 }
 
 fn blend(dst: &mut u32, src: u32) {

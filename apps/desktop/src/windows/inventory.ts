@@ -207,8 +207,26 @@ function buildHost(): InventoryHost {
     startFileDrag: (slotId) => {
       const item = getSlotFor(slotId, style.file, config.sharedData);
       if (!item || isPathMissing(item.path)) return;
+
+      // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
+      const hidden = icons.get(slotId) ?? null;
+      icons.delete(slotId);
+      render();
+
       const size = Math.round(16 * scale * (window.devicePixelRatio || 1));
-      void invoke("begin_file_drag", { path: item.path, size }).catch(() => undefined);
+      void invoke<boolean>("begin_file_drag", { path: item.path, size })
+        .then((dropped) => {
+          if (dropped) {
+            clearSlotFor(slotId, style.file, config.sharedData);
+            return;
+          }
+          // 取消拖放，图标还回格子
+          if (hidden) {
+            icons.set(slotId, hidden);
+            render();
+          }
+        })
+        .catch(() => undefined);
     },
     openMenu: (slotId, clientX, clientY) => {
       void (async () => {
