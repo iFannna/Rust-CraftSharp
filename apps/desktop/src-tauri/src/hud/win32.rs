@@ -102,6 +102,7 @@ extern "system" {
     ) -> Hwnd;
     pub fn DefWindowProcW(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> isize;
     pub fn ShowWindow(hwnd: Hwnd, command: i32) -> i32;
+    pub fn SetWindowPos(hwnd: Hwnd, after: isize, x: i32, y: i32, width: i32, height: i32, flags: u32) -> i32;
     pub fn UpdateLayeredWindow(
         hwnd: Hwnd,
         dst: Hdc,
@@ -152,6 +153,10 @@ pub const WS_EX_TRANSPARENT: u32 = 0x0000_0020;
 pub const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
 pub const SW_HIDE: i32 = 0;
+const HWND_TOPMOST: isize = -1;
+const SWP_NOSIZE: u32 = 0x0001;
+const SWP_NOMOVE: u32 = 0x0002;
+const SWP_NOACTIVATE: u32 = 0x0010;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
@@ -260,6 +265,15 @@ pub fn update_layered(hwnd: Hwnd, dib: &Dib, x: i32, y: i32) {
     // SAFETY: 句柄与缓冲区均有效，生命周期覆盖整次调用
     unsafe {
         UpdateLayeredWindow(hwnd, 0, &dst, &size, dib.dc, &src, 0, &blend, ULW_ALPHA);
+    }
+}
+
+/// 把浮层提到置顶窗口带的最前面。不带激活的显示会落在最底下，
+/// 不重新排序就会被同样置顶的状态栏盖住。
+pub fn raise_overlay(hwnd: Hwnd) {
+    // SAFETY: 只调整层级，不改位置尺寸
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 }
 

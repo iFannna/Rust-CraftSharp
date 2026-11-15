@@ -50,6 +50,8 @@ let background = await loadImage(style.url);
 let layout: InventoryLayout = computeInventoryLayout(scale, style, naturalWidth(background), naturalHeight(background));
 let icons = new Map<string, SlotIcon | null>();
 let iconGeneration = 0;
+// 已交给系统拖放的格子，拖放结束前不参与图标刷新，避免旧图标闪回
+let dragOutSlot: string | null = null;
 let dimmedSlot: string | null = null;
 let interaction: InventoryInteraction | null = null;
 let appliedSize: { width: number; height: number } | null = null;
@@ -164,7 +166,9 @@ async function refreshIcons() {  const generation = ++iconGeneration;
   const entries = await Promise.all(
     layout.slots.map(async (slot) => {
       const item = getSlotFor(slot.id, slotScope.style, slotScope.shared);
-      const icon = item ? await loadSlotIcon({ path: item.path, showTargetIcon: false }) : null;
+      const icon = item && slot.id !== dragOutSlot
+        ? await loadSlotIcon({ path: item.path, showTargetIcon: false })
+        : null;
       return [slot.id, icon] as const;
     })
   );
@@ -210,12 +214,14 @@ function buildHost(): InventoryHost {
 
       // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
       const hidden = icons.get(slotId) ?? null;
+      dragOutSlot = slotId;
       icons.delete(slotId);
       render();
 
       const size = Math.round(16 * scale * (window.devicePixelRatio || 1));
       void invoke<boolean>("begin_file_drag", { path: item.path, size })
         .then((dropped) => {
+          dragOutSlot = null;
           if (dropped) {
             clearSlotFor(slotId, style.file, config.sharedData);
             return;
@@ -226,7 +232,13 @@ function buildHost(): InventoryHost {
             render();
           }
         })
-        .catch(() => undefined);
+        .catch(() => {
+          dragOutSlot = null;
+          if (hidden) {
+            icons.set(slotId, hidden);
+            render();
+          }
+        });
     },
     openMenu: (slotId, clientX, clientY) => {
       void (async () => {

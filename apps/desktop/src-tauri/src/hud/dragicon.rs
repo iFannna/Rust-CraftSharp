@@ -69,6 +69,7 @@ pub fn show(sprite: &Sprite, x: i32, y: i32) {
             unsafe {
                 w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
             }
+            w::raise_overlay(window.hwnd);
         }
     });
 }
