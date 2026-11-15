@@ -2,6 +2,9 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::{mpsc, Once, OnceLock};
+use std::time::Duration;
 
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
@@ -16,6 +19,10 @@ use crate::hud::win32::Dib;
 use crate::slots::{self, Scope, SlotItem};
 
 pub const TIMER_HOVER: usize = 1;
+/// 扫格期间由采样线程投递的光标位置消息
+const WM_SHIFT_SAMPLE: u32 = w::WM_APP + 1;
+/// 采样间隔：鼠标消息会被系统合并，直接轮询光标才能跟上快速扫格
+const SHIFT_SAMPLE_MS: u64 = 2;
 const LONG_PRESS_MS: u64 = 150;
 const DRAG_THRESHOLD: f32 = 10.0;
 const HOVER_GREEN_MS: u64 = 250;
@@ -27,6 +34,74 @@ const SWEEP_STEP: f32 = 6.0;
 const SWEEP_MAX_POINTS: usize = 128;
 const ICON_MIN: f32 = 32.0;
 const ICON_MAX: f32 = 128.0;
+
+static SHIFT_SAMPLING: AtomicBool = AtomicBool::new(false);
+static SHIFT_HWND: AtomicIsize = AtomicIsize::new(0);
+static SHIFT_WAKE: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+
+/// 扫格期间不用系统合并后的鼠标消息，改为固定频率采样光标位置。
+fn install_shift_sampler(hwnd: w::Hwnd) {
+    static ONCE: Once = Once::new();
+    SHIFT_HWND.store(hwnd, Ordering::Relaxed);
+    ONCE.call_once(|| {
+        let (wake, sleep) = mpsc::channel::<()>();
+        let _ = SHIFT_WAKE.set(wake);
+        std::thread::spawn(move || {
+            let mut last = w::Point { x: i32::MIN, y: i32::MIN };
+            loop {
+                if !SHIFT_SAMPLING.load(Ordering::Relaxed) {
+                    let _ = sleep.recv_timeout(Duration::from_millis(50));
+                    continue;
+                }
+                std::thread::sleep(Duration::from_millis(SHIFT_SAMPLE_MS));
+                if !SHIFT_SAMPLING.load(Ordering::Relaxed) {
+                    continue;
+                }
+                // 左键已松开就不再补发，避免松手后的移动被算进扫格
+                if !w::key_down(0x01) {
+                    continue;
+                }
+                let cursor = w::cursor_pos();
+                if cursor.x == last.x && cursor.y == last.y {
+                    continue;
+                }
+                last = cursor;
+                let hwnd = SHIFT_HWND.load(Ordering::Relaxed);
+                if hwnd == 0 {
+                    continue;
+                }
+                let point = w::to_client(hwnd, cursor);
+                // 与鼠标消息使用同样的坐标打包方式
+                let packed = ((point.x as u32 & 0xffff) | ((point.y as u32 & 0xffff) << 16)) as isize;
+                w::post_message(hwnd, WM_SHIFT_SAMPLE, 0, packed);
+            }
+        });
+    });
+}
+
+fn start_shift_sampler() {
+    if !SHIFT_SAMPLING.swap(true, Ordering::Relaxed) {
+        // SAFETY: 只提升本进程的定时器精度，扫格结束会恢复
+        unsafe {
+            w::timeBeginPeriod(1);
+        }
+        if let Some(wake) = SHIFT_WAKE.get() {
+            let _ = wake.send(());
+        }
+    }
+}
+
+fn stop_shift_sampler() {
+    if SHIFT_SAMPLING.swap(false, Ordering::Relaxed) {
+        // SAFETY: 与 timeBeginPeriod 成对恢复
+        unsafe {
+            w::timeEndPeriod(1);
+        }
+        if let Some(wake) = SHIFT_WAKE.get() {
+            let _ = wake.send(());
+        }
+    }
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -171,6 +246,7 @@ pub fn init(app: &AppHandle) {
         return;
     }
     crate::dragdrop::install(app, "inventory", hwnd);
+    install_shift_sampler(hwnd);
 
     let style = inventory_draw::find_style("inventory.png");
     let background = inventory_draw::container_sprite(style).unwrap_or_else(|| Rc::new(sprite::Sprite { width: 176, height: 166, pixels: Vec::new() }));
@@ -254,6 +330,7 @@ pub fn apply(config: InventoryCfg) {
             state.hidden_icon = None;
             state.distribute = None;
             state.last_shift_slot = None;
+            stop_shift_sampler();
             state.last_click_slot = None;
         }
         rebuild_layout(state, style_changed || state.rect.is_none());
@@ -570,11 +647,13 @@ pub fn set_visible_inner(state: &mut State) {
             crate::hud::set_hidden_by_inventory(false);
         }
         hide_tooltip(state);
+        stop_shift_sampler();
         state.tracked = false;
         state.press = None;
         state.drag = None;
         state.distribute = None;
         state.shift_sweeping = false;
+        state.last_shift_slot = None;
         state.hover = None;
         state.drop_hover = None;
         state.q_down = false;
@@ -1019,7 +1098,9 @@ fn find_first_empty(state: &State, category: &str) -> Option<String> {
 fn shift_move(state: &mut State, index: usize) -> bool {
     let scope = state.config.scope();
     let id = state.layout.slots[index].id.clone();
-    let Some(item) = slots::get(&scope, &id) else { return false };
+    if slots::get(&scope, &id).is_none() {
+        return false;
+    }
 
     let category = if id.starts_with("hotbar_") {
         "hotbar"
@@ -1037,9 +1118,24 @@ fn shift_move(state: &mut State, index: usize) -> bool {
 
     let target_category = if category == "inventory" { "hotbar" } else { "inventory" };
     let Some(target) = find_first_empty(state, target_category) else { return false };
-    slots::set(&scope, &target, item);
-    slots::clear(&scope, &id);
-    true
+    slots::move_to(&scope, &id, &target)
+}
+
+/// 进入新格子立即搬移；采样和鼠标消息共用这一个入口。
+fn shift_step(state: &mut State, x: f32, y: f32) {
+    let current = inventory_draw::slot_at(&state.layout, x, y);
+    let mut moved = false;
+    if let Some(index) = current {
+        if state.last_shift_slot != Some(index) {
+            state.last_shift_slot = Some(index);
+            moved = shift_move(state, index);
+            if moved {
+                refresh_icons(state);
+            }
+        }
+    }
+    // 扫格时高亮跟随光标，而不是停在按下时的格子上
+    update_hover(state, current, moved);
 }
 
 fn click_slot(state: &mut State, index: usize) {
@@ -1067,7 +1163,8 @@ fn click_slot(state: &mut State, index: usize) {
 fn handle_input(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
     match message {
         w::WM_MOUSEMOVE | w::WM_LBUTTONDOWN | w::WM_LBUTTONUP | w::WM_MBUTTONDOWN | w::WM_RBUTTONUP
-        | w::WM_KEYDOWN | w::WM_KEYUP | w::WM_MOUSELEAVE | w::WM_CAPTURECHANGED | w::WM_TIMER => {
+        | w::WM_KEYDOWN | w::WM_KEYUP | w::WM_MOUSELEAVE | w::WM_CAPTURECHANGED | w::WM_TIMER
+        | WM_SHIFT_SAMPLE => {
             let drag_out = with_state(|state| handle_message(state, message, wparam, lparam)).unwrap_or(false);
             if drag_out {
                 start_system_drag();
@@ -1085,6 +1182,12 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_LBUTTONUP => on_left_up(state, lparam),
         w::WM_MBUTTONDOWN => on_middle_down(state, lparam),
         w::WM_RBUTTONUP => on_right_up(state, lparam),
+        WM_SHIFT_SAMPLE => {
+            if state.shift_sweeping && state.left_down {
+                let (x, y) = point_of(lparam);
+                shift_step(state, x, y);
+            }
+        }
         w::WM_MOUSELEAVE => {
             state.tracked = false;
             state.hover = None;
@@ -1098,6 +1201,9 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_CAPTURECHANGED => {
             state.press = None;
             state.last_move = None;
+            state.shift_sweeping = false;
+            state.last_shift_slot = None;
+            stop_shift_sampler();
             if state.moving.take().is_some() {
                 persist_position(state);
             }
@@ -1173,21 +1279,7 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
 
     if state.shift_sweeping {
         if state.left_down {
-            let mut moved = false;
-            for (point_x, point_y) in sweep_points(previous, x, y, state.unit * SWEEP_STEP) {
-                let Some(index) = inventory_draw::slot_at(&state.layout, point_x, point_y) else { continue };
-                if state.last_shift_slot == Some(index) {
-                    continue;
-                }
-                state.last_shift_slot = Some(index);
-                if shift_move(state, index) {
-                    moved = true;
-                }
-            }
-            if moved {
-                refresh_icons(state);
-                render(state);
-            }
+            shift_step(state, x, y);
         }
         return false;
     }
@@ -1210,6 +1302,7 @@ fn on_left_down(state: &mut State, wparam: usize, lparam: isize) {
     let (x, y) = point_of(lparam);
     state.left_down = true;
     state.last_move = Some((x, y));
+    stop_shift_sampler();
     // SAFETY: 捕获鼠标，拖出窗口后仍能收到移动
     unsafe {
         w::SetCapture(state.hwnd);
@@ -1242,6 +1335,7 @@ fn on_left_down(state: &mut State, wparam: usize, lparam: isize) {
             refresh_icons(state);
             render(state);
         }
+        start_shift_sampler();
         return;
     }
 
@@ -1250,6 +1344,7 @@ fn on_left_down(state: &mut State, wparam: usize, lparam: isize) {
 
 fn on_left_up(state: &mut State, lparam: isize) {
     state.left_down = false;
+    stop_shift_sampler();
     // SAFETY: 释放鼠标捕获
     unsafe {
         w::ReleaseCapture();
@@ -1298,6 +1393,7 @@ fn on_left_up(state: &mut State, lparam: isize) {
 
 fn on_middle_down(state: &mut State, lparam: isize) {
     let (x, y) = point_of(lparam);
+    stop_shift_sampler();
     begin_distribute(state, x, y);
     // SAFETY: 捕获鼠标，按住左键扫格
     unsafe {

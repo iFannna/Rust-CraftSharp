@@ -118,6 +118,8 @@ extern "system" {
     pub fn ReleaseDC(hwnd: Hwnd, dc: Hdc) -> i32;
     pub fn GetCursorPos(point: *mut Point) -> i32;
     pub fn ClientToScreen(hwnd: Hwnd, point: *mut Point) -> i32;
+    pub fn ScreenToClient(hwnd: Hwnd, point: *mut Point) -> i32;
+    pub fn PostMessageW(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> i32;
     pub fn GetDpiForWindow(hwnd: Hwnd) -> u32;
     pub fn MonitorFromWindow(hwnd: Hwnd, flags: u32) -> isize;
     pub fn MonitorFromPoint(point: Point, flags: u32) -> isize;
@@ -148,6 +150,12 @@ extern "system" {
     pub fn GetTickCount64() -> u64;
 }
 
+#[link(name = "winmm")]
+extern "system" {
+    pub fn timeBeginPeriod(period: u32) -> u32;
+    pub fn timeEndPeriod(period: u32) -> u32;
+}
+
 pub const WS_POPUP: u32 = 0x8000_0000;
 pub const WS_EX_LAYERED: u32 = 0x0008_0000;
 pub const WS_EX_TOPMOST: u32 = 0x0000_0008;
@@ -176,6 +184,7 @@ pub const WM_MBUTTONDOWN: u32 = 0x0207;
 pub const WM_MOUSEWHEEL: u32 = 0x020A;
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
 pub const WM_MOUSEACTIVATE: u32 = 0x0021;
+pub const WM_APP: u32 = 0x8000;
 pub const WM_ERASEBKGND: u32 = 0x0014;
 pub const WM_NCHITTEST: u32 = 0x0084;
 pub const WM_TIMER: u32 = 0x0113;
@@ -444,6 +453,21 @@ pub fn to_screen(hwnd: Hwnd, mut point: Point) -> Point {
         ClientToScreen(hwnd, &mut point);
     }
     point
+}
+
+pub fn to_client(hwnd: Hwnd, mut point: Point) -> Point {
+    // SAFETY: 只是坐标换算
+    unsafe {
+        ScreenToClient(hwnd, &mut point);
+    }
+    point
+}
+
+pub fn post_message(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) {
+    // SAFETY: 只投递到本进程窗口，不等待处理
+    unsafe {
+        PostMessageW(hwnd, message, wparam, lparam);
+    }
 }
 
 pub fn track_leave(hwnd: Hwnd) {

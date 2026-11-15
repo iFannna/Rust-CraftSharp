@@ -241,6 +241,21 @@ pub fn clear_many(scope: &Scope, ids: Vec<String>) {
     });
 }
 
+/// 同一作用域内搬移一个格子：清空源格与写入目标格一次提交。
+pub fn move_to(scope: &Scope, from_id: &str, to_id: &str) -> bool {
+    if from_id == to_id {
+        return false;
+    }
+    commit(|data| {
+        let map = map_mut(data, scope);
+        let Some(item) = map.remove(from_id) else {
+            return (false, false);
+        };
+        map.insert(to_id.to_string(), item);
+        (true, true)
+    })
+}
+
 pub fn clear_by_path(scope: &Scope, path: &str) {
     commit(|data| {
         let map = map_mut(data, scope);
