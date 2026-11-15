@@ -21,6 +21,10 @@ const DRAG_THRESHOLD: f32 = 10.0;
 const HOVER_GREEN_MS: u64 = 250;
 const DOUBLE_CLICK_MS: u64 = 500;
 const OUTSIDE_MARGIN: f32 = 4.0;
+/// 扫格插值的步长，按界面像素计，保证穿过任意格子都至少采样三次
+const SWEEP_STEP: f32 = 6.0;
+/// 单次移动补采样的上限，防止异常坐标跳变拖住消息循环
+const SWEEP_MAX_POINTS: usize = 128;
 const ICON_MIN: f32 = 32.0;
 const ICON_MAX: f32 = 128.0;
 
@@ -134,6 +138,8 @@ pub struct State {
     left_down: bool,
     q_down: bool,
     last_dropped: Option<usize>,
+    /// 上一次鼠标位置，扫格时用它补齐两帧之间跳过的格子
+    last_move: Option<(f32, f32)>,
     last_click_slot: Option<usize>,
     last_click_at: u64,
     tooltip_slot: Option<usize>,
@@ -195,6 +201,7 @@ pub fn init(app: &AppHandle) {
         left_down: false,
         q_down: false,
         last_dropped: None,
+        last_move: None,
         last_click_slot: None,
         last_click_at: 0,
         tooltip_slot: None,
@@ -571,6 +578,7 @@ pub fn set_visible_inner(state: &mut State) {
         state.hover = None;
         state.drop_hover = None;
         state.q_down = false;
+        state.last_move = None;
         if state.shown {
             state.shown = false;
             // SAFETY: 只隐藏窗口
@@ -728,6 +736,27 @@ fn point_of(lparam: isize) -> (f32, f32) {
     (x, y)
 }
 
+/// 上一位置到当前位置之间的采样点：系统会合并鼠标移动消息，
+/// 只处理落点会跳过快速划过的一两个格子。
+fn sweep_points(previous: Option<(f32, f32)>, x: f32, y: f32, step: f32) -> Vec<(f32, f32)> {
+    let Some((from_x, from_y)) = previous else {
+        return vec![(x, y)];
+    };
+    let dx = x - from_x;
+    let dy = y - from_y;
+    let distance = (dx * dx + dy * dy).sqrt();
+    if distance <= step {
+        return vec![(x, y)];
+    }
+    let count = ((distance / step).ceil() as usize).min(SWEEP_MAX_POINTS);
+    let mut points = Vec::with_capacity(count);
+    for index in 1..=count {
+        let t = index as f32 / count as f32;
+        points.push((from_x + dx * t, from_y + dy * t));
+    }
+    points
+}
+
 fn outside(state: &State, x: f32, y: f32) -> bool {
     let (left, top, right, bottom) = state.layout.bounds;
     // 原版是 4 个界面像素，与格子缩放无关
@@ -749,22 +778,41 @@ fn persist_position(state: &State) {
     );
 }
 
-fn update_hover(state: &mut State, hover: Option<usize>) {
-    let mut changed = hover != state.hover;
-    if state.q_down {
-        if let Some(index) = hover {
-            if state.last_dropped != Some(index) {
-                let id = state.layout.slots[index].id.clone();
-                if slots::get(&state.config.scope(), &id).is_some() {
-                    slots::clear(&state.config.scope(), &id);
-                    refresh_icons(state);
-                    changed = true;
-                }
-                state.last_dropped = Some(index);
-            }
+/// 按住丢弃键扫过路径上的格子，一帧内经过的格子合并成一次提交。
+fn drop_path(state: &mut State, previous: Option<(f32, f32)>, x: f32, y: f32) -> bool {
+    if !state.q_down {
+        return false;
+    }
+    let scope = state.config.scope();
+    let mut ids = Vec::new();
+    for (point_x, point_y) in sweep_points(previous, x, y, state.unit * SWEEP_STEP) {
+        let Some(index) = inventory_draw::slot_at(&state.layout, point_x, point_y) else { continue };
+        if state.last_dropped == Some(index) {
+            continue;
+        }
+        state.last_dropped = Some(index);
+        let id = state.layout.slots[index].id.clone();
+        if slots::get(&scope, &id).is_some() {
+            ids.push(id);
         }
     }
+    if ids.is_empty() {
+        return false;
+    }
+    let hover_dropped = state
+        .hover
+        .map(|index| ids.contains(&state.layout.slots[index].id))
+        .unwrap_or(false);
+    slots::clear_many(&scope, ids);
+    if hover_dropped {
+        hide_tooltip(state);
+    }
+    refresh_icons(state);
+    true
+}
 
+fn update_hover(state: &mut State, hover: Option<usize>, force_render: bool) {
+    let changed = hover != state.hover;
     if changed {
         state.hover = hover;
         state.hover_at = w::ticks();
@@ -776,7 +824,7 @@ fn update_hover(state: &mut State, hover: Option<usize>) {
             w::SetTimer(state.hwnd, TIMER_HOVER, HOVER_GREEN_MS as u32, 0);
         }
     }
-    if changed {
+    if changed || force_render {
         render(state);
     }
 }
@@ -869,15 +917,14 @@ fn start_system_drag() {
     with_state(|state| finish_drag_out(state, source, result));
 }
 
-fn distribute_to(state: &mut State, index: usize, path: &str) {
+fn distribute_to(state: &mut State, index: usize, path: &str) -> bool {
     let scope = state.config.scope();
     let id = state.layout.slots[index].id.clone();
     if slots::get(&scope, &id).is_some() {
-        return;
+        return false;
     }
     slots::set(&scope, &id, SlotItem { path: path.to_string(), display_name: None });
-    refresh_icons(state);
-    render(state);
+    true
 }
 
 fn begin_distribute(state: &mut State, x: f32, y: f32) {
@@ -893,6 +940,7 @@ fn begin_distribute(state: &mut State, x: f32, y: f32) {
     state.distribute = Some(Distribute { source: index, path: item.path, last: None });
     state.hover = None;
     state.drag = Some(Drag { source: index, target: index, x, y });
+    state.last_move = None;
     hide_tooltip(state);
     render(state);
 }
@@ -904,27 +952,51 @@ fn place_distribute(state: &mut State, x: f32, y: f32) {
         return;
     }
     let Some(path) = state.distribute.as_ref().map(|distribute| distribute.path.clone()) else { return };
-    distribute_to(state, index, &path);
+    if distribute_to(state, index, &path) {
+        refresh_icons(state);
+    }
 }
 
-fn sweep_distribute(state: &mut State, x: f32, y: f32) {
+/// 沿上一位置到当前位置的路径落格，一帧内跨过的格子一并写入。
+fn sweep_distribute(state: &mut State, previous: Option<(f32, f32)>, x: f32, y: f32) {
     if !state.left_down {
         return;
     }
-    let Some((source, last, path)) = state
+    let Some((source, mut last, path)) = state
         .distribute
         .as_ref()
         .map(|distribute| (distribute.source, distribute.last, distribute.path.clone()))
     else {
         return;
     };
-    let Some(index) = inventory_draw::slot_at(&state.layout, x, y) else { return };
-    if index == source || last == Some(index) {
+
+    let mut targets = Vec::new();
+    for (point_x, point_y) in sweep_points(previous, x, y, state.unit * SWEEP_STEP) {
+        let Some(index) = inventory_draw::slot_at(&state.layout, point_x, point_y) else { continue };
+        if index == source || last == Some(index) {
+            continue;
+        }
+        last = Some(index);
+        targets.push(index);
+    }
+    if let Some(distribute) = &mut state.distribute {
+        distribute.last = last;
+    }
+    if targets.is_empty() {
         return;
     }
-    distribute_to(state, index, &path);
-    if let Some(distribute) = &mut state.distribute {
-        distribute.last = Some(index);
+
+    let scope = state.config.scope();
+    let mut items = Vec::new();
+    for index in targets {
+        let id = state.layout.slots[index].id.clone();
+        if slots::get(&scope, &id).is_none() {
+            items.push((id, SlotItem { path: path.clone(), display_name: None }));
+        }
+    }
+    if !items.is_empty() {
+        slots::set_many(&scope, items);
+        refresh_icons(state);
     }
 }
 
@@ -944,10 +1016,10 @@ fn find_first_empty(state: &State, category: &str) -> Option<String> {
     ids.into_iter().find(|id| slots::get(&scope, id).is_none())
 }
 
-fn shift_move(state: &mut State, index: usize) {
+fn shift_move(state: &mut State, index: usize) -> bool {
     let scope = state.config.scope();
     let id = state.layout.slots[index].id.clone();
-    let Some(item) = slots::get(&scope, &id) else { return };
+    let Some(item) = slots::get(&scope, &id) else { return false };
 
     let category = if id.starts_with("hotbar_") {
         "hotbar"
@@ -960,15 +1032,14 @@ fn shift_move(state: &mut State, index: usize) {
     } else if id == "offhand" {
         "offhand"
     } else {
-        return;
+        return false;
     };
 
     let target_category = if category == "inventory" { "hotbar" } else { "inventory" };
-    let Some(target) = find_first_empty(state, target_category) else { return };
+    let Some(target) = find_first_empty(state, target_category) else { return false };
     slots::set(&scope, &target, item);
     slots::clear(&scope, &id);
-    refresh_icons(state);
-    render(state);
+    true
 }
 
 fn click_slot(state: &mut State, index: usize) {
@@ -1018,6 +1089,7 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
             state.tracked = false;
             state.hover = None;
             state.press = None;
+            state.last_move = None;
             sync_tooltip(state, None);
             render(state);
         }
@@ -1025,6 +1097,7 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_KEYUP => on_key_up(state, wparam),
         w::WM_CAPTURECHANGED => {
             state.press = None;
+            state.last_move = None;
             if state.moving.take().is_some() {
                 persist_position(state);
             }
@@ -1049,6 +1122,7 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
 
 fn on_move(state: &mut State, lparam: isize) -> bool {
     let (x, y) = point_of(lparam);
+    let previous = state.last_move.replace((x, y));
 
     if !state.tracked {
         state.tracked = true;
@@ -1069,6 +1143,8 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
             }
             render(state);
         }
+        // 窗口移动后客户区坐标整体变化，后续不能按旧位置插值
+        state.last_move = None;
         return false;
     }
 
@@ -1077,7 +1153,7 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
             drag.x = x;
             drag.y = y;
         }
-        sweep_distribute(state, x, y);
+        sweep_distribute(state, previous, x, y);
         render(state);
         return false;
     }
@@ -1091,18 +1167,26 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
             drag.y = y;
             drag.target = inventory_draw::slot_at(&state.layout, x, y).unwrap_or(drag.source);
         }
-        sweep_distribute(state, x, y);
         render(state);
         return false;
     }
 
     if state.shift_sweeping {
         if state.left_down {
-            if let Some(index) = inventory_draw::slot_at(&state.layout, x, y) {
-                if state.last_shift_slot != Some(index) {
-                    state.last_shift_slot = Some(index);
-                    shift_move(state, index);
+            let mut moved = false;
+            for (point_x, point_y) in sweep_points(previous, x, y, state.unit * SWEEP_STEP) {
+                let Some(index) = inventory_draw::slot_at(&state.layout, point_x, point_y) else { continue };
+                if state.last_shift_slot == Some(index) {
+                    continue;
                 }
+                state.last_shift_slot = Some(index);
+                if shift_move(state, index) {
+                    moved = true;
+                }
+            }
+            if moved {
+                refresh_icons(state);
+                render(state);
             }
         }
         return false;
@@ -1117,13 +1201,15 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
         return false;
     }
 
-    update_hover(state, inventory_draw::slot_at(&state.layout, x, y));
+    let dropped = drop_path(state, previous, x, y);
+    update_hover(state, inventory_draw::slot_at(&state.layout, x, y), dropped);
     false
 }
 
 fn on_left_down(state: &mut State, wparam: usize, lparam: isize) {
     let (x, y) = point_of(lparam);
     state.left_down = true;
+    state.last_move = Some((x, y));
     // SAFETY: 捕获鼠标，拖出窗口后仍能收到移动
     unsafe {
         w::SetCapture(state.hwnd);
@@ -1152,7 +1238,10 @@ fn on_left_down(state: &mut State, wparam: usize, lparam: isize) {
     if wparam & 0x0004 != 0 {
         state.shift_sweeping = true;
         state.last_shift_slot = Some(index);
-        shift_move(state, index);
+        if shift_move(state, index) {
+            refresh_icons(state);
+            render(state);
+        }
         return;
     }
 
@@ -1176,7 +1265,7 @@ fn on_left_up(state: &mut State, lparam: isize) {
     if state.distribute.is_some() {
         place_distribute(state, x, y);
         end_distribute(state);
-        update_hover(state, inventory_draw::slot_at(&state.layout, x, y));
+        update_hover(state, inventory_draw::slot_at(&state.layout, x, y), false);
         return;
     }
 
@@ -1196,7 +1285,7 @@ fn on_left_up(state: &mut State, lparam: isize) {
         }
         state.press = None;
         render(state);
-        update_hover(state, inventory_draw::slot_at(&state.layout, x, y));
+        update_hover(state, inventory_draw::slot_at(&state.layout, x, y), false);
         return;
     }
 

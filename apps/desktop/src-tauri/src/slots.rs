@@ -212,6 +212,35 @@ pub fn clear(scope: &Scope, slot_id: &str) {
     });
 }
 
+/// 扫格时一次写入多个目标格，避免逐格落盘与广播。
+pub fn set_many(scope: &Scope, items: Vec<(String, SlotItem)>) {
+    if items.is_empty() {
+        return;
+    }
+    commit(|data| {
+        let map = map_mut(data, scope);
+        for (id, item) in items {
+            map.insert(id, item);
+        }
+        ((), true)
+    });
+}
+
+/// 扫格丢弃时一次移除多个格子。
+pub fn clear_many(scope: &Scope, ids: Vec<String>) {
+    if ids.is_empty() {
+        return;
+    }
+    commit(|data| {
+        let map = map_mut(data, scope);
+        let mut changed = false;
+        for id in ids {
+            changed |= map.remove(&id).is_some();
+        }
+        ((), changed)
+    });
+}
+
 pub fn clear_by_path(scope: &Scope, path: &str) {
     commit(|data| {
         let map = map_mut(data, scope);
