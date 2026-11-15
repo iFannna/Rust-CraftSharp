@@ -84,23 +84,32 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
 pub fn apply(config: CrosshairCfg) {
     with_window(|window| {
         window.config = Some(config);
-        // SAFETY: 只调整顶层属性
-        unsafe {
-            w::SetWindowPos(
-                window.hwnd,
-                if window.config.as_ref().map(|config| config.top_most).unwrap_or(false) {
-                    w::HWND_TOPMOST
-                } else {
-                    w::HWND_NOTOPMOST
-                },
-                0,
-                0,
-                0,
-                0,
-                w::SWP_NOMOVE | w::SWP_NOSIZE | w::SWP_NOACTIVATE,
-            );
+        let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
+        if topmost {
+            w::raise_overlay(window.hwnd);
+        } else {
+            w::set_desktop_style(window.hwnd);
+            w::apply_desktop_layer(window.hwnd);
         }
         render(window);
+    });
+}
+
+/// 置顶时提到置顶层，桌面层时按显示桌面状态置底或临时置顶。
+fn raise_layer(window: &CrosshairWindow) {
+    if window.config.as_ref().map(|config| config.top_most).unwrap_or(false) {
+        w::raise_overlay(window.hwnd);
+    } else {
+        w::apply_desktop_layer(window.hwnd);
+    }
+}
+
+/// 显示桌面状态变化时同步本窗口层级。
+pub fn apply_desktop_layer() {
+    WINDOW.with(|cell| {
+        if let Some(window) = cell.borrow_mut().as_mut() {
+            raise_layer(window);
+        }
     });
 }
 
@@ -249,7 +258,7 @@ fn render(window: &mut CrosshairWindow) {
             unsafe {
                 w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
             }
-            w::raise_overlay(window.hwnd);
+            raise_layer(window);
         }
     } else {
         hide(window);

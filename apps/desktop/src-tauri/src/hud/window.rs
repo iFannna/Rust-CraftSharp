@@ -19,6 +19,7 @@ use crate::hud::win32 as w;
 use crate::hud::win32::Dib;
 
 pub const TIMER_ANIM: usize = 2;
+pub const TIMER_DESKTOP: usize = 3;
 
 pub struct Press {
     pub slot: i32,
@@ -91,6 +92,8 @@ pub struct State {
     pub hidden_by_inventory: bool,
     /// 拖放接受区域的布局指纹，变化时才重算
     pub zones_key: String,
+    /// Win+D 后等待桌面成为前台的计时次数
+    pub desktop_probe_ticks: u32,
 }
 
 thread_local! {
@@ -112,7 +115,11 @@ pub fn init(app: &AppHandle) {
     if hwnd == 0 {
         return;
     }
+    // 状态栏属于桌面层：顶层窗口置底，点击不激活
+    w::set_desktop_style(hwnd);
+    w::park_desktop(hwnd);
     crate::dragdrop::install(app, "hud", hwnd);
+    crate::hud::input::install_desktop_hooks();
 
     let state = State {
         app: app.clone(),
@@ -148,6 +155,7 @@ pub fn init(app: &AppHandle) {
         visible: true,
         hidden_by_inventory: false,
         zones_key: String::new(),
+        desktop_probe_ticks: 0,
     };
 
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
@@ -436,6 +444,7 @@ pub fn render(state: &mut State) {
             unsafe {
                 w::ShowWindow(state.hwnd, w::SW_SHOWNOACTIVATE);
             }
+            w::apply_desktop_layer(state.hwnd);
         }
     } else if state.shown {
         state.shown = false;
@@ -516,6 +525,58 @@ pub fn set_hidden_by_inventory(hidden: bool) {
 
 pub fn hidden_by_inventory() -> bool {
     with_state(|state| state.hidden_by_inventory).unwrap_or(false)
+}
+
+/// Win+D 后开始探测桌面是否成为前台，期间把桌面层窗口临时置顶。
+pub fn start_desktop_probe() {
+    with_state(|state| {
+        state.desktop_probe_ticks = 0;
+        // SAFETY: 只是启动本窗口的定时器
+        unsafe {
+            w::SetTimer(state.hwnd, TIMER_DESKTOP, 100, 0);
+        }
+    });
+}
+
+fn apply_desktop_layers(state: &State) {
+    w::apply_desktop_layer(state.hwnd);
+    crate::hud::bossbar::apply_desktop_layer();
+    crate::hud::crosshair::apply_desktop_layer();
+}
+
+fn tick_desktop(state: &mut State) {
+    let desktop = w::desktop_window();
+    // SAFETY: 只读取前台窗口
+    let foreground = unsafe { w::GetForegroundWindow() };
+    if desktop != 0 && foreground == desktop {
+        // 桌面在前台：显示桌面期间临时置顶，并继续监视前台变化
+        state.desktop_probe_ticks = 0;
+        w::set_desktop_floating(true);
+        apply_desktop_layers(state);
+        // SAFETY: 只是调整定时器间隔
+        unsafe {
+            w::SetTimer(state.hwnd, TIMER_DESKTOP, 100, 0);
+        }
+        return;
+    }
+    if w::desktop_floating() {
+        // 前台回到应用，压回桌面层
+        w::set_desktop_floating(false);
+        apply_desktop_layers(state);
+        // SAFETY: 只是停止定时器
+        unsafe {
+            w::KillTimer(state.hwnd, TIMER_DESKTOP);
+        }
+        return;
+    }
+    // 还没等到桌面成为前台，最多再等约 1.5 秒
+    state.desktop_probe_ticks += 1;
+    if state.desktop_probe_ticks >= 15 {
+        // SAFETY: 只是停止定时器
+        unsafe {
+            w::KillTimer(state.hwnd, TIMER_DESKTOP);
+        }
+    }
 }
 
 fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32) -> (i32, i32) {
@@ -784,7 +845,7 @@ pub fn persist_position(state: &State) {
 
 unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lparam: isize) -> isize {
     match message {
-        w::WM_MOUSEACTIVATE => return w::MA_ACTIVATE,
+        w::WM_MOUSEACTIVATE => return w::MA_NOACTIVATE,
         w::WM_ERASEBKGND => return 1,
         w::WM_PAINT => {
             w::validate(hwnd);
@@ -794,6 +855,8 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
         w::WM_TIMER => {
             if wparam == TIMER_ANIM {
                 with_state(tick_anim);
+            } else if wparam == TIMER_DESKTOP {
+                with_state(tick_desktop);
             }
             return 0;
         }

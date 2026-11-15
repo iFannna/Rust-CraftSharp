@@ -52,18 +52,24 @@ thread_local! {
 fn with_window<T>(f: impl FnOnce(&mut BossBarWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
-        let window = slot.get_or_insert_with(|| BossBarWindow {
-            hwnd: w::create_named_window(
+        let window = slot.get_or_insert_with(|| {
+            let hwnd = w::create_named_window(
                 "CraftSharpBossBar",
                 "CraftSharp Boss Bar",
                 wndproc,
                 w::WS_EX_TRANSPARENT,
-            ),
-            bars: Vec::new(),
-            metrics: Metrics::default(),
-            frame: None,
-            dib: None,
-            shown: false,
+            );
+            // BOSS 条和状态栏一样属于桌面层
+            w::set_desktop_style(hwnd);
+            w::park_desktop(hwnd);
+            BossBarWindow {
+                hwnd,
+                bars: Vec::new(),
+                metrics: Metrics::default(),
+                frame: None,
+                dib: None,
+                shown: false,
+            }
         });
         if window.hwnd == 0 {
             return None;
@@ -90,6 +96,15 @@ pub fn apply(bars: Vec<BossBarCfg>) {
     with_window(|window| {
         window.bars = bars.into_iter().filter(|bar| bar.enabled).collect();
         render(window);
+    });
+}
+
+/// 显示桌面状态变化时同步本窗口层级。
+pub fn apply_desktop_layer() {
+    WINDOW.with(|cell| {
+        if let Some(window) = cell.borrow_mut().as_mut() {
+            w::apply_desktop_layer(window.hwnd);
+        }
     });
 }
 
@@ -217,7 +232,7 @@ fn render(window: &mut BossBarWindow) {
         unsafe {
             w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
         }
-        w::raise_overlay(window.hwnd);
+        w::apply_desktop_layer(window.hwnd);
     }
 }
 

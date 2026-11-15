@@ -4,6 +4,7 @@
 
 use std::ffi::c_void;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub type Hwnd = isize;
 pub type Hdc = isize;
@@ -133,6 +134,18 @@ extern "system" {
     pub fn ValidateRect(hwnd: Hwnd, rect: *const Rect) -> i32;
     pub fn TrackMouseEvent(data: *mut TrackMouseEventData) -> i32;
     pub fn LoadCursorW(instance: isize, name: *const u16) -> isize;
+    pub fn GetShellWindow() -> Hwnd;
+    pub fn GetForegroundWindow() -> Hwnd;
+    pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
+    pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
+    pub fn WindowFromPoint(point: Point) -> Hwnd;
+    pub fn SetWindowsHookExW(
+        id_hook: i32,
+        proc_: Option<unsafe extern "system" fn(i32, usize, isize) -> isize>,
+        module: isize,
+        thread_id: u32,
+    ) -> isize;
+    pub fn CallNextHookEx(hook: isize, code: i32, wparam: usize, lparam: isize) -> isize;
 }
 
 #[link(name = "gdi32")]
@@ -164,11 +177,15 @@ pub const WS_EX_TRANSPARENT: u32 = 0x0000_0020;
 pub const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
 pub const SW_HIDE: i32 = 0;
+pub const HWND_BOTTOM: isize = 1;
 pub const HWND_TOPMOST: isize = -1;
 pub const HWND_NOTOPMOST: isize = -2;
+pub const GWL_EXSTYLE: i32 = -20;
 pub const SWP_NOSIZE: u32 = 0x0001;
 pub const SWP_NOMOVE: u32 = 0x0002;
 pub const SWP_NOACTIVATE: u32 = 0x0010;
+pub const WH_KEYBOARD_LL: i32 = 13;
+pub const WH_MOUSE_LL: i32 = 14;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
@@ -192,6 +209,7 @@ pub const WM_DPICHANGED: u32 = 0x02E0;
 pub const WM_CAPTURECHANGED: u32 = 0x0215;
 pub const HTCLIENT: isize = 1;
 pub const MA_ACTIVATE: isize = 1;
+pub const MA_NOACTIVATE: isize = 3;
 
 /// 预乘 alpha 的 32 位 DIB，像素直接写进 `bits`。
 pub struct Dib {
@@ -368,6 +386,62 @@ pub fn create_named_window(
 
 pub fn create_window(proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize) -> Hwnd {
     create_named_window("CraftSharpHud", "CraftSharp HUD", proc_, 0)
+}
+
+/// 桌面窗口 Progman，用于判断桌面是否处于前台。
+pub fn desktop_window() -> Hwnd {
+    // SAFETY: 只读取 shell 主窗口句柄
+    unsafe { GetShellWindow() }
+}
+
+/// 桌面层窗口样式：不置顶、点击不激活，避免被抬到应用窗口上面。
+pub fn set_desktop_style(hwnd: Hwnd) {
+    // SAFETY: 只调整扩展样式
+    unsafe {
+        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        SetWindowLongW(hwnd, GWL_EXSTYLE, ((ex_style & !WS_EX_TOPMOST) | WS_EX_NOACTIVATE) as i32);
+    }
+}
+
+/// 压到桌面之上、所有普通窗口之下。HWND_BOTTOM 正好落在 Progman 前一位。
+pub fn park_desktop(hwnd: Hwnd) {
+    // SAFETY: 只调整层级，不改位置尺寸
+    unsafe {
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
+/// 显示桌面期间临时提到置顶层，让窗口留在桌面上。
+pub fn float_desktop(hwnd: Hwnd) {
+    // SAFETY: 只调整层级，不改位置尺寸
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
+static DESKTOP_FLOATING: AtomicBool = AtomicBool::new(false);
+
+pub fn set_desktop_floating(on: bool) {
+    DESKTOP_FLOATING.store(on, Ordering::Relaxed);
+}
+
+pub fn desktop_floating() -> bool {
+    DESKTOP_FLOATING.load(Ordering::Relaxed)
+}
+
+/// 按当前是否处于显示桌面状态，决定窗口临时置顶还是置底。
+pub fn apply_desktop_layer(hwnd: Hwnd) {
+    if desktop_floating() {
+        float_desktop(hwnd);
+    } else {
+        park_desktop(hwnd);
+    }
+}
+
+pub fn window_from_point(point: Point) -> Hwnd {
+    // SAFETY: 只查询命中窗口
+    unsafe { WindowFromPoint(point) }
 }
 
 pub fn dpi_of(hwnd: Hwnd) -> f32 {

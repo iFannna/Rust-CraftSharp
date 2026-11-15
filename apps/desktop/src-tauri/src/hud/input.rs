@@ -2,6 +2,8 @@
 
 #![allow(non_snake_case)]
 
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+
 use tauri::Emitter;
 
 use crate::hud::win32 as w;
@@ -11,6 +13,96 @@ const LONG_PRESS_MS: u64 = 150;
 const DRAG_THRESHOLD: f32 = 10.0;
 /// 拖出窗口多少像素后转成系统拖放
 const DRAG_OUT_MARGIN: f32 = 2.0;
+
+/// 桌面层窗口不激活、拿不到焦点，桌面在前台时由钩子接住窗口内输入。
+static KEY_HOOK: AtomicIsize = AtomicIsize::new(0);
+static MOUSE_HOOK: AtomicIsize = AtomicIsize::new(0);
+static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+#[repr(C)]
+#[allow(dead_code)]
+struct KeyboardHookData {
+    vk_code: u32,
+    scan_code: u32,
+    flags: u32,
+    time: u32,
+    extra_info: usize,
+}
+
+#[repr(C)]
+#[allow(dead_code)]
+struct MouseHookData {
+    pt: w::Point,
+    mouse_data: u32,
+    flags: u32,
+    time: u32,
+    extra_info: usize,
+}
+
+pub fn install_desktop_hooks() {
+    if HOOKS_INSTALLED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    // SAFETY: 钩子过程在本进程内，安装在有消息循环的线程
+    let module = unsafe { w::GetModuleHandleW(std::ptr::null()) };
+    let key_hook = unsafe { w::SetWindowsHookExW(w::WH_KEYBOARD_LL, Some(keyboard_hook), module, 0) };
+    if key_hook != 0 {
+        KEY_HOOK.store(key_hook, Ordering::SeqCst);
+    }
+    let mouse_hook = unsafe { w::SetWindowsHookExW(w::WH_MOUSE_LL, Some(mouse_hook), module, 0) };
+    if mouse_hook != 0 {
+        MOUSE_HOOK.store(mouse_hook, Ordering::SeqCst);
+    }
+    if key_hook == 0 || mouse_hook == 0 {
+        eprintln!("桌面输入钩子安装失败");
+    }
+}
+
+unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    if code >= 0 && wparam == w::WM_KEYDOWN as usize {
+        let data = &*(lparam as *const KeyboardHookData);
+        // Win+D 交给桌面层探测，按键本身不拦截
+        if data.vk_code == 0x44 && (w::key_down(0x5b) || w::key_down(0x5c)) {
+            window::start_desktop_probe();
+        }
+        // 只在桌面处于前台时接管，其他应用里的按键一律放过
+        if w::GetForegroundWindow() == w::desktop_window() {
+            let handled = window::with_state(|state| {
+                if !state.visible || !state.shown || state.config.is_none() {
+                    return false;
+                }
+                on_key(state, data.vk_code as usize)
+            })
+            .unwrap_or(false);
+            if handled {
+                return 1;
+            }
+        }
+    }
+    w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+}
+
+unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
+    if code >= 0 && wparam == w::WM_MOUSEWHEEL as usize && w::GetForegroundWindow() == w::desktop_window() {
+        let data = &*(lparam as *const MouseHookData);
+        let handled = window::with_state(|state| {
+            if !state.visible || !state.shown || state.config.is_none() {
+                return false;
+            }
+            if w::window_from_point(data.pt) != state.hwnd {
+                return false;
+            }
+            on_wheel(state, data.mouse_data as usize);
+            true
+        })
+        .unwrap_or(false);
+        if handled {
+            return 1;
+        }
+    }
+    w::CallNextHookEx(MOUSE_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+}
 
 pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
     match message {
@@ -37,7 +129,9 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_LBUTTONUP => on_up(state, wparam, lparam),
         w::WM_RBUTTONUP => on_menu(state, lparam),
         w::WM_MOUSEWHEEL => on_wheel(state, wparam),
-        w::WM_KEYDOWN => on_key(state, wparam),
+        w::WM_KEYDOWN => {
+            on_key(state, wparam);
+        }
         w::WM_CAPTURECHANGED => on_capture_lost(state),
         _ => {}
     }
@@ -242,18 +336,19 @@ fn on_wheel(state: &mut State, wparam: usize) {
     select(state, next);
 }
 
-fn on_key(state: &mut State, wparam: usize) {
+/// 处理状态栏窗口内的快捷键，返回是否已经消费这个按键。
+fn on_key(state: &mut State, wparam: usize) -> bool {
     let key = wparam as u8;
 
     if (0x31..=0x39).contains(&key) {
         select(state, (key - 0x30) as i32 + 1);
-        return;
+        return true;
     }
 
     if key == 0x0d {
         let selected = state.selected;
         if selected < 2 {
-            return;
+            return false;
         }
         let has_item = state
             .config
@@ -264,7 +359,7 @@ fn on_key(state: &mut State, wparam: usize) {
             let _ = state.app.emit("hud-open", selected);
         }
         select(state, -1);
-        return;
+        return true;
     }
 
     let drop_key = state
@@ -275,8 +370,9 @@ fn on_key(state: &mut State, wparam: usize) {
     if drop_key.len() == 1 && drop_key.as_bytes()[0].to_ascii_uppercase() == key {
         if state.selected >= 2 {
             let _ = state.app.emit("hud-drop", state.selected);
+            return true;
         }
-        return;
+        return false;
     }
 
     // 状态栏聚焦时按局部快捷键开关物品栏
@@ -287,7 +383,10 @@ fn on_key(state: &mut State, wparam: usize) {
         .unwrap_or_default();
     if open_key.len() == 1 && open_key.as_bytes()[0].to_ascii_uppercase() == key {
         let _ = state.app.emit("hud-open-inventory", ());
+        return true;
     }
+
+    false
 }
 
 fn on_menu(state: &mut State, lparam: isize) {
