@@ -113,6 +113,34 @@ fn report_hover(label: &str, zone: Option<&str>) {
     }
 }
 
+/// 拖出结果：是否落地、落在哪个窗口与区域、是否落回发起拖出的原格子。
+/// 原格子被放置时必须还原图标并保留数据，不能当成移动。
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DragResult {
+    pub dropped: bool,
+    pub window: Option<String>,
+    pub zone: Option<String>,
+    pub same_source: bool,
+}
+
+/// 本次拖出的来源（窗口标签、格子 id），只用于识别落回原格子。
+fn drag_source() -> &'static Mutex<Option<(String, String)>> {
+    static SOURCE: OnceLock<Mutex<Option<(String, String)>>> = OnceLock::new();
+    SOURCE.get_or_init(|| Mutex::new(None))
+}
+
+/// 拖出过程中最后一次在我们自己窗口里的落点。
+fn last_drop() -> &'static Mutex<Option<(String, String, bool)>> {
+    static DROP: OnceLock<Mutex<Option<(String, String, bool)>>> = OnceLock::new();
+    DROP.get_or_init(|| Mutex::new(None))
+}
+
+fn is_drag_source(label: &str, zone: &str) -> bool {
+    let source = drag_source().lock().unwrap_or_else(|error| error.into_inner());
+    matches!(source.as_ref(), Some((source_label, source_zone)) if source_label == label && source_zone == zone)
+}
+
 /// 一个顶层窗口可能注册多个拖放目标，接受区域按窗口标签共享。
 fn zones() -> &'static Mutex<HashMap<String, Arc<Mutex<Vec<Zone>>>>> {
     static ZONES: OnceLock<Mutex<HashMap<String, Arc<Mutex<Vec<Zone>>>>>> = OnceLock::new();
@@ -501,6 +529,7 @@ unsafe extern "system" fn target_drop(this: *mut c_void, data: *mut c_void, _key
     ScreenToClient(target.window, &mut client);
     let zone = hit_zone(target, &client);
     let paths = read_paths(data).unwrap_or_default();
+    let same_source = zone.as_deref().map(|zone| is_drag_source(&target.label, zone)).unwrap_or(false);
 
     let drop_effect = if zone.is_some() && !paths.is_empty() { DROPEFFECT_COPY } else { DROPEFFECT_NONE };
     if !effect.is_null() {
@@ -514,16 +543,22 @@ unsafe extern "system" fn target_drop(this: *mut c_void, data: *mut c_void, _key
 
     if let Some(zone) = zone {
         if !paths.is_empty() {
-            let _ = target.app.emit(
-                EVENT_NAME,
-                serde_json::json!({
-                    "window": target.label,
-                    "zone": zone,
-                    "paths": paths,
-                    "x": client.x,
-                    "y": client.y,
-                }),
-            );
+            if let Ok(mut drop) = last_drop().lock() {
+                *drop = Some((target.label.clone(), zone.clone(), same_source));
+            }
+            // 落回发起拖出的原格子等价于取消，不写回也别覆盖原数据
+            if !same_source {
+                let _ = target.app.emit(
+                    EVENT_NAME,
+                    serde_json::json!({
+                        "window": target.label,
+                        "zone": zone,
+                        "paths": paths,
+                        "x": client.x,
+                        "y": client.y,
+                    }),
+                );
+            }
         }
     }
     S_OK
@@ -569,12 +604,30 @@ unsafe fn read_paths(data: *mut c_void) -> Option<Vec<String>> {
 
 /// 把格子文件拖到窗口外，向系统发起拖放，只复制文件本身。
 /// OLE 拖放会接管鼠标直到松手，必须在有消息循环的线程上调用，期间会被阻塞。
-/// 返回是否已在别处放下一份副本，调用方据此清空格子。
-pub fn begin_file_drag(path: String, size: u32) -> bool {
+/// 返回落点信息，调用方据此决定清空格子、还原图标还是原地不动。
+pub fn begin_file_drag(path: String, size: u32, source: Option<(String, String)>) -> DragResult {
     // 发起侧在主线程，这里的按键状态可靠，用来判断是不是真的按着拖
     let pressed = button_down();
+    *drag_source().lock().unwrap_or_else(|error| error.into_inner()) = source;
+    *last_drop().lock().unwrap_or_else(|error| error.into_inner()) = None;
+
     // SAFETY: 调用线程已初始化 OLE，拖放结束后自行释放
-    unsafe { drag_out(&path, size, pressed) }
+    let dropped = unsafe { drag_out(&path, size, pressed) };
+    let report = {
+        let mut drop = last_drop().lock().unwrap_or_else(|error| error.into_inner());
+        drop.take()
+    };
+    *drag_source().lock().unwrap_or_else(|error| error.into_inner()) = None;
+
+    match report {
+        Some((window, zone, same_source)) => DragResult {
+            dropped,
+            window: Some(window),
+            zone: Some(zone),
+            same_source,
+        },
+        None => DragResult { dropped, window: None, zone: None, same_source: false },
+    }
 }
 
 fn button_down() -> bool {
@@ -835,6 +888,18 @@ mod tests {
             release(session);
             OleUninitialize();
         }
+    }
+
+    /// 落回原格子只认同一个窗口里的同一个 zone，其他窗口同 id 不算。
+    #[test]
+    fn detects_drop_back_to_source() {
+        *drag_source().lock().unwrap_or_else(|error| error.into_inner()) =
+            Some(("hud".to_string(), "hotbar_3".to_string()));
+        assert!(is_drag_source("hud", "hotbar_3"));
+        assert!(!is_drag_source("hud", "hotbar_4"));
+        assert!(!is_drag_source("inventory", "hotbar_3"));
+        *drag_source().lock().unwrap_or_else(|error| error.into_inner()) = None;
+        assert!(!is_drag_source("hud", "hotbar_3"));
     }
 
     /// 缩略图助手按 shobjidl.h 的顺序调用：DragEnter 建图，DragOver 跟随，DragLeave 收尾。

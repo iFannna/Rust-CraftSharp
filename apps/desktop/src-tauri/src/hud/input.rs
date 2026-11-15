@@ -136,10 +136,12 @@ fn drag_out(state: &mut State) {
     let hidden = state.icons.get_mut(drag.source as usize).and_then(Option::take);
     window::render(state);
 
-    if crate::dragdrop::begin_file_drag(path, size) {
+    let source = ("hud".to_string(), crate::hud::layout::slot_id(drag.source));
+    let result = crate::dragdrop::begin_file_drag(path, size, Some(source));
+    if result.dropped && !result.same_source {
         let _ = state.app.emit("hud-drop", drag.source);
     } else if let Some(icon) = hidden {
-        // 取消拖放，图标还回格子
+        // 取消或落回原格子：图标还回去，格子数据本来就没动
         state.icons[drag.source as usize] = Some(icon);
         window::render(state);
     }

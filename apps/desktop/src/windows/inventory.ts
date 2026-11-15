@@ -64,6 +64,14 @@ let persistTimer = 0;
 let dragScaleFactor = window.devicePixelRatio || 1;
 let dragging = false;
 
+/** 拖出落点，落回原格子时 sameSource 为 true，按取消处理 */
+interface DragResult {
+  dropped: boolean;
+  window?: string | null;
+  zone?: string | null;
+  sameSource: boolean;
+}
+
 function naturalWidth(image: HTMLImageElement): number {
   return image.naturalWidth || image.width;
 }
@@ -230,14 +238,19 @@ function buildHost(): InventoryHost {
       render();
 
       const size = Math.min(128, Math.max(32, Math.round(16 * scale * (window.devicePixelRatio || 1))));
-      void invoke<boolean>("begin_file_drag", { path: item.path, size })
-        .then((dropped) => {
+      void invoke<DragResult>("begin_file_drag", {
+        path: item.path,
+        size,
+        sourceWindow: currentWindow.label,
+        sourceZone: slotId
+      })
+        .then((result) => {
           dragOutSlot = null;
-          if (dropped) {
+          if (result.dropped && !result.sameSource) {
             clearSlotFor(slotId, style.file, config.sharedData);
             return;
           }
-          // 取消拖放，图标还回格子
+          // 取消或落回原格子：图标还回去，格子数据本来就没动
           if (hidden) {
             icons.set(slotId, hidden);
             render();
