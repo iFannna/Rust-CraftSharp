@@ -4,6 +4,8 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 
@@ -16,7 +18,6 @@ use crate::hud::dragicon;
 use crate::hud::win32 as w;
 use crate::hud::win32::Dib;
 
-pub const TIMER_METRICS: usize = 1;
 pub const TIMER_ANIM: usize = 2;
 
 pub struct Press {
@@ -67,6 +68,8 @@ pub struct State {
     pub frame: Option<Frame>,
     pub selected: i32,
     pub hover: i32,
+    /// 外部文件拖入时命中的格子，与鼠标悬停独立
+    pub drop_hover: i32,
     pub press: Option<Press>,
     pub drag: Option<Drag>,
     pub moving: Option<Move>,
@@ -105,10 +108,6 @@ pub fn init(app: &AppHandle) {
     if hwnd == 0 {
         return;
     }
-    // SAFETY: 窗口已创建，注册拖放目标与指标定时器
-    unsafe {
-        w::SetTimer(hwnd, TIMER_METRICS, 1000, 0);
-    }
     crate::dragdrop::install(app, "hud", hwnd);
 
     let state = State {
@@ -126,6 +125,7 @@ pub fn init(app: &AppHandle) {
         frame: None,
         selected: -1,
         hover: -1,
+        drop_hover: -1,
         press: None,
         drag: None,
         moving: None,
@@ -149,6 +149,35 @@ pub fn init(app: &AppHandle) {
     if let Some(config) = pending {
         apply(app, config);
     }
+    preload_font(app);
+    start_metrics(app);
+}
+
+/// 字体文件很大，提前在后台解析好，第一次显示文件名不再停顿。
+fn preload_font(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Some(font) = text::parse() {
+            let _ = app.run_on_main_thread(move || text::install(font));
+        }
+    });
+}
+
+/// 指标采集会查询 PDH 与 WMI，放到后台线程按秒采样，结果投递回窗口线程。
+fn start_metrics(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        let values = metrics_of();
+        let failed = app
+            .run_on_main_thread(move || {
+                with_state(|state| tick_metrics(state, values));
+            })
+            .is_err();
+        if failed {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    });
 }
 
 /// 前端推送最新配置，窗口尺寸随可见元素变化，位图与几何同帧提交。
@@ -179,6 +208,9 @@ fn apply_inner(state: &mut State, config: HudConfig) {
         }
         state.visible = config.visible;
         state.config = Some(config);
+        if !state.config.as_ref().map(|config| config.hover_effect).unwrap_or(false) {
+            state.drop_hover = -1;
+        }
         if icons_changed {
             refresh_icons(state);
         }
@@ -211,9 +243,12 @@ fn refresh_icons(state: &mut State) {
     let scale = config.scale * state.dpi;
     let size = (layout::SLOT * scale).round().max(1.0) as u32;
     let show_target = config.show_target_icon;
+    let paths: Vec<Option<String>> =
+        (0..11).map(|index| config.slot(index as i32).and_then(|slot| slot.path.clone())).collect();
+    let app = state.app.clone();
+    let mut changed = false;
 
-    for index in 0..11 {
-        let path = config.slot(index as i32).and_then(|slot| slot.path.clone());
+    for (index, path) in paths.into_iter().enumerate() {
         let key = match &path {
             Some(path) => format!("{size}|{show_target}|{}|{path}", file_stamp(path)),
             None => String::new(),
@@ -221,24 +256,63 @@ fn refresh_icons(state: &mut State) {
         if !key.is_empty() && state.icon_keys[index] == key {
             continue;
         }
-        state.icon_keys[index] = key;
+        state.icon_keys[index] = key.clone();
         state.missing[index] = false;
 
         let Some(path) = path else {
             state.icons[index] = None;
+            changed = true;
             continue;
         };
 
-        match crate::icons::slot_icon_bytes(&path, show_target)
-            .and_then(|bytes| sprite::load_scaled(&bytes, size, size, true))
-        {
-            Some(sprite) => state.icons[index] = Some(SlotIcon { sprite }),
+        // 命中缓存直接装，未命中交给后台线程，旧图标先留着避免闪空
+        match crate::icons::cached(&path, show_target, size) {
+            Some(entry) => changed |= install_icon_value(state, &key, entry, size),
+            None => {
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    let decoded = crate::icons::decoded(&path, show_target, size);
+                    let _ = app.run_on_main_thread(move || install_icon(&key, decoded, size));
+                });
+            }
+        }
+    }
+
+    if changed {
+        render(state);
+    }
+}
+
+/// 后台解码完成：按 key 找到所有对应格子装上，已经换了配置的格子直接忽略。
+pub fn install_icon(key: &str, entry: Option<Arc<crate::icons::Decoded>>, size: u32) {
+    with_state(|state| {
+        if install_icon_value(state, key, entry, size) {
+            render(state);
+        }
+    });
+}
+
+fn install_icon_value(state: &mut State, key: &str, entry: Option<Arc<crate::icons::Decoded>>, size: u32) -> bool {
+    let mut changed = false;
+    for index in 0..state.icon_keys.len() {
+        if state.icon_keys[index] != key {
+            continue;
+        }
+        changed = true;
+        match &entry {
+            Some(decoded) => {
+                state.icons[index] = Some(SlotIcon {
+                    sprite: Rc::new(sprite::from_rgba(decoded.size, decoded.size, &decoded.pixels)),
+                });
+                state.missing[index] = false;
+            }
             None => {
                 state.missing[index] = true;
                 state.icons[index] = barrier_icon(size);
             }
         }
     }
+    changed
 }
 
 fn file_stamp(path: &str) -> u128 {
@@ -298,6 +372,7 @@ pub fn render(state: &mut State) {
         &model,
         &state.icons,
         state.hover,
+        state.drop_hover,
         state.selected,
         state.drag.as_ref(),
         state.heart_flash,
@@ -429,6 +504,7 @@ fn build_overlay<'a>(
     config: &HudConfig,
     icons: &'a [Option<SlotIcon>],
     hover: i32,
+    drop_hover: i32,
     selected: i32,
     drag: Option<&Drag>,
     heart_flash: Option<f32>,
@@ -437,6 +513,7 @@ fn build_overlay<'a>(
     let icon = drag.and_then(|drag| icons.get(drag.source as usize)?.as_ref());
     Overlay {
         hover_slot: hover,
+        drop_hover_slot: drop_hover,
         selected_slot: selected,
         dimmed_slot: config.cut_slot,
         drag: icon,
@@ -537,9 +614,24 @@ pub fn show_label(state: &mut State, slot: i32) {
     state.label = Some(Label { text: name, color, shown_at: w::ticks() });
 }
 
+/// 外部文件拖入悬停：只影响选中框，不改变鼠标悬停状态。
+pub fn set_drop_hover(zone: Option<&str>) {
+    with_state(|state| {
+        let enabled = state.config.as_ref().map(|config| config.hover_effect).unwrap_or(false);
+        let next = match zone {
+            Some(id) if enabled => layout::slot_index(id).unwrap_or(-1),
+            _ => -1,
+        };
+        if state.drop_hover != next {
+            state.drop_hover = next;
+            render(state);
+        }
+    });
+}
+
 /// 指标变化时更新数值，并触发与原版一致的闪烁动画。
-pub fn tick_metrics(state: &mut State) {
-    state.metrics = metrics_of();
+pub fn tick_metrics(state: &mut State, metrics: Metrics) {
+    state.metrics = metrics;
     let Some(config) = state.config.clone() else { return };
     let health = config.elements.health.resolved(&state.metrics);
     let air = config.elements.air.resolved(&state.metrics);
@@ -648,9 +740,7 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
         }
         w::WM_NCHITTEST => return w::HTCLIENT,
         w::WM_TIMER => {
-            if wparam == TIMER_METRICS {
-                with_state(tick_metrics);
-            } else if wparam == TIMER_ANIM {
+            if wparam == TIMER_ANIM {
                 with_state(tick_anim);
             }
             return 0;

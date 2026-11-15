@@ -140,6 +140,21 @@ if (tauriWindow) {
   await listen("tooltip:hide", () => {
     void handleHide();
   });
+  void warmUp();
+}
+
+/** 预热窗口合成：第一次悬停才显示时不再卡一下 */
+async function warmUp() {
+  const win = getCurrentWindow();
+  try {
+    await win.setSize(new LogicalSize(8, 8));
+    await win.setPosition(new LogicalPosition(-400, -400));
+    await win.show();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await win.hide();
+  } catch {
+    // 预热失败不影响正常显示
+  }
 }
 
 document.body.dataset.ready = "true";

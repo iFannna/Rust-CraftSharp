@@ -52,6 +52,9 @@ let icons = new Map<string, SlotIcon | null>();
 let iconGeneration = 0;
 // 已交给系统拖放的格子，拖放结束前不参与图标刷新，避免旧图标闪回
 let dragOutSlot: string | null = null;
+// 外部文件拖入命中的格子，系统拖放期间没有指针事件
+let dropHoverSlot: string | null = null;
+let dropHoverTimer = 0;
 let dimmedSlot: string | null = null;
 let interaction: InventoryInteraction | null = null;
 let appliedSize: { width: number; height: number } | null = null;
@@ -132,14 +135,16 @@ async function showTooltip(slotId: string, box: SlotBox) {
 
 function render() {
   const state = interaction?.state;
+  const hoverSlot = dropHoverSlot ?? state?.hoverSlot ?? null;
   drawInventory(canvas, {
     layout,
     background,
     icons,
-    hoverSlot: state?.hoverSlot ?? null,
-    hoverPhase: interaction?.hoverPhase() ?? "white",
+    hoverSlot,
+    hoverPhase: dropHoverSlot ? "white" : interaction?.hoverPhase() ?? "white",
     drag: state?.drag?.icon ? { icon: state.drag.icon, x: state.drag.x, y: state.drag.y } : null,
-    dragSourceSlot: state?.drag?.source ?? null,
+    // 中键分发时源格保留图标，浮动图标只是一份副本
+    dragSourceSlot: state?.distributing ? null : state?.drag?.source ?? null,
     dimmedSlot
   });
   // 拖动时恢复整窗区域，避免拖拽图标被窗口形状裁掉
@@ -166,8 +171,14 @@ async function refreshIcons() {  const generation = ++iconGeneration;
   const entries = await Promise.all(
     layout.slots.map(async (slot) => {
       const item = getSlotFor(slot.id, slotScope.style, slotScope.shared);
+      // 与拖拽图像同一尺寸，拖出时直接命中图标缓存
+      const pixel = window.devicePixelRatio || 1;
       const icon = item && slot.id !== dragOutSlot
-        ? await loadSlotIcon({ path: item.path, showTargetIcon: false })
+        ? await loadSlotIcon({
+            path: item.path,
+            showTargetIcon: false,
+            size: Math.min(128, Math.max(32, Math.round(slot.width * pixel)))
+          })
         : null;
       return [slot.id, icon] as const;
     })
@@ -218,7 +229,7 @@ function buildHost(): InventoryHost {
       icons.delete(slotId);
       render();
 
-      const size = Math.round(16 * scale * (window.devicePixelRatio || 1));
+      const size = Math.min(128, Math.max(32, Math.round(16 * scale * (window.devicePixelRatio || 1))));
       void invoke<boolean>("begin_file_drag", { path: item.path, size })
         .then((dropped) => {
           dragOutSlot = null;
@@ -373,6 +384,27 @@ void listen<{ window: string; zone: string; paths: string[] }>("file-dropped", (
   const { window: source, zone, paths } = event.payload;
   if (source !== "inventory" || !zone || paths.length === 0) return;
   setSlotFor(zone, { path: paths[0] }, style.file, config.sharedData);
+});
+
+void listen<string | null>("drag-hover", ({ payload }) => {
+  const zone = payload && config.hoverEffect ? payload : null;
+  window.clearTimeout(dropHoverTimer);
+
+  if (zone) {
+    if (dropHoverSlot !== zone) {
+      dropHoverSlot = zone;
+      hideTooltip();
+      render();
+    }
+    return;
+  }
+
+  // 光标在 WebView 子窗口之间切换会先离开再进入，稍等一下再清，避免闪一帧
+  dropHoverTimer = window.setTimeout(() => {
+    if (!dropHoverSlot) return;
+    dropHoverSlot = null;
+    render();
+  }, 60);
 });
 
 subscribeInventoryConfig(() => {

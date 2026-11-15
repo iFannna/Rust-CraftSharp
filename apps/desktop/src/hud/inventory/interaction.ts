@@ -43,6 +43,8 @@ export interface InventoryInteractionState {
   hoverSlot: string | null;
   hoverStartedAt: number;
   drag: InventoryDragState | null;
+  /** 中键分发：源格保留，浮动图标只是一份副本 */
+  distributing: boolean;
 }
 
 interface PressState {
@@ -61,7 +63,7 @@ interface DistributeState {
 }
 
 export class InventoryInteraction {
-  readonly state: InventoryInteractionState = { hoverSlot: null, hoverStartedAt: 0, drag: null };
+  readonly state: InventoryInteractionState = { hoverSlot: null, hoverStartedAt: 0, drag: null, distributing: false };
 
   private press: PressState | null = null;
   private hoverTimer = 0;
@@ -95,6 +97,13 @@ export class InventoryInteraction {
     const onKeyDown = (event: KeyboardEvent) => this.handleKeyDown(event);
     const onKeyUp = (event: KeyboardEvent) => this.handleKeyUp(event);
     const onContextMenu = (event: MouseEvent) => this.handleContextMenu(event);
+    // 拦掉中键的自动滚动与 auxclick，否则分发手势会被浏览器默认行为吃掉
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button === 1) event.preventDefault();
+    };
+    const onAuxClick = (event: MouseEvent) => {
+      if (event.button === 1) event.preventDefault();
+    };
 
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
@@ -102,6 +111,8 @@ export class InventoryInteraction {
     canvas.addEventListener("pointercancel", onPointerCancel);
     canvas.addEventListener("pointerleave", onPointerLeave);
     canvas.addEventListener("contextmenu", onContextMenu);
+    canvas.addEventListener("mousedown", onMouseDown);
+    canvas.addEventListener("auxclick", onAuxClick);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
@@ -112,6 +123,8 @@ export class InventoryInteraction {
       () => canvas.removeEventListener("pointercancel", onPointerCancel),
       () => canvas.removeEventListener("pointerleave", onPointerLeave),
       () => canvas.removeEventListener("contextmenu", onContextMenu),
+      () => canvas.removeEventListener("mousedown", onMouseDown),
+      () => canvas.removeEventListener("auxclick", onAuxClick),
       () => window.removeEventListener("keydown", onKeyDown),
       () => window.removeEventListener("keyup", onKeyUp)
     ];
@@ -135,11 +148,18 @@ export class InventoryInteraction {
 
   private handlePointerDown(event: PointerEvent) {
     if (event.button === 1) {
+      event.preventDefault();
       this.beginDistribute(event);
       return;
     }
 
     if (event.button !== 0) return;
+
+    // 分发期间左键只用于扫格与结束，不再开始新的点击或拖拽
+    if (this.distribute) {
+      event.preventDefault();
+      return;
+    }
 
     const slotId = this.hitTest(event);
 
@@ -214,10 +234,12 @@ export class InventoryInteraction {
 
   private handlePointerUp(event: PointerEvent) {
     if (this.distribute) {
-      this.distribute = null;
-      this.state.drag = null;
-      this.host.requestRender();
-      this.updateHover(this.hitTest(event));
+      // 原版只在左键抬起时结束并补一次落点复制，中键抬起不结束
+      if (event.button === 0) {
+        this.placeDistribute(event);
+        this.endDistribute();
+        this.updateHover(this.hitTest(event));
+      }
       return;
     }
 
@@ -336,13 +358,23 @@ export class InventoryInteraction {
   }
 
   private beginDistribute(event: PointerEvent) {
+    // 交换拖拽进行中不接管中键，避免两个手势叠在一起
+    if (this.state.drag || this.distribute) return;
+
     const slotId = this.hitTest(event);
     if (!slotId) return;
 
     const item = this.host.getItem(slotId);
     if (!item) return;
 
+    // 分发优先，先把可能存在的按下状态清掉
+    if (this.press) {
+      window.clearTimeout(this.press.timer);
+      this.press = null;
+    }
+
     this.distribute = { source: slotId, path: item.path, last: null };
+    this.state.distributing = true;
     this.state.drag = { source: slotId, target: slotId, x: 0, y: 0, icon: this.host.getIcon(slotId) };
     this.hideTooltip();
     this.clearHover();
@@ -350,6 +382,25 @@ export class InventoryInteraction {
     const point = this.pointOf(event);
     this.updateDragIcon(point.x, point.y);
     this.canvas.setPointerCapture(event.pointerId);
+  }
+
+  /** 左键抬起时若停在空格子上，再复制一份；和按住扫过的路径共用去重规则 */
+  private placeDistribute(event: PointerEvent) {
+    const distribute = this.distribute;
+    if (!distribute) return;
+
+    const slotId = this.hitTest(event);
+    if (!slotId || slotId === distribute.source) return;
+    if (this.host.getItem(slotId)) return;
+
+    this.host.distributeTo(slotId, distribute.path);
+  }
+
+  private endDistribute() {
+    this.distribute = null;
+    this.state.drag = null;
+    this.state.distributing = false;
+    this.host.requestRender();
   }
 
   private sweepDistribute(event: PointerEvent) {
@@ -379,6 +430,7 @@ export class InventoryInteraction {
 
     if (this.state.drag || this.distribute || this.shiftSweeping) {
       this.state.drag = null;
+      this.state.distributing = false;
       this.distribute = null;
       this.shiftSweeping = false;
       this.host.requestRender();
@@ -530,6 +582,13 @@ export class InventoryInteraction {
   }
 
   private handleContextMenu(event: MouseEvent) {
+    // 分发期间右键被吞掉，和原版一致
+    if (this.distribute) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const slotId = this.hitTest(event);
     if (!slotId) return;
 

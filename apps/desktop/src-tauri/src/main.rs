@@ -29,10 +29,14 @@ fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) -> Vec<String> 
     }
 }
 
-/// 获取格子图标，返回 Data URL；路径无效返回 None。
+/// 获取格子图标，返回目标尺寸的 Data URL；解码与缩放都在后台线程。
 #[tauri::command]
-fn slot_icon(path: String, show_target_icon: bool) -> Option<String> {
-    icons::slot_icon(&path, show_target_icon)
+async fn slot_icon(path: String, show_target_icon: bool, size: Option<u32>) -> Option<String> {
+    let size = size.unwrap_or(32);
+    tauri::async_runtime::spawn_blocking(move || icons::data_url(&path, show_target_icon, size))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
@@ -72,8 +76,10 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
 
 /// BOSS 血条数据映射：电池、内存、CPU、GPU 占用，取值 0-1。
 #[tauri::command]
-fn system_metrics() -> metrics::SystemMetrics {
-    metrics::collect()
+async fn system_metrics() -> metrics::SystemMetrics {
+    tauri::async_runtime::spawn_blocking(metrics::collect)
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -119,6 +125,20 @@ fn hud_apply(app: tauri::AppHandle, config: hud::HudConfig) {
 #[tauri::command]
 fn hud_visible(visible: bool) {
     hud::set_visible(visible);
+}
+
+/// 拖入悬停：快捷栏在原生层直接画，其余窗口交给前端画蒙版。
+fn install_drag_hover(app: &tauri::AppHandle) {
+    use tauri::Emitter;
+
+    let handle = app.clone();
+    dragdrop::set_hover_handler(move |label, zone| {
+        if label == "hud" {
+            hud::set_drop_hover(zone);
+        } else {
+            let _ = handle.emit_to(label, "drag-hover", zone.map(str::to_string));
+        }
+    });
 }
 
 /// 前端下发窗口的拖放接受区域，坐标为客户区物理像素。
@@ -194,6 +214,7 @@ fn main() {
             create_tray(app.handle())?;
             singleinstance::watch(app.handle().clone());
             hud::init(app.handle());
+            install_drag_hover(app.handle());
             // MC 窗口与快捷栏一样直接显隐，不做系统过渡动画
             for window in app.webview_windows().values() {
                 if let Ok(hwnd) = window.hwnd() {

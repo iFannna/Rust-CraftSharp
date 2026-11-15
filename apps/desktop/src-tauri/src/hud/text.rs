@@ -51,6 +51,16 @@ fn with_font<T>(f: impl FnOnce(&Font) -> T) -> Option<T> {
     })
 }
 
+/// 在后台线程解析字体，避免第一次显示文件名时卡一下。
+pub fn parse() -> Option<Font> {
+    Font::from_bytes(FONT_BYTES, FontSettings::default()).ok()
+}
+
+/// 把后台解析好的字体交给窗口线程。
+pub fn install(font: Font) {
+    FONT.with(|cell| *cell.borrow_mut() = Some(font));
+}
+
 /// 在内容区底部上方 50 倍缩放处居中绘制文件名，整段文字带同色阴影。
 pub fn draw_label(frame: &mut Frame, layout: &Layout, text: &str, color: u32, alpha: u8) {
     let px = 8.0 * layout.scale;

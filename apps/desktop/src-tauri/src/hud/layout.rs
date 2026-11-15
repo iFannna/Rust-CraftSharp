@@ -29,6 +29,15 @@ pub fn slot_id(index: i32) -> String {
     }
 }
 
+/// 格子 id 还原成全局索引，非格子 id 返回 None。
+pub fn slot_index(id: &str) -> Option<i32> {
+    match id {
+        "hotbar_left_offhand" => Some(0),
+        "hotbar_right_offhand" => Some(1),
+        _ => id.strip_prefix("hotbar_")?.parse::<i32>().ok().map(|value| value + 2),
+    }
+}
+
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Rect {
     pub left: f32,

@@ -91,6 +91,28 @@ impl Zone {
     }
 }
 
+type HoverHandler = Arc<dyn Fn(&str, Option<&str>) + Send + Sync>;
+
+fn hover_handler() -> &'static Mutex<Option<HoverHandler>> {
+    static HANDLER: OnceLock<Mutex<Option<HoverHandler>>> = OnceLock::new();
+    HANDLER.get_or_init(|| Mutex::new(None))
+}
+
+/// 拖入过程中命中的区域变化时回调，None 表示离开当前窗口。
+pub fn set_hover_handler(handler: impl Fn(&str, Option<&str>) + Send + Sync + 'static) {
+    *hover_handler().lock().unwrap_or_else(|error| error.into_inner()) = Some(Arc::new(handler));
+}
+
+fn report_hover(label: &str, zone: Option<&str>) {
+    let handler = hover_handler()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone();
+    if let Some(handler) = handler {
+        handler(label, zone);
+    }
+}
+
 /// 一个顶层窗口可能注册多个拖放目标，接受区域按窗口标签共享。
 fn zones() -> &'static Mutex<HashMap<String, Arc<Mutex<Vec<Zone>>>>> {
     static ZONES: OnceLock<Mutex<HashMap<String, Arc<Mutex<Vec<Zone>>>>>> = OnceLock::new();
@@ -121,6 +143,7 @@ struct DropTarget {
     window: isize,
     zones: Arc<Mutex<Vec<Zone>>>,
     entered: AtomicBool,
+    hover: Mutex<Option<String>>,
     helper: Mutex<Option<isize>>,
 }
 
@@ -317,6 +340,7 @@ fn register(context: &InstallContext, hwnd: isize) {
         window: context.window,
         zones: context.zones.clone(),
         entered: AtomicBool::new(false),
+        hover: Mutex::new(None),
         helper: Mutex::new(if helper.is_null() { None } else { Some(helper as isize) }),
     })) as *mut c_void;
 
@@ -404,6 +428,17 @@ fn hit_zone(target: &DropTarget, point: &PointL) -> Option<String> {
     list.iter().find(|zone| zone.hit(x, y)).map(|zone| zone.id.clone())
 }
 
+/// 记录当前悬停区域，只在变化时通知，避免每次 DragOver 都重绘。
+fn update_hover(target: &DropTarget, zone: Option<&str>) {
+    let mut hover = target.hover.lock().unwrap_or_else(|error| error.into_inner());
+    if hover.as_deref() == zone {
+        return;
+    }
+    *hover = zone.map(str::to_string);
+    drop(hover);
+    report_hover(&target.label, zone);
+}
+
 unsafe extern "system" fn target_drag_enter(this: *mut c_void, data: *mut c_void, _keys: u32, point: PointL, effect: *mut u32) -> i32 {
     let target = target_of(this);
     let mut client = point;
@@ -413,6 +448,7 @@ unsafe extern "system" fn target_drag_enter(this: *mut c_void, data: *mut c_void
     target.entered.store(has_files, Ordering::SeqCst);
 
     let zone = if has_files { hit_zone(target, &client) } else { None };
+    update_hover(target, zone.as_deref());
     let drop_effect = if zone.is_some() { DROPEFFECT_COPY } else { DROPEFFECT_NONE };
     if !effect.is_null() {
         *effect = drop_effect;
@@ -431,6 +467,7 @@ unsafe extern "system" fn target_drag_over(this: *mut c_void, _keys: u32, point:
     ScreenToClient(target.window, &mut client);
 
     let zone = if target.entered.load(Ordering::SeqCst) { hit_zone(target, &client) } else { None };
+    update_hover(target, zone.as_deref());
     let drop_effect = if zone.is_some() { DROPEFFECT_COPY } else { DROPEFFECT_NONE };
     if !effect.is_null() {
         *effect = drop_effect;
@@ -446,6 +483,7 @@ unsafe extern "system" fn target_drag_over(this: *mut c_void, _keys: u32, point:
 unsafe extern "system" fn target_drag_leave(this: *mut c_void) -> i32 {
     let target = target_of(this);
     target.entered.store(false, Ordering::SeqCst);
+    update_hover(target, None);
 
     if let Some(helper) = helper_of(target) {
         let vtbl = *(helper as *const *const DropTargetHelperVtbl);
@@ -457,6 +495,7 @@ unsafe extern "system" fn target_drag_leave(this: *mut c_void) -> i32 {
 unsafe extern "system" fn target_drop(this: *mut c_void, data: *mut c_void, _keys: u32, point: PointL, effect: *mut u32) -> i32 {
     let target = target_of(this);
     target.entered.store(false, Ordering::SeqCst);
+    update_hover(target, None);
 
     let mut client = point;
     ScreenToClient(target.window, &mut client);
@@ -661,13 +700,11 @@ unsafe fn create_source_helper() -> Option<isize> {
 
 /// 用格子图标生成拖拽图像，返回位图与尺寸。
 unsafe fn make_drag_image(path: &str, size: u32) -> Option<(isize, u32, u32)> {
-    let bytes = crate::icons::slot_icon_bytes(path, false)?;
-    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
-    let side = size.clamp(1, 256);
-    let resized = image::imageops::resize(&image, side, side, image::imageops::FilterType::Lanczos3);
+    let side = size.clamp(1, 128);
+    let decoded = crate::icons::decoded(path, false, side)?;
 
     let mut pixels = Vec::with_capacity((side * side) as usize);
-    for pixel in resized.as_raw().chunks_exact(4) {
+    for pixel in decoded.pixels.chunks_exact(4) {
         let alpha = pixel[3] as u32;
         let red = pixel[0] as u32 * alpha / 255;
         let green = pixel[1] as u32 * alpha / 255;

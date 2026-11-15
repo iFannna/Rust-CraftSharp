@@ -5,6 +5,8 @@ import type { SlotIcon } from "@/hud/slots/types";
 export interface SlotIconSource {
   path: string;
   showTargetIcon?: boolean;
+  /** 目标像素尺寸，缺省 32；解码在后台完成，传大了也不会卡 UI */
+  size?: number;
 }
 
 /** 是否运行在 Tauri 宿主内，浏览器预览时没有原生图标提取 */
@@ -31,22 +33,24 @@ export function isPathMissing(path: string): boolean {
  * 文件图标按原 WPF 规则走 HighQuality，文件丢失或提取失败回退占位图并按 NearestNeighbor 绘制。
  */
 export function loadSlotIcon(source: SlotIconSource): Promise<SlotIcon | null> {
-  const key = `${source.showTargetIcon ? 1 : 0}\u0001${source.path}`;
+  const size = Math.min(128, Math.max(1, Math.round(source.size ?? 32)));
+  const key = `${source.showTargetIcon ? 1 : 0}\u0001${size}\u0001${source.path}`;
   let pending = iconCache.get(key);
   if (!pending) {
-    pending = requestSlotIcon(source);
+    pending = requestSlotIcon(source, size);
     iconCache.set(key, pending);
   }
   return pending;
 }
 
-async function requestSlotIcon(source: SlotIconSource): Promise<SlotIcon | null> {
+async function requestSlotIcon(source: SlotIconSource, size: number): Promise<SlotIcon | null> {
   if (!hasIconBackend()) return null;
 
   try {
     const dataUrl = await invoke<string | null>("slot_icon", {
       path: source.path,
-      showTargetIcon: source.showTargetIcon ?? false
+      showTargetIcon: source.showTargetIcon ?? false,
+      size
     });
 
     if (!dataUrl) {

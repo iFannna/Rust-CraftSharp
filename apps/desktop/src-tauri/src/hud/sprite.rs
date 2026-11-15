@@ -45,20 +45,13 @@ pub fn load(name: &str) -> Option<Rc<Sprite>> {
     })
 }
 
-/// 文件图标按目标尺寸预缩放，平滑与像素两种采样各自缓存。
-pub fn load_scaled(bytes: &[u8], width: u32, height: u32, smooth: bool) -> Option<Rc<Sprite>> {
-    let image = image::load_from_memory(bytes).ok()?.to_rgba8();
-    let filter = if smooth {
-        image::imageops::FilterType::Lanczos3
-    } else {
-        image::imageops::FilterType::Nearest
-    };
-    let resized = image::imageops::resize(&image, width.max(1), height.max(1), filter);
-    Some(Rc::new(Sprite {
-        width: resized.width(),
-        height: resized.height(),
-        pixels: premultiply(resized.as_raw()),
-    }))
+/// 用后台线程解码好的 RGBA 组装贴图，只做像素预乘。
+pub fn from_rgba(width: u32, height: u32, rgba: &[u8]) -> Sprite {
+    Sprite {
+        width: width.max(1),
+        height: height.max(1),
+        pixels: premultiply(rgba),
+    }
 }
 
 impl Sprite {

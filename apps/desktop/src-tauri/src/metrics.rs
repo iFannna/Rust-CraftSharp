@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Default, Serialize)]
 pub struct SystemMetrics {
     pub battery: f64,
     pub memory: f64,

@@ -12,6 +12,8 @@ pub struct SlotIcon {
 
 pub struct Overlay<'a> {
     pub hover_slot: i32,
+    /// 外部文件拖入时命中的格子
+    pub drop_hover_slot: i32,
     pub selected_slot: i32,
     pub dimmed_slot: i32,
     pub drag: Option<&'a SlotIcon>,
@@ -27,6 +29,7 @@ impl Default for Overlay<'_> {
     fn default() -> Self {
         Overlay {
             hover_slot: -1,
+            drop_hover_slot: -1,
             selected_slot: -1,
             dimmed_slot: -1,
             drag: None,
@@ -212,6 +215,9 @@ pub fn draw(frame: &mut Frame, layout: &Layout, style: &FrameStyle, config: &Hud
     // 拖动时选中框跟随目标格，和原版拖动 hover 一致
     let selection = if overlay.drag.is_some() {
         overlay.drag_target
+    } else if overlay.drop_hover_slot >= 2 {
+        // 外部文件拖入时优先显示落点，不受当前选中影响
+        overlay.drop_hover_slot
     } else if overlay.selected_slot >= 2 {
         overlay.selected_slot
     } else {

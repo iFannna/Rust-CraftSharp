@@ -12,4 +12,4 @@ mod win32;
 mod window;
 
 pub use config::HudConfig;
-pub use window::{apply, init, set_visible};
+pub use window::{apply, init, set_drop_hover, set_visible};
