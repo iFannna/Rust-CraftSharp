@@ -134,7 +134,6 @@ extern "system" {
     pub fn TrackMouseEvent(data: *mut TrackMouseEventData) -> i32;
     pub fn LoadCursorW(instance: isize, name: *const u16) -> isize;
     pub fn GetShellWindow() -> Hwnd;
-    pub fn FindWindowExW(parent: Hwnd, after: Hwnd, class: *const u16, title: *const u16) -> Hwnd;
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
     pub fn SetWindowLongPtrW(hwnd: Hwnd, index: i32, value: isize) -> isize;
@@ -425,29 +424,18 @@ pub fn park_desktop(hwnd: Hwnd) {
     }
 }
 
-/// 把窗口所有者设为桌面图标视图，窗口便随桌面一起显示：
+/// 把窗口所有者设为桌面 shell 窗口 Progman，窗口便随桌面一起显示：
 /// 显示桌面（Win+D / 任务栏按钮）时不会被最小化或盖住，无需再切换层级，也就不会闪。
+/// 所有者必须用顶层 Progman，不能用其子窗口 SHELLDLL_DefView：子窗口当所有者会让
+/// Explorer 的显示桌面最小化逻辑在全屏窗口前台时卡死，挡掉全屏游戏的 Win+D。
 pub fn set_desktop_owner(hwnd: Hwnd) {
     let desktop = desktop_window();
     if desktop == 0 {
         return;
     }
-    let class: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
-    // SAFETY: 只查找桌面图标视图并设置窗口所有者
+    // SAFETY: 只把所有者设为顶层 shell 窗口
     unsafe {
-        let mut owner = FindWindowExW(desktop, 0, class.as_ptr(), ptr::null());
-        if owner == 0 {
-            // 部分 Windows 11 版本图标视图挂在 WorkerW 下
-            let worker_class: Vec<u16> = "WorkerW\0".encode_utf16().collect();
-            let mut worker = FindWindowExW(0, 0, worker_class.as_ptr(), ptr::null());
-            while worker != 0 && owner == 0 {
-                owner = FindWindowExW(worker, 0, class.as_ptr(), ptr::null());
-                worker = FindWindowExW(0, worker, worker_class.as_ptr(), ptr::null());
-            }
-        }
-        if owner != 0 {
-            SetWindowLongPtrW(hwnd, GWL_HWNDPARENT, owner);
-        }
+        SetWindowLongPtrW(hwnd, GWL_HWNDPARENT, desktop);
     }
 }
 
