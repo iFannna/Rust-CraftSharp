@@ -100,6 +100,17 @@ pub fn apply(bars: Vec<BossBarCfg>) {
     });
 }
 
+/// 前台回到应用时重新置底。
+pub fn repark_desktop() {
+    WINDOW.with(|cell| {
+        if let Some(window) = cell.borrow_mut().as_mut() {
+            if window.shown {
+                w::park_desktop(window.hwnd);
+            }
+        }
+    });
+}
+
 pub fn set_metrics(metrics: Metrics) {
     // 指标每秒都到，没有窗口或没有血条时不重绘
     WINDOW.with(|cell| {

@@ -105,6 +105,18 @@ fn raise_layer(window: &CrosshairWindow) {
     }
 }
 
+/// 前台回到应用时重新置底；开启窗口置顶时保持置顶。
+pub fn repark_desktop() {
+    WINDOW.with(|cell| {
+        if let Some(window) = cell.borrow_mut().as_mut() {
+            let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
+            if window.shown && !topmost {
+                w::park_desktop(window.hwnd);
+            }
+        }
+    });
+}
+
 pub fn set_metrics(metrics: Metrics) {
     // 指标每秒都到，没有窗口或窗口隐藏时不重绘
     WINDOW.with(|cell| {

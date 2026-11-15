@@ -136,6 +136,8 @@ unsafe extern "system" fn foreground_event(
 ) {
     // 前台切到别的窗口，快捷栏不再持有键盘焦点
     HOTBAR_KEY_ACTIVE.store(false, Ordering::Relaxed);
+    // 显示桌面恢复后窗口可能停在应用之上，前台回到外部窗口时重新置底归位
+    window::repark_desktop_windows();
 }
 
 pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {

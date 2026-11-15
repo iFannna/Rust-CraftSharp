@@ -524,6 +524,18 @@ pub fn hidden_by_inventory() -> bool {
     with_state(|state| state.hidden_by_inventory).unwrap_or(false)
 }
 
+/// 前台回到外部应用时把桌面层窗口重新置底，
+/// 修正显示桌面恢复后窗口停在应用之上的 z 序。一次性归位，不切换置顶，不会闪。
+pub fn repark_desktop_windows() {
+    with_state(|state| {
+        if state.shown {
+            w::park_desktop(state.hwnd);
+        }
+    });
+    crate::hud::bossbar::repark_desktop();
+    crate::hud::crosshair::repark_desktop();
+}
+
 fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32) -> (i32, i32) {
     let dpi = state.dpi;
     if config.remember_position {
