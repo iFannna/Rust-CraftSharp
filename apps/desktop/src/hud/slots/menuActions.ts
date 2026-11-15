@@ -75,10 +75,10 @@ export async function runSlotMenuAction(
       if (item) await copyItemPath(item);
       break;
     case "cut":
-      if (item) await cutSlot(slotId, item);
+      if (item) await cutSlot(slotId, item, scope);
       break;
     case "copy":
-      if (item) await copySlot(slotId, item);
+      if (item) await copySlot(slotId, item, scope);
       break;
     case "paste":
       await pasteInto(slotId, scope);

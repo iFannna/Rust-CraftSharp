@@ -294,6 +294,44 @@ export function swapSlotsFor(fromId: string, toId: string, style: string, shared
   send("slots_swap", { from: fromId, to: toId, style, shared });
 }
 
+/** 剪切粘贴搬移：源格清空与目标格写入一次完成，Rust 侧一次提交，避免旧快照回显闪出源格 */
+export function moveSlotFor(
+  fromId: string,
+  toId: string,
+  item: SlotItem,
+  from: { style: string; shared: boolean },
+  to: { style: string; shared: boolean }
+) {
+  const sameScope = from.shared === to.shared && (from.shared || from.style === to.style);
+  if (sameScope) {
+    updateMap(to.style, to.shared, (map) => {
+      const sourceItem = map[fromId] ?? item;
+      const next = { ...map };
+      delete next[fromId];
+      next[toId] = sourceItem;
+      return next;
+    });
+  } else {
+    const sourceItem = slotMapFor(from.style, from.shared)[fromId] ?? item;
+    updateMap(from.style, from.shared, (map) => {
+      if (!map[fromId]) return null;
+      const next = { ...map };
+      delete next[fromId];
+      return next;
+    });
+    updateMap(to.style, to.shared, (map) => ({ ...map, [toId]: sourceItem }));
+  }
+  send("slots_move", {
+    from: fromId,
+    to: toId,
+    item,
+    fromStyle: from.style,
+    fromShared: from.shared,
+    style: to.style,
+    shared: to.shared
+  });
+}
+
 function swapInMap(map: SlotMap, fromId: string, toId: string): SlotMap {
   const from = map[fromId];
   const to = map[toId];

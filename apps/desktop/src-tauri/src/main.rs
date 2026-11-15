@@ -268,6 +268,25 @@ fn slots_swap(from: String, to: String, style: String, shared: bool) {
 }
 
 #[tauri::command]
+fn slots_move(
+    from: String,
+    to: String,
+    item: slots::SlotItem,
+    from_style: String,
+    from_shared: bool,
+    style: String,
+    shared: bool,
+) {
+    slots::move_between(
+        &slots::Scope::new(from_style, from_shared),
+        &from,
+        &slots::Scope::new(style, shared),
+        &to,
+        item,
+    );
+}
+
+#[tauri::command]
 fn slots_clear_by_path(path: String, style: String, shared: bool) {
     slots::clear_by_path(&slots::Scope::new(style, shared), &path);
 }
@@ -386,6 +405,7 @@ fn main() {
             slots_set,
             slots_clear,
             slots_swap,
+            slots_move,
             slots_clear_by_path,
             slots_replace_path,
             set_autostart

@@ -5,6 +5,7 @@ import {
   clearSlotFor,
   clearSlotsByPathFor,
   displayNameOf,
+  moveSlotFor,
   replaceSlotsPathFor,
   setSlotFor,
   type SlotItem
@@ -17,6 +18,11 @@ export interface SlotScope {
 }
 
 export const SHARED_SCOPE: SlotScope = { style: "inventory.png", shared: true };
+
+/** 两个作用域是否读同一份格子数据：共享模式共用一张表，独立模式按样式隔离 */
+export function sameSlotScope(a: SlotScope, b: SlotScope): boolean {
+  return a.shared === b.shared && (a.shared || a.style === b.style);
+}
 
 const inTauri = typeof window !== "undefined"
   && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
@@ -95,6 +101,7 @@ interface ClipboardState {
   slotId: string;
   item: SlotItem;
   cut: boolean;
+  scope: SlotScope;
 }
 
 let clipboard: ClipboardState | null = null;
@@ -118,25 +125,28 @@ function setClipboard(next: ClipboardState | null) {
   notifyClipboard();
 }
 
-export async function copySlot(slotId: string, item: SlotItem): Promise<void> {
-  setClipboard({ slotId, item, cut: false });
+export async function copySlot(slotId: string, item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<void> {
+  setClipboard({ slotId, item, cut: false, scope });
   await invoke("copy_to_clipboard", { text: item.path }).catch(() => undefined);
 }
 
-export async function cutSlot(slotId: string, item: SlotItem): Promise<void> {
-  setClipboard({ slotId, item, cut: true });
+export async function cutSlot(slotId: string, item: SlotItem, scope: SlotScope = SHARED_SCOPE): Promise<void> {
+  setClipboard({ slotId, item, cut: true, scope });
   await invoke("copy_to_clipboard", { text: item.path }).catch(() => undefined);
 }
 
 /** 粘贴到目标格子：优先内部剪贴板，其次 Windows 剪贴板中的文件 */
 export async function pasteInto(slotId: string, scope: SlotScope = SHARED_SCOPE): Promise<boolean> {
   if (clipboard) {
-    const { slotId: sourceSlotId, item, cut } = clipboard;
-    setSlotFor(slotId, { path: item.path, displayName: item.displayName }, scope.style, scope.shared);
-
+    const { slotId: sourceSlotId, item, cut, scope: sourceScope } = clipboard;
     if (cut) {
-      if (sourceSlotId !== slotId) clearSlotFor(sourceSlotId, scope.style, scope.shared);
+      // 剪切粘贴是一次搬移：源格清空与目标格写入一起提交，再清剪贴板，避免旧快照回显闪出源格图标
+      if (sourceSlotId !== slotId || !sameSlotScope(sourceScope, scope)) {
+        moveSlotFor(sourceSlotId, slotId, item, sourceScope, scope);
+      }
       setClipboard(null);
+    } else {
+      setSlotFor(slotId, { path: item.path, displayName: item.displayName }, scope.style, scope.shared);
     }
     return true;
   }

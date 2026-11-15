@@ -256,6 +256,22 @@ pub fn move_to(scope: &Scope, from_id: &str, to_id: &str) -> bool {
     })
 }
 
+/// 剪切粘贴搬移：源格与目标格可能属于不同作用域，清空源格与写入目标格一次提交，
+/// 避免分步写入的旧快照回显闪出源格图标。源格数据缺失时按剪贴板内容写入目标格。
+pub fn move_between(from_scope: &Scope, from_id: &str, to_scope: &Scope, to_id: &str, fallback: SlotItem) {
+    if from_scope == to_scope && from_id == to_id {
+        return;
+    }
+    commit(|data| {
+        let item = map_for(data, from_scope)
+            .and_then(|map| map.get(from_id).cloned())
+            .unwrap_or(fallback);
+        map_mut(data, to_scope).insert(to_id.to_string(), item);
+        map_mut(data, from_scope).remove(from_id);
+        ((), true)
+    });
+}
+
 pub fn clear_by_path(scope: &Scope, path: &str) {
     commit(|data| {
         let map = map_mut(data, scope);

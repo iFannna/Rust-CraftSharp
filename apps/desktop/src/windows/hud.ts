@@ -11,7 +11,7 @@ import {
   subscribeSlots,
   swapSlots
 } from "@/hud/slots/store";
-import { SHARED_SCOPE, getClipboard, openItem, subscribeClipboard } from "@/hud/slots/actions";
+import { SHARED_SCOPE, getClipboard, openItem, sameSlotScope, subscribeClipboard } from "@/hud/slots/actions";
 import { buildSlotMenuItems, runSlotMenuAction } from "@/hud/slots/menuActions";
 import { showSlotMenuAt } from "@/hud/slots/menu";
 import { toggleInventory } from "@/lib/windowControls";
@@ -72,7 +72,7 @@ function buildConfig() {
     fileNameColor: hotbar.fileNameColor,
     dropKey: config.hotkeys.dropItem,
     openInventory: config.hotkeys.openInventory,
-    cutSlot: clipboard?.cut ? globalIndexOf(clipboard.slotId) : -1,
+    cutSlot: clipboard?.cut && sameSlotScope(clipboard.scope, SHARED_SCOPE) ? globalIndexOf(clipboard.slotId) : -1,
     elements: {
       health: elementOf(elements.health),
       food: elementOf(elements.food),
@@ -135,7 +135,9 @@ function inventoryConfig() {
     tooltipShowFilePath: inventory.tooltipShowFilePath,
     tooltipShowFileType: inventory.tooltipShowFileType,
     fileNameColor: inventory.fileNameColor,
-    cutSlot: clipboard?.cut ? clipboard.slotId : null,
+    cutSlot: clipboard?.cut && sameSlotScope(clipboard.scope, { style: inventory.style, shared: inventory.sharedData })
+      ? clipboard.slotId
+      : null,
     dropKey: config.hotkeys.dropItem,
     openInventory: config.hotkeys.openInventory
   };
