@@ -22,7 +22,7 @@ pub const TIMER_HOVER: usize = 1;
 /// 扫格期间由采样线程投递的光标位置消息
 const WM_SHIFT_SAMPLE: u32 = w::WM_APP + 1;
 /// 采样间隔：鼠标消息会被系统合并，直接轮询光标才能跟上快速扫格
-const SHIFT_SAMPLE_MS: u64 = 2;
+const SHIFT_SAMPLE_MS: u64 = 1;
 const LONG_PRESS_MS: u64 = 150;
 const DRAG_THRESHOLD: f32 = 10.0;
 const HOVER_GREEN_MS: u64 = 250;
@@ -555,6 +555,13 @@ pub fn set_drop_hover(zone: Option<&str>) {
     });
 }
 
+/// 扫格期间高亮按当前真实光标取格，不使用排队中的采样坐标。
+fn live_hover(state: &State) -> Option<usize> {
+    let cursor = w::cursor_pos();
+    let point = w::to_client(state.hwnd, cursor);
+    inventory_draw::slot_at(&state.layout, point.x as f32, point.y as f32)
+}
+
 fn render(state: &mut State) {
     let width = state.layout.width.ceil().max(1.0) as u32;
     let height = state.layout.height.ceil().max(1.0) as u32;
@@ -569,9 +576,17 @@ fn render(state: &mut State) {
         .cut_slot
         .as_deref()
         .and_then(|id| inventory_draw::slot_index(&state.layout, id));
-    let hover = state.drop_hover.or(state.hover);
+    let hover_slot = if state.shift_sweeping && state.left_down {
+        live_hover(state)
+    } else {
+        state.hover
+    };
+    let hover = state.drop_hover.or(hover_slot);
     let hover_green = state.drop_hover.is_none()
-        && state.hover.map(|index| hover_green(state, index)).unwrap_or(false);
+        && hover_slot
+            .filter(|index| Some(*index) == state.hover)
+            .map(|index| hover_green(state, index))
+            .unwrap_or(false);
 
     let Some(frame) = &mut state.frame else { return };
 
@@ -1123,6 +1138,9 @@ fn shift_move(state: &mut State, index: usize) -> bool {
 
 /// 进入新格子立即搬移；采样和鼠标消息共用这一个入口。
 fn shift_step(state: &mut State, x: f32, y: f32) {
+    // 高亮先按实时光标刷新，再处理搬移，避免写盘和广播拖慢悬停
+    update_hover(state, live_hover(state), false);
+
     let current = inventory_draw::slot_at(&state.layout, x, y);
     let mut moved = false;
     if let Some(index) = current {
@@ -1134,8 +1152,9 @@ fn shift_step(state: &mut State, x: f32, y: f32) {
             }
         }
     }
-    // 扫格时高亮跟随光标，而不是停在按下时的格子上
-    update_hover(state, current, moved);
+    if moved {
+        render(state);
+    }
 }
 
 fn click_slot(state: &mut State, index: usize) {
