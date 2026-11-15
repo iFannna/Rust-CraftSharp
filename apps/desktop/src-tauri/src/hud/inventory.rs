@@ -224,6 +224,12 @@ pub fn apply(config: InventoryCfg) {
         state.configured = true;
         let scope = state.config.scope();
         slots::register_scope("inventory", &scope.style, scope.shared);
+        // 分发期间每次落格都由原生即时刷新，配置回传只更新镜像，
+        // 不再触发第二次布局/重绘，避免跟手浮层抖动
+        let data_only = !style_changed && !shared_changed && !visible_changed && !hide_changed && !overlay_changed;
+        if state.distribute.is_some() && data_only {
+            return;
+        }
         if style_changed {
             if let Some(sprite) = inventory_draw::container_sprite(style) {
                 state.style = style;
@@ -243,7 +249,6 @@ pub fn apply(config: InventoryCfg) {
             state.last_shift_slot = None;
             state.last_click_slot = None;
         }
-        let _ = shared_changed;
         rebuild_layout(state, style_changed || state.rect.is_none());
         if state.config.visible {
             refresh_icons(state);
@@ -267,12 +272,24 @@ fn rebuild_layout(state: &mut State, reposition: bool) {
     state.icon_keys.resize(state.layout.slots.len(), String::new());
     if reposition || state.rect.is_none() {
         apply_geometry(state);
-    } else if let Some((x, y, _, _)) = state.rect {
+    } else if let Some((x, y, old_width, old_height)) = state.rect {
         let width = state.layout.width.ceil().max(1.0) as u32;
         let height = state.layout.height.ceil().max(1.0) as u32;
-        // SAFETY: 只调整自身窗口矩形，不激活
-        unsafe {
-            w::SetWindowPos(state.hwnd, w::HWND_TOPMOST, x, y, width as i32, height as i32, w::SWP_NOACTIVATE);
+        // 数据变化也会走到这里，尺寸没变时不要重设窗口，
+        // 否则每次分发都会把物品栏重新提层，拖拽浮层闪一下
+        if width != old_width || height != old_height {
+            // SAFETY: 只调整自身窗口矩形，不激活
+            unsafe {
+                w::SetWindowPos(
+                    state.hwnd,
+                    w::HWND_TOPMOST,
+                    x,
+                    y,
+                    width as i32,
+                    height as i32,
+                    w::SWP_NOACTIVATE,
+                );
+            }
         }
         state.rect = Some((x, y, width, height));
     }
@@ -491,10 +508,15 @@ fn render(state: &mut State) {
 
     if let (Some(drag), Some(origin)) = (&state.drag, state.rect) {
         if let Some(Some(icon)) = state.icons.get(drag.source) {
-            dragicon::show(&icon.sprite, origin.0 + drag.x.round() as i32, origin.1 + drag.y.round() as i32);
+            dragicon::show(
+                "inventory",
+                &icon.sprite,
+                origin.0 + drag.x.round() as i32,
+                origin.1 + drag.y.round() as i32,
+            );
         }
     } else if state.drag_source.is_none() {
-        dragicon::hide();
+        dragicon::hide("inventory");
     }
 
     if let (Some(dib), Some((x, y, _, _)), Some(frame)) = (&state.dib, state.rect, &state.frame) {
@@ -556,7 +578,7 @@ pub fn set_visible_inner(state: &mut State) {
                 w::ShowWindow(state.hwnd, w::SW_HIDE);
             }
         }
-        dragicon::hide();
+        dragicon::hide("inventory");
     }
 }
 
@@ -796,7 +818,7 @@ fn prepare_drag_out(state: &mut State) -> Option<(String, u32, String)> {
     }
     state.hidden_icon = Some((hidden, hidden_key));
     state.drag_source = Some(drag.source);
-    dragicon::hide();
+    dragicon::hide("inventory");
     render(state);
 
     let size = icon_size(state);

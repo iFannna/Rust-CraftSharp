@@ -443,7 +443,7 @@ pub fn render(state: &mut State) {
         unsafe {
             w::ShowWindow(state.hwnd, 0);
         }
-        dragicon::hide();
+        dragicon::hide("hud");
     }
     schedule_anim(state);
 }
@@ -459,11 +459,12 @@ fn update_drag_icon(state: &State) {
 
     match (state.drag.as_ref(), icon) {
         (Some(drag), Some(icon)) => dragicon::show(
+            "hud",
             &icon.sprite,
             rect.x + drag.x.round() as i32,
             rect.y + drag.y.round() as i32,
         ),
-        _ => dragicon::hide(),
+        _ => dragicon::hide("hud"),
     }
 }
 
@@ -479,7 +480,7 @@ pub fn set_visible(value: bool) {
             render(state);
         } else if state.shown {
             state.shown = false;
-            dragicon::hide();
+            dragicon::hide("hud");
             // SAFETY: 只是隐藏窗口
             unsafe {
                 w::ShowWindow(state.hwnd, 0);
@@ -504,7 +505,7 @@ pub fn set_hidden_by_inventory(hidden: bool) {
             render(state);
         } else if state.shown {
             state.shown = false;
-            dragicon::hide();
+            dragicon::hide("hud");
             // SAFETY: 只是隐藏窗口
             unsafe {
                 w::ShowWindow(state.hwnd, 0);
