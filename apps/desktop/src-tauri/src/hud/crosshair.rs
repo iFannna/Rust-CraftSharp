@@ -108,7 +108,9 @@ fn raise_layer(window: &CrosshairWindow) {
 pub fn apply_desktop_layer() {
     WINDOW.with(|cell| {
         if let Some(window) = cell.borrow_mut().as_mut() {
-            raise_layer(window);
+            if window.shown {
+                raise_layer(window);
+            }
         }
     });
 }

@@ -14,10 +14,13 @@ const DRAG_THRESHOLD: f32 = 10.0;
 /// 拖出窗口多少像素后转成系统拖放
 const DRAG_OUT_MARGIN: f32 = 2.0;
 
-/// 桌面层窗口不激活、拿不到焦点，桌面在前台时由钩子接住窗口内输入。
+/// 桌面层窗口不激活、拿不到焦点，点击快捷栏后由钩子接住窗口内输入。
 static KEY_HOOK: AtomicIsize = AtomicIsize::new(0);
 static MOUSE_HOOK: AtomicIsize = AtomicIsize::new(0);
+static FOREGROUND_HOOK: AtomicIsize = AtomicIsize::new(0);
 static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
+/// 点击快捷栏视为取得键盘焦点，点击别处或切换前台窗口即失去。
+static HOTBAR_KEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[allow(dead_code)]
@@ -53,25 +56,65 @@ pub fn install_desktop_hooks() {
     if mouse_hook != 0 {
         MOUSE_HOOK.store(mouse_hook, Ordering::SeqCst);
     }
+    // SAFETY: 前台变化事件用于收回快捷栏的键盘焦点
+    let foreground_hook = unsafe {
+        w::SetWinEventHook(
+            w::EVENT_SYSTEM_FOREGROUND,
+            w::EVENT_SYSTEM_FOREGROUND,
+            0,
+            Some(foreground_event),
+            0,
+            0,
+            w::WINEVENT_OUTOFCONTEXT | w::WINEVENT_SKIPOWNPROCESS,
+        )
+    };
+    if foreground_hook != 0 {
+        FOREGROUND_HOOK.store(foreground_hook, Ordering::SeqCst);
+    }
     if key_hook == 0 || mouse_hook == 0 {
         eprintln!("桌面输入钩子安装失败");
     }
 }
 
 unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
-    if code >= 0 && wparam == w::WM_KEYDOWN as usize {
+    // 只在点击快捷栏取得键盘焦点后接管，其他情况一律放过
+    if code >= 0 && wparam == w::WM_KEYDOWN as usize && HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed) {
         let data = &*(lparam as *const KeyboardHookData);
-        // Win+D 交给桌面层探测，按键本身不拦截
-        if data.vk_code == 0x44 && (w::key_down(0x5b) || w::key_down(0x5c)) {
-            window::start_desktop_probe();
+        let handled = window::with_state(|state| {
+            if !state.visible || !state.shown || state.config.is_none() {
+                return false;
+            }
+            on_key(state, data.vk_code as usize)
+        })
+        .unwrap_or(false);
+        if handled {
+            return 1;
         }
-        // 只在桌面处于前台时接管，其他应用里的按键一律放过
-        if w::GetForegroundWindow() == w::desktop_window() {
+    }
+    w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+}
+
+unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    if code >= 0 {
+        let data = &*(lparam as *const MouseHookData);
+        if wparam == w::WM_LBUTTONDOWN as usize {
+            // 点击快捷栏取得键盘焦点，点击别处失去
+            let on_hotbar = window::with_state(|state| {
+                state.visible && state.shown && w::window_from_point(data.pt) == state.hwnd
+            })
+            .unwrap_or(false);
+            HOTBAR_KEY_ACTIVE.store(on_hotbar, Ordering::Relaxed);
+        } else if wparam == w::WM_MOUSEWHEEL as usize {
+            // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
             let handled = window::with_state(|state| {
                 if !state.visible || !state.shown || state.config.is_none() {
                     return false;
                 }
-                on_key(state, data.vk_code as usize)
+                if w::window_from_point(data.pt) != state.hwnd {
+                    return false;
+                }
+                on_wheel(state, data.mouse_data as usize);
+                true
             })
             .unwrap_or(false);
             if handled {
@@ -79,29 +122,20 @@ unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize)
             }
         }
     }
-    w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+    w::CallNextHookEx(MOUSE_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
 }
 
-unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) -> isize {
-    // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
-    if code >= 0 && wparam == w::WM_MOUSEWHEEL as usize && w::GetForegroundWindow() == w::desktop_window() {
-        let data = &*(lparam as *const MouseHookData);
-        let handled = window::with_state(|state| {
-            if !state.visible || !state.shown || state.config.is_none() {
-                return false;
-            }
-            if w::window_from_point(data.pt) != state.hwnd {
-                return false;
-            }
-            on_wheel(state, data.mouse_data as usize);
-            true
-        })
-        .unwrap_or(false);
-        if handled {
-            return 1;
-        }
-    }
-    w::CallNextHookEx(MOUSE_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+unsafe extern "system" fn foreground_event(
+    _hook: isize,
+    _event: u32,
+    _hwnd: isize,
+    _object: i32,
+    _child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    // 前台切到别的窗口，快捷栏不再持有键盘焦点
+    HOTBAR_KEY_ACTIVE.store(false, Ordering::Relaxed);
 }
 
 pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {

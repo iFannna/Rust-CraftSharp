@@ -92,8 +92,6 @@ pub struct State {
     pub hidden_by_inventory: bool,
     /// 拖放接受区域的布局指纹，变化时才重算
     pub zones_key: String,
-    /// Win+D 后等待桌面成为前台的计时次数
-    pub desktop_probe_ticks: u32,
 }
 
 thread_local! {
@@ -120,6 +118,10 @@ pub fn init(app: &AppHandle) {
     w::park_desktop(hwnd);
     crate::dragdrop::install(app, "hud", hwnd);
     crate::hud::input::install_desktop_hooks();
+    // SAFETY: 启动桌面层守护定时器，监测显示桌面状态
+    unsafe {
+        w::SetTimer(hwnd, TIMER_DESKTOP, 100, 0);
+    }
 
     let state = State {
         app: app.clone(),
@@ -155,7 +157,6 @@ pub fn init(app: &AppHandle) {
         visible: true,
         hidden_by_inventory: false,
         zones_key: String::new(),
-        desktop_probe_ticks: 0,
     };
 
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
@@ -527,55 +528,49 @@ pub fn hidden_by_inventory() -> bool {
     with_state(|state| state.hidden_by_inventory).unwrap_or(false)
 }
 
-/// Win+D 后开始探测桌面是否成为前台，期间把桌面层窗口临时置顶。
-pub fn start_desktop_probe() {
-    with_state(|state| {
-        state.desktop_probe_ticks = 0;
-        // SAFETY: 只是启动本窗口的定时器
-        unsafe {
-            w::SetTimer(state.hwnd, TIMER_DESKTOP, 100, 0);
-        }
-    });
-}
-
 fn apply_desktop_layers(state: &State) {
-    w::apply_desktop_layer(state.hwnd);
+    if state.shown {
+        w::apply_desktop_layer(state.hwnd);
+    }
     crate::hud::bossbar::apply_desktop_layer();
     crate::hud::crosshair::apply_desktop_layer();
 }
 
+/// 快捷栏中心点，用于探测桌面是否盖住了它。
+fn hotbar_center(state: &State) -> Option<w::Point> {
+    if !state.shown {
+        return None;
+    }
+    let rect = state.rect.as_ref()?;
+    let layout = state.layout.as_ref()?;
+    Some(w::Point {
+        x: rect.x + (layout.width / 2.0) as i32,
+        y: rect.y + rect.height as i32 / 2,
+    })
+}
+
+/// 守护桌面层：显示桌面（Win+D 或任务栏按钮）把桌面抬到窗口之上时临时置顶，
+/// 前台回到应用后压回底部。只在状态变化时调整层级，避免反复重排闪烁。
 fn tick_desktop(state: &mut State) {
     let desktop = w::desktop_window();
     // SAFETY: 只读取前台窗口
     let foreground = unsafe { w::GetForegroundWindow() };
+    let mut target = false;
     if desktop != 0 && foreground == desktop {
-        // 桌面在前台：显示桌面期间临时置顶，并继续监视前台变化
-        state.desktop_probe_ticks = 0;
-        w::set_desktop_floating(true);
-        apply_desktop_layers(state);
-        // SAFETY: 只是调整定时器间隔
-        unsafe {
-            w::SetTimer(state.hwnd, TIMER_DESKTOP, 100, 0);
+        match hotbar_center(state) {
+            Some(center) => {
+                let hit = w::window_from_point(center);
+                // 桌面盖住快捷栏说明处于显示桌面状态；被应用盖住则保持置底
+                if hit != state.hwnd && w::is_desktop_window(hit, desktop) {
+                    target = true;
+                }
+            }
+            None => target = w::desktop_floating(),
         }
-        return;
     }
-    if w::desktop_floating() {
-        // 前台回到应用，压回桌面层
-        w::set_desktop_floating(false);
+    if target != w::desktop_floating() {
+        w::set_desktop_floating(target);
         apply_desktop_layers(state);
-        // SAFETY: 只是停止定时器
-        unsafe {
-            w::KillTimer(state.hwnd, TIMER_DESKTOP);
-        }
-        return;
-    }
-    // 还没等到桌面成为前台，最多再等约 1.5 秒
-    state.desktop_probe_ticks += 1;
-    if state.desktop_probe_ticks >= 15 {
-        // SAFETY: 只是停止定时器
-        unsafe {
-            w::KillTimer(state.hwnd, TIMER_DESKTOP);
-        }
     }
 }
 

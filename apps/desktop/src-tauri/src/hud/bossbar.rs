@@ -103,7 +103,9 @@ pub fn apply(bars: Vec<BossBarCfg>) {
 pub fn apply_desktop_layer() {
     WINDOW.with(|cell| {
         if let Some(window) = cell.borrow_mut().as_mut() {
-            w::apply_desktop_layer(window.hwnd);
+            if window.shown {
+                w::apply_desktop_layer(window.hwnd);
+            }
         }
     });
 }

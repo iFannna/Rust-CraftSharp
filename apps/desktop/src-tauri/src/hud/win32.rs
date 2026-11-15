@@ -136,9 +136,19 @@ extern "system" {
     pub fn LoadCursorW(instance: isize, name: *const u16) -> isize;
     pub fn GetShellWindow() -> Hwnd;
     pub fn GetForegroundWindow() -> Hwnd;
+    pub fn GetAncestor(hwnd: Hwnd, flags: u32) -> Hwnd;
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
     pub fn WindowFromPoint(point: Point) -> Hwnd;
+    pub fn SetWinEventHook(
+        event_min: u32,
+        event_max: u32,
+        module: isize,
+        proc_: Option<unsafe extern "system" fn(isize, u32, isize, i32, i32, u32, u32)>,
+        process: u32,
+        thread: u32,
+        flags: u32,
+    ) -> isize;
     pub fn SetWindowsHookExW(
         id_hook: i32,
         proc_: Option<unsafe extern "system" fn(i32, usize, isize) -> isize>,
@@ -186,6 +196,10 @@ pub const SWP_NOMOVE: u32 = 0x0002;
 pub const SWP_NOACTIVATE: u32 = 0x0010;
 pub const WH_KEYBOARD_LL: i32 = 13;
 pub const WH_MOUSE_LL: i32 = 14;
+pub const GA_ROOT: u32 = 2;
+pub const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
+pub const WINEVENT_OUTOFCONTEXT: u32 = 0x0000;
+pub const WINEVENT_SKIPOWNPROCESS: u32 = 0x0002;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
@@ -413,11 +427,22 @@ pub fn park_desktop(hwnd: Hwnd) {
 }
 
 /// 显示桌面期间临时提到置顶层，让窗口留在桌面上。
+/// 系统显示桌面时可能把窗口最小化，这里先恢复再置顶。
 pub fn float_desktop(hwnd: Hwnd) {
-    // SAFETY: 只调整层级，不改位置尺寸
+    // SAFETY: 只恢复显示并调整层级，不改位置尺寸
     unsafe {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
+}
+
+/// 命中窗口是否属于桌面（Progman 及其图标层子窗口）。
+pub fn is_desktop_window(hwnd: Hwnd, desktop: Hwnd) -> bool {
+    if hwnd == 0 || desktop == 0 {
+        return false;
+    }
+    // SAFETY: 只查询祖先窗口
+    unsafe { GetAncestor(hwnd, GA_ROOT) == desktop }
 }
 
 static DESKTOP_FLOATING: AtomicBool = AtomicBool::new(false);
