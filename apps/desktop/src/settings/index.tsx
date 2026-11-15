@@ -10,6 +10,7 @@ import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
 import { AboutSection } from "@/settings/sections/aboutSection";
 import { AppearanceSection } from "@/settings/sections/appearanceSection";
 import { HotkeysSection } from "@/settings/sections/hotkeysSection";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
 import { SystemSection } from "@/settings/sections/systemSection";
@@ -18,6 +19,7 @@ import "@/settings/settings.css";
 type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about";
 
 ensureSettingsFonts();
+installLocalHotkeys();
 
 interface NavItem {
   id: SectionId;

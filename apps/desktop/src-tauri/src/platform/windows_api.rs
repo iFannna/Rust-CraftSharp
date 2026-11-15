@@ -40,9 +40,25 @@ extern "system" {
     fn GlobalSize(handle: isize) -> usize;
 }
 
+#[link(name = "dwmapi")]
+extern "system" {
+    fn DwmSetWindowAttribute(hwnd: isize, attribute: u32, value: *const c_void, size: u32) -> i32;
+}
+
 const CF_UNICODETEXT: u32 = 13;
 const CF_HDROP: u32 = 15;
 const GMEM_MOVEABLE: u32 = 0x0002;
+// dwmapi.h 中 NCRENDERING_POLICY 是 2，TRANSITIONS_FORCEDISABLED 是 3，写错 2 会关掉非客户区渲染
+const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
+
+/// 关闭窗口显隐时的 DWM 过渡，让 MC 窗口和快捷栏一样直接出现。
+pub fn disable_transitions(hwnd: isize) {
+    let value: i32 = 1;
+    // SAFETY: 只设置窗口属性，失败也不影响功能
+    unsafe {
+        DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, &value as *const i32 as *const c_void, 4);
+    }
+}
 
 fn wide(value: &str) -> Vec<u16> {
     Path::new(value)

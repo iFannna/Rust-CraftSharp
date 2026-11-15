@@ -120,6 +120,9 @@ pub struct HudConfig {
     pub file_name_color: String,
     #[serde(default)]
     pub drop_key: String,
+    /// 局部快捷键：状态栏聚焦时按此键开关物品栏
+    #[serde(default)]
+    pub open_inventory: String,
     /// 剪贴板剪切中的格子，-1 表示没有
     #[serde(default = "none_slot")]
     pub cut_slot: i32,

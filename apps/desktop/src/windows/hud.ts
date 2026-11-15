@@ -14,6 +14,7 @@ import {
 import { SHARED_SCOPE, getClipboard, openItem, subscribeClipboard } from "@/hud/slots/actions";
 import { buildSlotMenuItems, runSlotMenuAction } from "@/hud/slots/menuActions";
 import { showSlotMenuAt } from "@/hud/slots/menu";
+import { toggleInventory } from "@/lib/windowControls";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -70,6 +71,7 @@ function buildConfig() {
     positionHeight: config.statusBar.positionHeight ?? null,
     fileNameColor: hotbar.fileNameColor,
     dropKey: config.hotkeys.dropItem,
+    openInventory: config.hotkeys.openInventory,
     cutSlot: clipboard?.cut ? globalIndexOf(clipboard.slotId) : -1,
     elements: {
       health: elementOf(elements.health),
@@ -115,9 +117,14 @@ void listen<{ index: number; x: number; y: number }>("hud-menu", (event) => {
   })();
 });
 
-void listen<{ index: number; path: string }>("hud-files", (event) => {
-  const { index, path } = event.payload;
-  setSlot(slotIdForGlobal(index), { path });
+void listen<{ window: string; zone: string; paths: string[] }>("file-dropped", (event) => {
+  const { window: source, zone, paths } = event.payload;
+  if (source !== "hud" || !zone || paths.length === 0) return;
+  setSlot(zone, { path: paths[0] });
+});
+
+void listen("hud-open-inventory", () => {
+  void toggleInventory();
 });
 
 void listen<{ x: number; y: number; height: number }>("hud-moved", (event) => {

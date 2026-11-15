@@ -2,12 +2,12 @@
 
 mod autostart;
 mod desktop;
+mod dragdrop;
 mod hud;
 mod icons;
 mod metrics;
 mod platform;
 mod singleinstance;
-mod windowbounds;
 mod windowdrag;
 
 #[cfg(windows)]
@@ -109,24 +109,6 @@ fn toggle_desktop_icons() -> Result<(), String> {
     desktop::toggle()
 }
 
-/// 一次性设置窗口位置与尺寸，参数为物理像素。
-#[tauri::command]
-fn set_window_bounds(
-    app: tauri::AppHandle,
-    label: String,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> bool {
-    use tauri::Manager;
-
-    match app.get_webview_window(&label) {
-        Some(window) => windowbounds::set(&window, x, y, width, height),
-        None => false,
-    }
-}
-
 /// 前端推送状态栏配置，Rust 侧重绘并同步窗口几何。
 #[tauri::command]
 fn hud_apply(app: tauri::AppHandle, config: hud::HudConfig) {
@@ -137,6 +119,18 @@ fn hud_apply(app: tauri::AppHandle, config: hud::HudConfig) {
 #[tauri::command]
 fn hud_visible(visible: bool) {
     hud::set_visible(visible);
+}
+
+/// 前端下发窗口的拖放接受区域，坐标为客户区物理像素。
+#[tauri::command]
+fn set_drop_zones(label: String, zones: Vec<dragdrop::Zone>) {
+    dragdrop::set_zones(&label, zones);
+}
+
+/// 把格子文件拖出窗口，交给系统拖放，只提供复制。
+#[tauri::command]
+fn begin_file_drag(path: String, size: Option<u32>) {
+    dragdrop::begin_file_drag(path, size.unwrap_or(32));
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -195,9 +189,18 @@ fn main() {
 
     tauri::Builder::default()
         .setup(|app| {
+            use tauri::Manager;
+
             create_tray(app.handle())?;
             singleinstance::watch(app.handle().clone());
             hud::init(app.handle());
+            // MC 窗口与快捷栏一样直接显隐，不做系统过渡动画
+            for window in app.webview_windows().values() {
+                if let Ok(hwnd) = window.hwnd() {
+                    platform::disable_transitions(hwnd.0 as isize);
+                }
+            }
+            dragdrop::install_all(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -214,9 +217,10 @@ fn main() {
             set_hit_mask,
             drag_window,
             toggle_desktop_icons,
-            set_window_bounds,
             hud_apply,
             hud_visible,
+            set_drop_zones,
+            begin_file_drag,
             set_autostart
         ])
         .run(tauri::generate_context!())

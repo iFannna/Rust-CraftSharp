@@ -16,6 +16,7 @@ pub struct Overlay<'a> {
     pub dimmed_slot: i32,
     pub drag: Option<&'a SlotIcon>,
     pub drag_source: i32,
+    pub drag_target: i32,
     pub drag_x: f32,
     pub drag_y: f32,
     /// 生命值变化前的数值，用于闪烁
@@ -32,6 +33,7 @@ impl Default for Overlay<'_> {
             dimmed_slot: -1,
             drag: None,
             drag_source: -1,
+            drag_target: -1,
             drag_x: 0.0,
             drag_y: 0.0,
             heart_flash: None,
@@ -211,7 +213,14 @@ pub fn draw(frame: &mut Frame, layout: &Layout, style: &FrameStyle, config: &Hud
         }
     }
 
-    let selection = if overlay.selected_slot >= 2 { overlay.selected_slot } else { overlay.hover_slot };
+    // 拖动时选中框跟随目标格，和原版拖动 hover 一致
+    let selection = if overlay.drag.is_some() {
+        overlay.drag_target
+    } else if overlay.selected_slot >= 2 {
+        overlay.selected_slot
+    } else {
+        overlay.hover_slot
+    };
     if visible.hotbar && (2..=10).contains(&selection) {
         let rect = layout.selection_rect(selection - 2);
         frame.draw(&style.hotbar_selection, rect.left, rect.top, rect.width, rect.height);

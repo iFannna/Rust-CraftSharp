@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { HUD_ASSETS, loadImage } from "@/hud/statusbar/assets";
-import type { SlotIcon } from "@/hud/statusbar/renderer";
+import type { SlotIcon } from "@/hud/slots/types";
 
 export interface SlotIconSource {
   path: string;

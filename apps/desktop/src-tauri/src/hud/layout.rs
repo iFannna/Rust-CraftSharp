@@ -20,6 +20,15 @@ pub const ABSORBING_MAX_GAP_ADJUSTMENT: f32 = 7.0;
 /// 左右各留 1 MC 像素，容纳比格子宽 4 像素的选中框
 pub const SIDE_PADDING: f32 = 1.0;
 
+/// 全局格子索引对应的格子 id：0 左副手、1 右副手、2-10 主快捷栏。
+pub fn slot_id(index: i32) -> String {
+    match index {
+        0 => "hotbar_left_offhand".to_string(),
+        1 => "hotbar_right_offhand".to_string(),
+        value => format!("hotbar_{}", value - 2),
+    }
+}
+
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Rect {
     pub left: f32,

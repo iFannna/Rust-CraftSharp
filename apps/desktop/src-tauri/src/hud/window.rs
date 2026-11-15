@@ -81,6 +81,8 @@ pub struct State {
     pub tracked: bool,
     pub shown: bool,
     pub visible: bool,
+    /// 拖放接受区域的布局指纹，变化时才重算
+    pub zones_key: String,
 }
 
 thread_local! {
@@ -102,11 +104,11 @@ pub fn init(app: &AppHandle) {
     if hwnd == 0 {
         return;
     }
-    // SAFETY: 窗口已创建，注册文件拖放与指标定时器
+    // SAFETY: 窗口已创建，注册拖放目标与指标定时器
     unsafe {
-        w::DragAcceptFiles(hwnd, 1);
         w::SetTimer(hwnd, TIMER_METRICS, 1000, 0);
     }
+    crate::dragdrop::install(app, "hud", hwnd);
 
     let state = State {
         app: app.clone(),
@@ -138,6 +140,7 @@ pub fn init(app: &AppHandle) {
         tracked: false,
         shown: false,
         visible: true,
+        zones_key: String::new(),
     };
 
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
@@ -253,10 +256,12 @@ fn barrier_icon(size: u32) -> Option<SlotIcon> {
 
 pub fn render(state: &mut State) {
     let Some(config) = state.config.clone() else { return };
-    let Some(style) = &state.style else { return };
 
     let scale = config.scale * state.dpi;
     let layout = layout::compute(scale, config.offhand(), config.visibility(), config.elements.absorbing.max_i());
+    update_drop_zones(state, &layout);
+
+    let Some(style) = &state.style else { return };
     let width = layout.width.ceil().max(1.0) as u32;
     let height = layout.height.ceil().max(1.0) as u32;
 
@@ -413,11 +418,64 @@ fn build_overlay<'a>(
         dimmed_slot: config.cut_slot,
         drag: icon,
         drag_source: drag.map(|drag| drag.source).unwrap_or(-1),
+        drag_target: drag.map(|drag| drag.target).unwrap_or(-1),
         drag_x: drag.map(|drag| drag.x).unwrap_or(0.0),
         drag_y: drag.map(|drag| drag.y).unwrap_or(0.0),
         heart_flash,
         air_burst,
     }
+}
+
+/// 窗口显隐、缩放或副手变化时刷新拖放接受区域。
+fn update_drop_zones(state: &mut State, layout: &Layout) {
+    let key = format!(
+        "{:.2}|{:.2}|{:.2}|{:.2}|{}|{}{}",
+        layout.scale,
+        layout.core_left,
+        layout.hotbar_top,
+        layout.slot_size,
+        layout.visible.hotbar,
+        layout.offhand.left,
+        layout.offhand.right
+    );
+    if key == state.zones_key {
+        return;
+    }
+    state.zones_key = key;
+
+    let mut zones = Vec::new();
+    if layout.visible.hotbar {
+        let mut push = |index: i32, rect: layout::Rect| {
+            zones.push(crate::dragdrop::Zone {
+                id: layout::slot_id(index),
+                left: rect.left as f64,
+                top: rect.top as f64,
+                width: rect.width as f64,
+                height: rect.height as f64,
+            });
+        };
+        for index in 0..9 {
+            push(index + 2, layout.slot_drop_rect(index));
+        }
+        if layout.offhand.left {
+            push(0, layout.offhand_drop_rect(0));
+        }
+        if layout.offhand.right {
+            push(1, layout.offhand_drop_rect(1));
+        }
+    }
+    crate::dragdrop::set_zones("hud", zones);
+}
+
+/// 交换两个格子的图标缓存，落点立即生效，配置回传时不再重载。
+pub fn swap_icons(state: &mut State, from: i32, to: i32) {
+    let (from, to) = (from as usize, to as usize);
+    if from == to || from >= state.icons.len() || to >= state.icons.len() {
+        return;
+    }
+    state.icons.swap(from, to);
+    state.icon_keys.swap(from, to);
+    state.missing.swap(from, to);
 }
 
 fn label_alpha(label: &Label, now: u64) -> f32 {

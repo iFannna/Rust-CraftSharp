@@ -138,14 +138,6 @@ extern "system" {
     fn DeleteObject(object: isize) -> i32;
 }
 
-#[link(name = "shell32")]
-extern "system" {
-    pub fn DragAcceptFiles(hwnd: Hwnd, accept: i32);
-    pub fn DragQueryFileW(drop: isize, file: u32, buffer: *mut u16, size: u32) -> u32;
-    pub fn DragQueryPoint(drop: isize, point: *mut Point) -> i32;
-    pub fn DragFinish(drop: isize);
-}
-
 #[link(name = "kernel32")]
 extern "system" {
     pub fn GetModuleHandleW(name: *const u16) -> isize;
@@ -156,7 +148,6 @@ pub const WS_POPUP: u32 = 0x8000_0000;
 pub const WS_EX_LAYERED: u32 = 0x0008_0000;
 pub const WS_EX_TOPMOST: u32 = 0x0000_0008;
 pub const WS_EX_TOOLWINDOW: u32 = 0x0000_0080;
-pub const WS_EX_ACCEPTFILES: u32 = 0x0000_0010;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
 pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
@@ -172,7 +163,6 @@ pub const WM_MOUSEWHEEL: u32 = 0x020A;
 pub const WM_MOUSELEAVE: u32 = 0x02A3;
 pub const WM_MOUSEACTIVATE: u32 = 0x0021;
 pub const WM_ERASEBKGND: u32 = 0x0014;
-pub const WM_DROPFILES: u32 = 0x0233;
 pub const WM_NCHITTEST: u32 = 0x0084;
 pub const WM_TIMER: u32 = 0x0113;
 pub const WM_DPICHANGED: u32 = 0x02E0;
@@ -298,7 +288,7 @@ pub fn create_window(proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -
         RegisterClassW(&class);
 
         CreateWindowExW(
-            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES,
+            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
             class_name.as_ptr(),
             title.as_ptr(),
             WS_POPUP,

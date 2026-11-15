@@ -2,7 +2,7 @@
 
 import { draw, drawUniform } from "@/hud/shared/canvas";
 import type { InventoryLayout } from "@/hud/inventory/layout";
-import type { SlotIcon } from "@/hud/statusbar/renderer";
+import type { SlotIcon } from "@/hud/slots/types";
 
 export type HoverPhase = "white" | "green";
 

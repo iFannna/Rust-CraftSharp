@@ -426,3 +426,20 @@ HUD 逐像素差异目标为 0。设置面板只验证功能和布局，不做�
 - 窗口几何锚定：底边固定，核心容器水平中心固定，尺寸变化不跳位
 - 已验证：启动自动绘制、元素显隐后窗口高度跟随且底边不动、PNG 与 Shell 图标绘制、整体显隐命令
 - 待验证：真实鼠标的长按拖拽与右键菜单、文件拖放入口、HiDPI 多屏切换
+
+## 16. 窗口交互补全
+
+- 文件拖放统一走 OLE：`src-tauri/src/dragdrop.rs` 实现 `IDropTarget` 并调用 `IDropTargetHelper`，缩略图与复制/禁止光标由系统绘制
+- 拖放目标必须注册到 WebView2 的子窗口：wry 就是用 `EnumChildWindows` 逐个接管子窗口的，只注册顶层窗口收不到任何拖放事件；本次按同样方式枚举子窗口注册，坐标与缩略图仍以顶层窗口为基准
+- 状态栏按布局下发 9 个快捷栏加副手的接受区域；物品栏由页面把格子矩形（客户区物理像素）下发给 `set_drop_zones`，区域按窗口标签共享，注册前到达也会保留
+- 落点事件 `file-dropped` 携带窗口、格子 id、路径与客户区坐标，状态栏和物品栏各自写自己的格子
+- 落点为空时只显示缩略图和禁止光标；注册前先撤掉 wry 的目标，WebView 不会自己打开拖入的文件
+- 缩略图助手的方法顺序必须按 shobjidl.h：DragEnter、DragLeave、DragOver、Drop、Show。写成 DragEnter、DragOver、DragLeave 会让每次 DragOver 实际调用 DragLeave，图像刚出现就被收掉，表现就是「拖拽时没有缩略图」
+- 拖出到桌面或资源管理器：拖动图标离开窗口范围后转为系统拖放，`SHCreateDataObject` 提供 CF_HDROP，`IDragSourceHelper` 提供图标预览，只提供复制，格子数据不变
+- 拖出是否按住用两个来源判断：OLE 传入的 grfKeyState 与发起时的全局键态，任一显示按住就继续，避免某个线程读到过期键态导致拖拽刚开始就被取消
+- 拖拽助手由 `CLSID_DragDropHelper` 创建，接受与拖拽图像是两个 IID：`IDropTargetHelper` 为 4657278B，`IDragSourceHelper` 为 DE5BF786；用同一个 GUID 取两个接口会拿到空对象，拖出时没有跟随图标
+- 窗口显隐关闭 DWM 过渡：`DWMWA_TRANSITIONS_FORCEDISABLED` 是属性 3，属性 2 是 `DWMWA_NCRENDERING_POLICY`，写成 2 会让 DWM 停止绘制非客户区，设置面板出现白边且过渡动画照旧
+- 局部快捷键：任何应用窗口聚焦时 E 开关物品栏、ESC 关闭物品栏，输入框内不触发；状态栏在原生输入里认 E
+- 拖动手感：早于长按的移动不再取消长按；移动超过阈值后松开不算点击，不会误开文件；落点交换先在原生侧交换图标缓存，避免源格闪回；拖动时目标格显示选中框
+- 已验证：8 个窗口含子窗口共 40 多个拖放目标全部注册成功；物品栏下发 46 个区域、状态栏下发 9 个；按区域中心模拟落点后 `file-dropped` 分别写入 `craftsharp.styleSlots.v1` 与 `craftsharp.slots.v1`；拖拽图像与拖拽助手随数据对象一起创建；DWM 属性 3 写入成功
+- 待验证（需要真实鼠标手测）：拖拽经过时缩略图与光标的实际观感、拖出到资源管理器是否复制文件、物品栏首次显示的动画是否彻底消失

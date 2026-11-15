@@ -1,5 +1,6 @@
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
-import { emitTo } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { loadImage } from "@/hud/statusbar/assets";
@@ -19,12 +20,12 @@ import {
   subscribeSlots,
   swapSlotsFor
 } from "@/hud/slots/store";
-import type { SlotIcon } from "@/hud/statusbar/renderer";
+import type { SlotIcon } from "@/hud/slots/types";
 import { buildTooltipLines } from "@/hud/tooltip/content";
 import { clampToWorkArea } from "@/hud/shared/windowPlacement";
 import { startWindowDrag } from "@/hud/shared/windowDrag";
 import { createHitMask } from "@/lib/hitMask";
-import { setInventoryVisible } from "@/lib/windowControls";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -39,15 +40,8 @@ const canvas: HTMLCanvasElement = canvasNode;
 const tauriWindow = (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 const currentWindow = getCurrentWindow();
 
-// 本地快捷键：物品栏窗口打开时按配置键关闭
-window.addEventListener("keydown", (event) => {
-  if (event.ctrlKey || event.altKey || event.metaKey) return;
-  const key = getConfig().hotkeys.openInventory;
-  if (key && event.key.toLowerCase() === key.toLowerCase()) {
-    event.preventDefault();
-    void setInventoryVisible(false).catch(() => undefined);
-  }
-});
+// 局部快捷键与状态栏一致：E 开关物品栏、ESC 关闭
+installLocalHotkeys();
 const refreshHitMask = createHitMask(canvas, currentWindow.label);
 
 let config = getInventoryConfig();
@@ -150,8 +144,21 @@ function render() {
   refreshHitMask(Boolean(state?.drag));
 }
 
-async function refreshIcons() {
-  const generation = ++iconGeneration;
+/** 把格子区域交给原生拖放，文件悬浮时按格子显示可放置光标与缩略图 */
+function pushDropZones() {
+  if (!tauriWindow) return;
+  const pixel = window.devicePixelRatio || 1;
+  const zones = layout.slots.map((slot) => ({
+    id: slot.id,
+    left: Math.round(slot.left * pixel),
+    top: Math.round(slot.top * pixel),
+    width: Math.round(slot.width * pixel),
+    height: Math.round(slot.height * pixel)
+  }));
+  void invoke("set_drop_zones", { label: currentWindow.label, zones }).catch(() => undefined);
+}
+
+async function refreshIcons() {  const generation = ++iconGeneration;
   const slotScope = scope();
 
   const entries = await Promise.all(
@@ -176,6 +183,7 @@ async function rebuildLayout(next: ContainerStyle) {
   interaction = new InventoryInteraction(canvas, buildHost());
   interaction.attach();
   await applyWindowGeometry();
+  pushDropZones();
   await refreshIcons();
 }
 
@@ -195,6 +203,12 @@ function buildHost(): InventoryHost {
     distributeTo: (slotId, path) => {
       if (getSlotFor(slotId, style.file, config.sharedData)) return;
       setSlotFor(slotId, { path }, style.file, config.sharedData);
+    },
+    startFileDrag: (slotId) => {
+      const item = getSlotFor(slotId, style.file, config.sharedData);
+      if (!item || isPathMissing(item.path)) return;
+      const size = Math.round(16 * scale * (window.devicePixelRatio || 1));
+      void invoke("begin_file_drag", { path: item.path, size }).catch(() => undefined);
     },
     openMenu: (slotId, clientX, clientY) => {
       void (async () => {
@@ -325,6 +339,12 @@ subscribeClipboard(() => {
   render();
 });
 
+void listen<{ window: string; zone: string; paths: string[] }>("file-dropped", (event) => {
+  const { window: source, zone, paths } = event.payload;
+  if (source !== "inventory" || !zone || paths.length === 0) return;
+  setSlotFor(zone, { path: paths[0] }, style.file, config.sharedData);
+});
+
 subscribeInventoryConfig(() => {
   const previous = config;
   const next = getInventoryConfig();
@@ -351,6 +371,7 @@ if (tauriWindow) {
   void applyWindowGeometry();
   await currentWindow.onScaleChanged(({ payload }) => {
     dragScaleFactor = payload.scaleFactor;
+    pushDropZones();
   });
 
   // 物品栏窗口被隐藏或最小化时不留悬浮提示
@@ -380,5 +401,6 @@ if (tauriWindow) {
 
 
 void refreshIcons();
+pushDropZones();
 render();
 document.body.dataset.ready = "true";

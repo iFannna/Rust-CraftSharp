@@ -1,7 +1,7 @@
 /** 物品栏交互：hover 蒙版、点击打开、长按拖拽交换、Shift 批量、中键分发、Q 丢弃 */
 
 import { slotIdAtPoint, slotBox, type InventoryLayout, type SlotBox } from "@/hud/inventory/layout";
-import type { SlotIcon } from "@/hud/statusbar/renderer";
+import type { SlotIcon } from "@/hud/slots/types";
 import type { SlotItem } from "@/hud/slots/store";
 
 const LONG_PRESS_MS = 150;
@@ -27,6 +27,8 @@ export interface InventoryHost {
   /** 鼠标停在有文件的格子上，box 为格子画布坐标 */
   showTooltip(slotId: string, box: SlotBox): void;
   hideTooltip(): void;
+  /** 拖出窗口后交给系统拖放 */
+  startFileDrag(slotId: string): void;
 }
 
 export interface InventoryDragState {
@@ -50,7 +52,6 @@ interface PressState {
   startedAt: number;
   timer: number;
   ready: boolean;
-  cancelled: boolean;
 }
 
 interface DistributeState {
@@ -167,8 +168,7 @@ export class InventoryInteraction {
       startY: event.clientY,
       startedAt: performance.now(),
       timer,
-      ready: false,
-      cancelled: false
+      ready: false
     };
   }
 
@@ -209,11 +209,6 @@ export class InventoryInteraction {
     if (ready) {
       if (distance > DRAG_THRESHOLD) this.startDrag(event);
       return;
-    }
-
-    if (distance > DRAG_THRESHOLD) {
-      window.clearTimeout(press.timer);
-      press.cancelled = true;
     }
   }
 
@@ -258,7 +253,10 @@ export class InventoryInteraction {
     if (!press) return;
 
     window.clearTimeout(press.timer);
-    this.handleClick(press.slot);
+
+    // 移动超过阈值的按下是没进入拖动的拖动，不当作点击
+    const distance = Math.hypot(event.clientX - press.startX, event.clientY - press.startY);
+    if (distance <= DRAG_THRESHOLD) this.handleClick(press.slot);
   }
 
   private startDrag(event: PointerEvent) {
@@ -285,10 +283,39 @@ export class InventoryInteraction {
     if (!drag) return;
 
     const point = this.pointOf(event);
+    if (this.outside(point)) {
+      this.dragOut(event.pointerId);
+      return;
+    }
+
     drag.x = point.x;
     drag.y = point.y;
     drag.target = this.hitTest(event) ?? drag.source;
     this.host.requestRender();
+  }
+
+  /** 拖到窗口外就转成系统拖放，格子数据保持不变 */
+  private outside(point: { x: number; y: number }): boolean {
+    const margin = 2;
+    return (
+      point.x < -margin ||
+      point.y < -margin ||
+      point.x > this.canvas.clientWidth + margin ||
+      point.y > this.canvas.clientHeight + margin
+    );
+  }
+
+  private dragOut(pointerId: number) {
+    const drag = this.state.drag;
+    this.state.drag = null;
+    this.press = null;
+
+    if (this.canvas.hasPointerCapture?.(pointerId)) {
+      this.canvas.releasePointerCapture(pointerId);
+    }
+    this.host.requestRender();
+
+    if (drag) this.host.startFileDrag(drag.source);
   }
 
   private updateDragIcon(x: number, y: number) {

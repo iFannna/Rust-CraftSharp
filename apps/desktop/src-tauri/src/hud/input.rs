@@ -9,6 +9,8 @@ use crate::hud::window::{self, Drag, Move, Press, State};
 
 const LONG_PRESS_MS: u64 = 150;
 const DRAG_THRESHOLD: f32 = 10.0;
+/// 拖出窗口多少像素后转成系统拖放
+const DRAG_OUT_MARGIN: f32 = 2.0;
 
 pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
     match message {
@@ -19,7 +21,6 @@ pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
         | w::WM_RBUTTONUP
         | w::WM_MOUSEWHEEL
         | w::WM_KEYDOWN
-        | w::WM_DROPFILES
         | w::WM_CAPTURECHANGED => {
             window::with_state(|state| handle_message(state, message, wparam, lparam));
             Some(0)
@@ -37,7 +38,6 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_RBUTTONUP => on_menu(state, lparam),
         w::WM_MOUSEWHEEL => on_wheel(state, wparam),
         w::WM_KEYDOWN => on_key(state, wparam),
-        w::WM_DROPFILES => on_files(state, wparam as isize),
         w::WM_CAPTURECHANGED => on_capture_lost(state),
         _ => {}
     }
@@ -67,6 +67,10 @@ fn on_move(state: &mut State, lparam: isize) {
     }
 
     if state.drag.is_some() {
+        if outside_window(state, x, y) {
+            drag_out(state);
+            return;
+        }
         let target = slot_at(state, x, y);
         if let Some(drag) = &mut state.drag {
             drag.x = x;
@@ -78,19 +82,53 @@ fn on_move(state: &mut State, lparam: isize) {
     }
 
     if let Some(press) = &state.press {
+        // 早于长按的移动不取消，松开时没进入拖动就仍算点击
         let distance = ((x - press.x).powi(2) + (y - press.y).powi(2)).sqrt();
         let ready = w::ticks().saturating_sub(press.at) >= LONG_PRESS_MS;
-        if ready {
-            if distance > DRAG_THRESHOLD {
-                start_drag(state, x, y);
-            }
-        } else if distance > DRAG_THRESHOLD {
-            state.press = None;
+        if ready && distance > DRAG_THRESHOLD {
+            start_drag(state, x, y);
         }
         return;
     }
 
     update_hover(state, slot_at(state, x, y));
+}
+
+fn outside_window(state: &State, x: f32, y: f32) -> bool {
+    state
+        .layout
+        .as_ref()
+        .map(|layout| {
+            x < -DRAG_OUT_MARGIN
+                || y < -DRAG_OUT_MARGIN
+                || x > layout.width + DRAG_OUT_MARGIN
+                || y > layout.height + DRAG_OUT_MARGIN
+        })
+        .unwrap_or(false)
+}
+
+/// 拖出窗口后交给系统拖放，只提供复制，格子数据保持不变。
+fn drag_out(state: &mut State) {
+    let Some(drag) = state.drag.take() else { return };
+    // SAFETY: 释放鼠标捕获，后续由 OLE 拖放接管
+    unsafe {
+        w::ReleaseCapture();
+    }
+
+    let missing = state.missing.get(drag.source as usize).copied().unwrap_or(false);
+    let path = state
+        .config
+        .as_ref()
+        .and_then(|config| config.slot(drag.source))
+        .and_then(|slot| slot.path.clone())
+        .filter(|path| !path.trim().is_empty() && !missing);
+    let size = state.layout.as_ref().map(|layout| layout.slot_size.round().max(1.0) as u32).unwrap_or(32);
+
+    window::render(state);
+
+    if let Some(path) = path {
+        crate::dragdrop::begin_file_drag(path, size);
+    }
 }
 
 fn on_leave(state: &mut State) {
@@ -142,6 +180,8 @@ fn on_up(state: &mut State, wparam: usize, lparam: isize) {
     if state.drag.is_some() {
         let drag = state.drag.take().expect("drag");
         if drag.target >= 0 && drag.source != drag.target {
+            // 先交换本地图标，避免配置回传前源格闪回旧图标
+            window::swap_icons(state, drag.source, drag.target);
             let _ = state.app.emit(
                 "hud-swap",
                 serde_json::json!({ "source": drag.source, "target": drag.target }),
@@ -152,8 +192,12 @@ fn on_up(state: &mut State, wparam: usize, lparam: isize) {
     }
 
     let Some(press) = state.press.take() else { return };
-    let _ = point_of(lparam);
-    click(state, press.slot);
+    let (x, y) = point_of(lparam);
+    let distance = ((x - press.x).powi(2) + (y - press.y).powi(2)).sqrt();
+    // 移动超过阈值的按下是没进入拖动的拖动，不当作点击
+    if distance <= DRAG_THRESHOLD {
+        click(state, press.slot);
+    }
 }
 
 fn on_wheel(state: &mut State, wparam: usize) {
@@ -207,6 +251,17 @@ fn on_key(state: &mut State, wparam: usize) {
         if state.selected >= 2 {
             let _ = state.app.emit("hud-drop", state.selected);
         }
+        return;
+    }
+
+    // 状态栏聚焦时按局部快捷键开关物品栏
+    let open_key = state
+        .config
+        .as_ref()
+        .map(|config| config.open_inventory.to_lowercase())
+        .unwrap_or_default();
+    if open_key.len() == 1 && open_key.as_bytes()[0].to_ascii_uppercase() == key {
+        let _ = state.app.emit("hud-open-inventory", ());
     }
 }
 
@@ -221,35 +276,6 @@ fn on_menu(state: &mut State, lparam: isize) {
         "hud-menu",
         serde_json::json!({ "index": slot, "x": screen.x, "y": screen.y }),
     );
-}
-
-fn on_files(state: &mut State, drop: isize) {
-    if drop == 0 {
-        return;
-    }
-    let mut point = w::Point::default();
-    // SAFETY: HDROP 句柄来自窗口消息，用完立即释放
-    let has_point = unsafe { w::DragQueryPoint(drop, &mut point) } != 0;
-    let count = unsafe { w::DragQueryFileW(drop, u32::MAX, std::ptr::null_mut(), 0) };
-
-    if has_point && count > 0 {
-        let mut buffer = vec![0u16; 32768];
-        let length = unsafe { w::DragQueryFileW(drop, 0, buffer.as_mut_ptr(), buffer.len() as u32) };
-        if length > 0 {
-            let path = String::from_utf16_lossy(&buffer[..length as usize]);
-            let slot = slot_at(state, point.x as f32, point.y as f32);
-            if slot >= 0 {
-                let _ = state
-                    .app
-                    .emit("hud-files", serde_json::json!({ "index": slot, "path": path }));
-            }
-        }
-    }
-
-    // SAFETY: 释放拖放句柄
-    unsafe {
-        w::DragFinish(drop);
-    }
 }
 
 fn on_capture_lost(state: &mut State) {

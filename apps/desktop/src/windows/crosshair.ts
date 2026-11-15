@@ -5,6 +5,9 @@ import { getConfig, subscribeConfig, type DataMappingType } from "@/config/appCo
 import { loadCrosshairAssets } from "@/hud/crosshair/assets";
 import { computeCrosshairLayout, resolveScale } from "@/hud/crosshair/layout";
 import { drawCrosshairLayer } from "@/hud/crosshair/renderer";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
+
+installLocalHotkeys();
 
 declare global {
   interface Window {

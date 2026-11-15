@@ -31,6 +31,8 @@ mod windows_api {
     pub fn read_file_paths() -> Vec<String> {
         Vec::new()
     }
+
+    pub fn disable_transitions(_hwnd: isize) {}
 }
 
 pub use windows_api::*;

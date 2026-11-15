@@ -4,6 +4,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig, subscribeConfig, type BossBarConfig, type DataMappingType } from "@/config/appConfig";
 import { computeBossBarLayout, type BossBarLayout } from "@/hud/bossbar/layout";
 import { createBossBarRenderer } from "@/hud/bossbar/renderer";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
+
+installLocalHotkeys();
 
 interface SystemMetrics {
   battery: number;
