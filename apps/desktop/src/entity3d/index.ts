@@ -52,12 +52,23 @@ function prepare(texture: THREE.Texture) {
   return texture;
 }
 
+export async function loadTexture(name: string): Promise<void> {
+  if (textures.has(name)) return;
+  const key = textureKeys.get(name);
+  if (!key) throw new Error(`missing texture ${name}`);
+  textures.set(name, prepare(await loader.loadAsync(textureUrls[key])));
+}
+
+// 只加载已注册模型引用的贴图，实体系贴图目录留全量备用但不进启动开销
 export async function loadTextures(): Promise<void> {
-  await Promise.all(
-    [...textureKeys.entries()].map(async ([name, key]) => {
-      textures.set(name, prepare(await loader.loadAsync(textureUrls[key])));
-    })
-  );
+  const needed = new Set<string>();
+  for (const def of models.values()) {
+    needed.add(def.texture);
+    for (const bone of def.bones) {
+      for (const cube of bone.cubes) if (cube.texture) needed.add(cube.texture);
+    }
+  }
+  await Promise.all([...needed].map((name) => loadTexture(name)));
 }
 
 export async function loadSkinTexture(url: string): Promise<string> {
@@ -102,9 +113,12 @@ export class EntityView {
     if (!def) throw new Error(`unknown model ${id}`);
     let textureKey = def.texture;
     if (entity === "player") {
-      textureKey = options.skinUrl
-        ? await loadSkinTexture(options.skinUrl)
-        : skinTextureKey(options.skin ?? "steve", !!options.slim);
+      if (options.skinUrl) {
+        textureKey = await loadSkinTexture(options.skinUrl);
+      } else {
+        textureKey = skinTextureKey(options.skin ?? "steve", !!options.slim);
+        await loadTexture(textureKey);
+      }
     }
     const resolved: ModelDef = { ...def, texture: textureKey };
     this.model?.dispose();
