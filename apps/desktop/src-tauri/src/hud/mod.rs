@@ -6,7 +6,7 @@ mod draw;
 mod input;
 mod layout;
 mod sprite;
-mod sprites;
+mod embedded;
 mod text;
 mod win32;
 mod window;

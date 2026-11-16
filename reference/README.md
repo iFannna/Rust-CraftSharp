@@ -5,6 +5,7 @@
 ## 内容与来源
 
 - `bedrock/entity/*.geo.json`、`bedrock/animations/*.json`：Mojang 官方基岩版资源包，取自 Mojang/bedrock-samples 的 main 分支，用于数据驱动几何对照与官方动画角度。少部分动画 JSON 带注释，属原样数据。
+- `legacy-wpf/`：旧 WPF 项目的截图、字符串与图标，仅作历史参考，不参与构建。
 - `java/net/minecraft/client/model/**`、`java/net/minecraft/client/renderer/entity/**`：Java 版反编译源码（Mojang 映射），取自 MCFireworkDev/MinecraftDeobfuscated-Mojang 的 snapshot 分支，是 Java 版模型结构、逐面 UV 与姿态常数的权威来源。该公开仓库只到 2023 年，26.3 的源码需用 Bram1903/MinecraftSourcesGenerator 本地生成，生成结果不入库。
 - 全量贴图：从 26.3 客户端 jar 原样解包到 `assets/minecraft/textures/`，路径与 jar 内一致。
 - `assets/minecraft/textures/{item,block}/data/categories.json`：按 26.3 `CreativeModeTabs` 的官方创造栏重建，物品与方块分类不再手写。

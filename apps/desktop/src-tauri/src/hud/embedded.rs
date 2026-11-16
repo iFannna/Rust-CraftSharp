@@ -70,7 +70,7 @@ pub fn bytes(name: &str) -> Option<&'static [u8]> {
         "hud/hotbar/hotbar.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar.png"),
         "hud/hotbar/hotbar_offhand.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar_offhand.png"),
         "hud/hotbar/hotbar_selection.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/sprites/hud/hotbar/hotbar_selection.png"),
-        "item/barrier.png" => include_bytes!("../../../../../assets/minecraft/textures/item/item/barrier.png"),
+        "item/barrier.png" => include_bytes!("../../../../../assets/minecraft/textures/item/barrier.png"),
         "gui/container/brewing_stand.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/container/brewing_stand.png"),
         "gui/container/cartography_table.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/container/cartography_table.png"),
         "gui/container/crafter.png" => include_bytes!("../../../../../assets/minecraft/textures/gui/container/crafter.png"),

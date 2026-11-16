@@ -27,13 +27,13 @@ fn premultiply(rgba: &[u8]) -> Vec<u32> {
     out
 }
 
-/// 按名字取贴图，名字见 `sprites::bytes`。
+/// 按名字取贴图，名字见 `embedded::bytes`。
 pub fn load(name: &str) -> Option<Rc<Sprite>> {
     CACHE.with(|cache| {
         if let Some(sprite) = cache.borrow().get(name) {
             return Some(sprite.clone());
         }
-        let bytes = crate::hud::sprites::bytes(name)?;
+        let bytes = crate::hud::embedded::bytes(name)?;
         let image = image::load_from_memory(bytes).ok()?.to_rgba8();
         let sprite = Rc::new(Sprite {
             width: image.width(),
