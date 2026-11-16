@@ -58,7 +58,8 @@ function convertBone(b) {
 // 玩家：HumanoidModel.createMesh + PlayerModel.createMesh
 function playerMesh(slim) {
   const armW = slim ? 3 : 4;
-  const armY = slim ? 2.5 : 2;
+  // 26.3 起 slim 手臂枢轴与 wide 同为 y=2
+  const armY = 2;
   const bones = [
     bone("head", null, [0, 0, 0], [cube(-4, -8, -4, 8, 8, 8, 0, 0)]),
     bone("hat", null, [0, 0, 0], [cube(-4, -8, -4, 8, 8, 8, 32, 0, 0.5)]),
