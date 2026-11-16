@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getConfig } from "@/config/appConfig";
 import { openDialogWindow } from "@/lib/dialogWindow";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { isTauri } from "@/lib/runtime";
 import { tOf } from "@/i18n";
 import {
@@ -27,17 +28,17 @@ export function sameSlotScope(a: SlotScope, b: SlotScope): boolean {
 }
 
 const inTauri = isTauri();
-const RENAME_LABEL = "rename-dialog";
-const CONFIRM_LABEL = "confirm-dialog";
 
 async function showConfirm(text: string): Promise<boolean> {
   if (!inTauri) return window.confirm(text);
+  const t = tOf(getConfig().system.language);
   const result = await openDialogWindow<boolean>({
-    label: CONFIRM_LABEL,
+    label: WINDOW_LABEL.confirm,
+    title: t("dialog.confirmTitle"),
     page: "confirm",
     params: { kind: "confirm", text },
-    width: 440,
-    height: 230
+    width: 460,
+    height: 260
   });
   return result === true;
 }
@@ -47,24 +48,28 @@ async function showAlert(text: string): Promise<void> {
     window.alert(text);
     return;
   }
+  const t = tOf(getConfig().system.language);
   await openDialogWindow<boolean>({
-    label: CONFIRM_LABEL,
+    label: WINDOW_LABEL.confirm,
+    title: t("dialog.alertTitle"),
     page: "confirm",
     params: { kind: "alert", text },
-    width: 440,
-    height: 230
+    width: 460,
+    height: 260
   });
 }
 
 /** 重命名对话框独立成窗口，避免隐藏窗口里的 prompt 不可见 */
 async function askRename(initial: string): Promise<string | null> {
-  if (!inTauri) return window.prompt(tOf(getConfig().system.language)("rename.title"), initial);
+  const t = tOf(getConfig().system.language);
+  if (!inTauri) return window.prompt(t("rename.title"), initial);
   return openDialogWindow<string>({
-    label: RENAME_LABEL,
+    label: WINDOW_LABEL.rename,
+    title: t("rename.title"),
     page: "rename",
     params: { name: initial },
-    width: 360,
-    height: 190
+    width: 380,
+    height: 220
   });
 }
 

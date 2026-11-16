@@ -64,6 +64,8 @@
         "minWidth": 760,
         "minHeight": 480,
         "center": true,
+        "decorations": false,
+        "shadow": true,
         "resizable": true,
         "visible": false
       },

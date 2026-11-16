@@ -4,13 +4,14 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
 import { isTauri } from "@/lib/runtime";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
 import { Button } from "@/ui/components/button";
 import { Input } from "@/ui/components/input";
 import { ThemeRoot } from "@/ui/theme-root";
+import { WindowFrame } from "@/ui/window-frame";
 import "@/ui/styles.css";
 
-const LABEL = "rename-dialog";
 const params = new URLSearchParams(location.search);
 
 function RenameDialog() {
@@ -18,8 +19,8 @@ function RenameDialog() {
   const [value, setValue] = useState(() => params.get("name") ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const submit = () => emitDialogResult(LABEL, value);
-  const cancel = () => emitDialogResult(LABEL, null);
+  const submit = () => emitDialogResult(WINDOW_LABEL.rename, value);
+  const cancel = () => emitDialogResult(WINDOW_LABEL.rename, null);
 
   useEffect(() => {
     document.title = t("rename.title");
@@ -47,15 +48,14 @@ function RenameDialog() {
 
   return (
     <ThemeRoot>
-      <div className="flex h-screen items-center justify-center p-3">
+      <WindowFrame title={t("rename.title")} controls="close" onClose={cancel}>
         <form
-          className="flex w-full flex-col gap-3 rounded-lg border bg-card p-4 shadow-md"
+          className="flex min-h-0 flex-1 flex-col gap-4 p-5"
           onSubmit={(event) => {
             event.preventDefault();
             submit();
           }}
         >
-          <div className="text-sm font-medium">{t("rename.title")}</div>
           <Input
             ref={inputRef}
             value={value}
@@ -64,14 +64,14 @@ function RenameDialog() {
             autoComplete="off"
             className="h-9 text-sm"
           />
-          <div className="flex justify-end gap-2">
+          <div className="mt-auto flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={cancel}>
               {t("common.cancel")}
             </Button>
             <Button type="submit">{t("common.confirm")}</Button>
           </div>
         </form>
-      </div>
+      </WindowFrame>
     </ThemeRoot>
   );
 }

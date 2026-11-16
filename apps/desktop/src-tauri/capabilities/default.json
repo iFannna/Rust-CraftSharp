@@ -7,6 +7,9 @@
     "hud",
     "slot-menu",
     "rename-dialog",
+    "confirm-dialog",
+    "app-icon-picker",
+    "entity-preview",
     "settings"
   ],
   "permissions": [

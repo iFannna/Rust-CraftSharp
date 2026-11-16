@@ -1,33 +1,48 @@
-import { useState } from "react";
-import type { TFunction } from "@/i18n";
-import { DEFAULT_APP_ICON, DEFAULT_APP_ICON_URL, APP_ICON_GROUPS, appIconUrl } from "@/settings/appIcons";
-import { Dialog, DialogContent, DialogTitle } from "@/ui/components/dialog";
+import { useEffect, useState } from "react";
+import ReactDOM from "react-dom/client";
+import { getConfig } from "@/config/appConfig";
+import { emitDialogResult } from "@/lib/dialogWindow";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
+import { tOf } from "@/i18n";
+import { APP_ICON_GROUPS, DEFAULT_APP_ICON, DEFAULT_APP_ICON_URL, appIconUrl } from "@/settings/appIcons";
+import { ThemeRoot } from "@/ui/theme-root";
+import { WindowFrame } from "@/ui/window-frame";
 import { cn } from "@/ui/lib/utils";
+import "@/ui/styles.css";
 
-interface AppIconPickerProps {
-  value: string;
-  t: TFunction;
-  onPick: (id: string) => void;
-  onClose: () => void;
-}
+const params = new URLSearchParams(location.search);
 
-/** 应用图标选择：沿用老版分类，选中即应用并关闭 */
-export function AppIconPicker({ value, t, onPick, onClose }: AppIconPickerProps) {
+function IconPicker() {
+  const t = tOf(getConfig().system.language);
+  const value = params.get("value") ?? "";
   const [active, setActive] = useState(
     () => `${APP_ICON_GROUPS[0].id}:${APP_ICON_GROUPS[0].categories[0].id}`
   );
+
+  const finish = (icon: string | null) => emitDialogResult(WINDOW_LABEL.iconPicker, icon);
+
+  useEffect(() => {
+    document.title = t("iconPicker.title");
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      finish(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const [groupId, categoryId] = active.split(":");
   const group = APP_ICON_GROUPS.find((item) => item.id === groupId) ?? APP_ICON_GROUPS[0];
   const category = group.categories.find((item) => item.id === categoryId) ?? group.categories[0];
 
   return (
-    <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent className="flex h-[min(640px,calc(100vh-64px))] w-[min(900px,calc(100vw-64px))] max-w-none flex-col gap-0 overflow-hidden p-0">
-        <header className="flex h-14 flex-none items-center border-b px-5 pr-14">
-          <DialogTitle className="text-base font-semibold">{t("iconPicker.title")}</DialogTitle>
-        </header>
-
+    <ThemeRoot>
+      <WindowFrame
+        title={t("iconPicker.title")}
+        resizable
+        onClose={() => finish(null)}
+      >
         <div className="flex min-h-0 flex-1">
           <nav className="ui-scroll w-48 flex-none overflow-y-auto border-r p-2" aria-label={t("iconPicker.title")}>
             {APP_ICON_GROUPS.map((item) => (
@@ -65,7 +80,7 @@ export function AppIconPicker({ value, t, onPick, onClose }: AppIconPickerProps)
               )}
               title={t("iconPicker.defaultIcon")}
               aria-label={t("iconPicker.defaultIcon")}
-              onClick={() => onPick(DEFAULT_APP_ICON)}
+              onClick={() => finish(DEFAULT_APP_ICON)}
             >
               <img
                 src={DEFAULT_APP_ICON_URL}
@@ -84,7 +99,7 @@ export function AppIconPicker({ value, t, onPick, onClose }: AppIconPickerProps)
                 )}
                 title={entry.file}
                 aria-label={entry.file}
-                onClick={() => onPick(entry.id)}
+                onClick={() => finish(entry.id)}
               >
                 <img
                   src={appIconUrl(entry.id)}
@@ -98,7 +113,9 @@ export function AppIconPicker({ value, t, onPick, onClose }: AppIconPickerProps)
             ))}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </WindowFrame>
+    </ThemeRoot>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")!).render(<IconPicker />);

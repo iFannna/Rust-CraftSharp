@@ -1,6 +1,7 @@
 // 3D 预览窗口：实体/皮肤/动作切换与相机操作，兼作渲染校验面
 import * as THREE from "three";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ENTITIES,
   PLAYER_SKINS,
@@ -10,6 +11,7 @@ import {
   type EntityId
 } from "@/entity3d";
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
+import { isTauri } from "@/lib/runtime";
 import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
 
 const ANIMATION_LABELS: Record<string, string> = {
@@ -43,6 +45,53 @@ const resetButton = document.getElementById("resetView") as HTMLButtonElement;
 const autoRotateCheck = document.getElementById("autoRotate") as HTMLInputElement;
 const backgroundSelect = document.getElementById("background") as HTMLSelectElement;
 const wireframeCheck = document.getElementById("wireframe") as HTMLInputElement;
+
+type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
+
+if (isTauri()) {
+  const currentWindow = getCurrentWindow();
+  const minimizeButton = document.getElementById("windowMinimize") as HTMLButtonElement;
+  const maximizeButton = document.getElementById("windowMaximize") as HTMLButtonElement;
+  const closeButton = document.getElementById("windowClose") as HTMLButtonElement;
+
+  const syncMaximized = () => {
+    void currentWindow
+      .isMaximized()
+      .then((maximized) => {
+        document.body.classList.toggle("maximized", maximized);
+        const label = maximized ? "还原" : "最大化";
+        maximizeButton.setAttribute("aria-label", label);
+        maximizeButton.title = label;
+      })
+      .catch(() => undefined);
+  };
+
+  minimizeButton.addEventListener("click", () => {
+    void currentWindow.minimize().catch(() => undefined);
+  });
+  maximizeButton.addEventListener("click", () => {
+    void currentWindow.toggleMaximize().catch(() => undefined);
+  });
+  closeButton.addEventListener("click", () => {
+    void currentWindow.hide().catch(() => undefined);
+  });
+
+  // Alt+F4 也按关闭键处理，窗口保留给托盘再次打开
+  void currentWindow.onCloseRequested((event) => {
+    event.preventDefault();
+    void currentWindow.hide().catch(() => undefined);
+  });
+  void currentWindow.onResized(syncMaximized);
+  syncMaximized();
+
+  for (const handle of document.querySelectorAll<HTMLElement>("[data-resize]")) {
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const direction = handle.dataset.resize as ResizeDirection;
+      void currentWindow.startResizeDragging(direction).catch(() => undefined);
+    });
+  }
+}
 
 ensureSettingsFonts();
 

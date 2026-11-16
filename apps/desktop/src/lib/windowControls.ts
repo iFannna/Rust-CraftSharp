@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 
 export type WindowLabel = "main" | "settings" | "entity-preview";
 
@@ -18,6 +19,11 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
     await target.show();
     if (focus) await target.setFocus();
   } else {
+    if (label === WINDOW_LABEL.settings) {
+      // 设置面板收起时，从它打开的展示窗口一起收起
+      const picker = await WebviewWindow.getByLabel(WINDOW_LABEL.iconPicker);
+      await picker?.close().catch(() => undefined);
+    }
     await target.hide();
   }
 }

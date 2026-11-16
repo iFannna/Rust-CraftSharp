@@ -3,22 +3,24 @@ import ReactDOM from "react-dom/client";
 import { CircleHelp, TriangleAlert } from "lucide-react";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
 import { Button } from "@/ui/components/button";
 import { ThemeRoot } from "@/ui/theme-root";
+import { WindowFrame } from "@/ui/window-frame";
 import "@/ui/styles.css";
 
-const LABEL = "confirm-dialog";
 const params = new URLSearchParams(location.search);
 
 function ConfirmDialog() {
   const t = tOf(getConfig().system.language);
   const kind = params.get("kind") === "alert" ? "alert" : "confirm";
   const text = params.get("text") ?? "";
-  const finish = (value: boolean) => emitDialogResult(LABEL, value);
+  const title = t(kind === "confirm" ? "dialog.confirmTitle" : "dialog.alertTitle");
+  const finish = (value: boolean) => emitDialogResult(WINDOW_LABEL.confirm, value);
 
   useEffect(() => {
-    document.title = t(kind === "confirm" ? "dialog.confirmTitle" : "dialog.alertTitle");
+    document.title = title;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -32,20 +34,15 @@ function ConfirmDialog() {
 
   return (
     <ThemeRoot>
-      <div className="flex h-screen items-center justify-center p-3">
-        <div className="flex w-full flex-col gap-4 rounded-lg border bg-card p-4 shadow-md">
-          <div className="flex gap-3">
+      <WindowFrame title={title} controls="close" onClose={() => finish(false)}>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
+          <div className="flex min-h-0 flex-1 gap-3">
             <Icon className="mt-0.5 h-5 w-5 flex-none text-muted-foreground" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="text-sm font-semibold">
-                {t(kind === "confirm" ? "dialog.confirmTitle" : "dialog.alertTitle")}
-              </div>
-              <p className="ui-scroll max-h-[104px] overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                {text}
-              </p>
-            </div>
+            <p className="ui-scroll min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
+              {text}
+            </p>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-none justify-end gap-2">
             {kind === "confirm" ? (
               <Button autoFocus type="button" variant="outline" onClick={() => finish(false)}>
                 {t("common.cancel")}
@@ -61,7 +58,7 @@ function ConfirmDialog() {
             </Button>
           </div>
         </div>
-      </div>
+      </WindowFrame>
     </ThemeRoot>
   );
 }

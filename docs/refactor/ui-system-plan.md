@@ -60,7 +60,7 @@
 
 ## 当前结果
 
-- 已接入 Tailwind 3.4 + shadcn/ui new-york neutral，仅保留 button、input、select、switch、checkbox、dialog、accordion 七个组件。
+- 已接入 Tailwind 3.4 + shadcn/ui new-york neutral，仅保留 button、input、select、switch、checkbox、accordion 六个组件。
 - 设置窗口壳、侧栏、标题栏、共享控件、全部 7 个设置页、图标选择弹窗已切到中性风。
 - 重命名、确认框、右键菜单改为 React 独立窗口，共用 ThemeRoot、Button、Input、颜色令牌和字体栈。
 - 确认框替换了原生 MessageBoxW，Rust 里的 `confirm_dialog` / `alert_dialog` 已删除。
@@ -70,6 +70,18 @@
 - 已验证：暗色 / 亮色、中文 / 英文、字号 20、字体切换、下拉、开关、图标选择与 Esc 关闭、构建和 cargo check 通过。
 - 当前体积：settings JS 598.78 kB（gzip 142.62 kB），CSS 28.57 kB（gzip 6.15 kB）。
 - macOS：当前三端都使用右侧自绘按钮。原生红绿灯要等 macOS 窗口配置（Overlay / hiddenTitle）一起接入，避免现在出现无按钮窗口。
+
+## 窗口壳统一
+
+- 标题栏统一为 32 高的 Windows 标准，三个按钮 `46×32` 满高贴边，图标统一 16；悬停与配色不变。
+- 窗口分两类：展示框（设置、图标选择、3D 预览）三键齐全、可缩放、进任务栏；对话框（确认、提示、重命名）只有关闭键、固定尺寸、进任务栏、置顶。
+- 新增 `ui/window-frame.tsx`，统一标题栏、缩放边缘与窗口操作；设置面板一并切到该外框。
+- 图标选择从设置面板内嵌 Dialog 改为独立展示窗口，经 `dialog:result` 返回结果；选中即应用并关闭，关闭或 Esc 取消。
+- 对话框与展示框都改为整窗外框，去掉透明留白和浮动卡片；窗口标题按当前语言传给任务栏。
+- 3D 预览去掉系统标题栏，换成同一套自绘标题栏与缩放边缘，关闭改为隐藏，保留托盘再次打开。
+- 删除 `ui/components/dialog.tsx`、`settings/components/appIconPicker.tsx` 和 `@radix-ui/react-dialog` 依赖。
+- 权限补齐 `confirm-dialog`、`app-icon-picker`、`entity-preview`。
+- `tsc --noEmit` 与 `vite build` 通过；真实窗口冒烟留给用户。
 
 ## 清理
 
@@ -81,4 +93,5 @@
 - [x] 试点
 - [x] 设置面板全量
 - [x] 独立窗口
+- [x] 窗口壳统一
 - [x] 清理

@@ -6,7 +6,17 @@ import react from "@vitejs/plugin-react";
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
 /** 每个桌面窗口一个 HTML 入口，统一放在 pages/ */
-const pages = ["index", "hud", "menu", "rename", "confirm", "settings", "entity-preview", "entity-view"];
+const pages = [
+  "index",
+  "hud",
+  "menu",
+  "rename",
+  "confirm",
+  "icon-picker",
+  "settings",
+  "entity-preview",
+  "entity-view"
+];
 
 export default defineConfig({
   plugins: [react()],

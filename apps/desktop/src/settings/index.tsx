@@ -17,8 +17,9 @@ import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
 import { SystemSection } from "@/settings/sections/systemSection";
 import { tOf, type MessageKey } from "@/i18n";
+import { setSettingsVisible } from "@/lib/windowControls";
 import { ThemeRoot } from "@/ui/theme-root";
-import { TitleBar } from "@/ui/title-bar";
+import { WindowFrame } from "@/ui/window-frame";
 import { cn } from "@/ui/lib/utils";
 import "@/ui/styles.css";
 
@@ -44,28 +45,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: "debug", labelKey: "nav.debug", Icon: Bug, Section: DebugSection }
 ];
 
-/** @tauri-apps/api 未导出该联合类型，这里按 startResizeDragging 的取值定义 */
-type ResizeDirection =
-  | "East"
-  | "North"
-  | "NorthEast"
-  | "NorthWest"
-  | "South"
-  | "SouthEast"
-  | "SouthWest"
-  | "West";
-
-const RESIZE_EDGES: { direction: ResizeDirection; className: string }[] = [
-  { direction: "North", className: "left-2 right-2 top-0 h-1 cursor-ns-resize" },
-  { direction: "South", className: "bottom-0 left-2 right-2 h-1 cursor-ns-resize" },
-  { direction: "East", className: "bottom-2 right-0 top-2 w-1 cursor-ew-resize" },
-  { direction: "West", className: "bottom-2 left-0 top-2 w-1 cursor-ew-resize" },
-  { direction: "NorthEast", className: "right-0 top-0 h-2 w-2 cursor-nesw-resize" },
-  { direction: "NorthWest", className: "left-0 top-0 h-2 w-2 cursor-nwse-resize" },
-  { direction: "SouthEast", className: "bottom-0 right-0 h-2 w-2 cursor-nwse-resize" },
-  { direction: "SouthWest", className: "bottom-0 left-0 h-2 w-2 cursor-nesw-resize" }
-];
-
 function windowApi() {
   return isTauri() ? getCurrentWindow() : null;
 }
@@ -79,13 +58,12 @@ function SettingsApp() {
     if (system.rememberNavSelection && NAV_ITEMS.some((item) => item.id === saved)) return saved;
     return "system";
   });
-  const [maximized, setMaximized] = useState(false);
   const maximizedRef = useRef(false);
   const ActiveSection = NAV_ITEMS.find((item) => item.id === active)!.Section;
 
-  useEffect(() => {
-    maximizedRef.current = maximized;
-  }, [maximized]);
+  const syncMaximized = (value: boolean) => {
+    maximizedRef.current = value;
+  };
 
   useEffect(() => {
     const title = t("window.title");
@@ -99,22 +77,6 @@ function SettingsApp() {
       updateConfig({ system: { lastSection: id } });
     }
   };
-
-  useEffect(() => {
-    const current = windowApi();
-    if (!current) return;
-
-    let unlisten: (() => void) | undefined;
-    const syncMaximized = () => {
-      void current.isMaximized().then(setMaximized).catch(() => undefined);
-    };
-    syncMaximized();
-    void current.onResized(syncMaximized).then((dispose) => {
-      unlisten = dispose;
-    }).catch(() => undefined);
-
-    return () => unlisten?.();
-  }, []);
 
   // 记忆设置窗口的位置、大小与选中页，恢复时夹回当前工作区
   useEffect(() => {
@@ -191,50 +153,19 @@ function SettingsApp() {
     };
   }, []);
 
-  const minimize = () => {
-    void windowApi()?.minimize().catch(() => undefined);
-  };
-
-  const toggleMaximize = () => {
-    void windowApi()?.toggleMaximize().catch(() => undefined);
-  };
-
   const close = () => {
     // 关闭只隐藏窗口，托盘与后台窗口继续运行，与原版一致
-    void windowApi()?.hide().catch(() => undefined);
+    void setSettingsVisible(false);
   };
 
   return (
     <ThemeRoot>
-      <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-        {maximized
-          ? null
-          : RESIZE_EDGES.map((edge) => (
-              <div
-                key={edge.direction}
-                className={cn("fixed z-50", edge.className)}
-                aria-hidden="true"
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  void windowApi()?.startResizeDragging(edge.direction).catch(() => undefined);
-                }}
-              />
-            ))}
-
-        <TitleBar
-          title="Craft#"
-          maximized={maximized}
-          labels={{
-            minimize: t("window.minimize"),
-            maximize: t("window.maximize"),
-            restore: t("window.restore"),
-            close: t("window.close")
-          }}
-          onMinimize={minimize}
-          onMaximize={toggleMaximize}
-          onClose={close}
-        />
-
+      <WindowFrame
+        title="Craft#"
+        resizable
+        onMaximizedChange={syncMaximized}
+        onClose={close}
+      >
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-56 flex-none flex-col border-r p-2" aria-label={t("window.sections")}>
             <div className="flex flex-col gap-1">
@@ -266,7 +197,7 @@ function SettingsApp() {
             </div>
           </main>
         </div>
-      </div>
+      </WindowFrame>
     </ThemeRoot>
   );
 }
