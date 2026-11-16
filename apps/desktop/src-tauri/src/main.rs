@@ -396,6 +396,7 @@ fn show_settings(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("settings") else {
         return;
     };
+    let _ = window.set_skip_taskbar(false);
     let _ = window.show();
     if window.is_minimized().unwrap_or(false) {
         let _ = window.unminimize();
@@ -403,7 +404,7 @@ fn show_settings(app: &tauri::AppHandle) {
     let _ = window.set_focus();
 }
 
-/// 托盘左键切换：可见时立即收起，隐藏或最小化时恢复并聚焦。
+/// 托盘左键切换：收起时先启动最小化动画，任务栏按钮立即消失，动画结束后再隐藏窗口。
 fn toggle_settings(app: &tauri::AppHandle) {
     use tauri::Manager;
 
@@ -418,7 +419,19 @@ fn toggle_settings(app: &tauri::AppHandle) {
     }
 
     let _ = window.minimize();
-    let _ = window.hide();
+    let _ = window.set_skip_taskbar(true);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(260));
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("settings") {
+            if window.is_visible().unwrap_or(false) && window.is_minimized().unwrap_or(false) {
+                let _ = window.hide();
+            }
+            // 隐藏后恢复任务栏状态，之后任何入口重新打开都正常
+            let _ = window.set_skip_taskbar(false);
+        }
+    });
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {

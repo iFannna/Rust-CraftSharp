@@ -26,6 +26,7 @@
     "core:window:allow-is-visible",
     "core:window:allow-is-minimized",
     "core:window:allow-unminimize",
+    "core:window:allow-set-skip-taskbar",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",
     "core:window:allow-start-resize-dragging",

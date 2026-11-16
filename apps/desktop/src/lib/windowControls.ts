@@ -36,6 +36,7 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
   }
 
   await target.show().catch(() => undefined);
+  await target.setSkipTaskbar(false).catch(() => undefined);
   if (pendingVisibility.get(label) !== token) return;
   if (await target.isMinimized().catch(() => false)) {
     await target.unminimize().catch(() => undefined);
