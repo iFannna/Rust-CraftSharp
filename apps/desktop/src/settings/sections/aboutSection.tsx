@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { resetConfig } from "@/config/appConfig";
+import { getConfig, resetConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
 import { Button, Card, Note, SectionHead } from "@/settings/components/controls";
+import { applyTrayIcon } from "@/settings/trayIcons";
 
 const ABOUT_ROWS: { labelKey: MessageKey; value: string }[] = [
   { labelKey: "about.author", value: "iFannna" },
@@ -21,6 +22,7 @@ export function AboutSection() {
 
   const handleReset = () => {
     resetConfig();
+    void applyTrayIcon(getConfig().appearance.trayIcon);
     setConfirming(false);
     setResetting(true);
   };

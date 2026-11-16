@@ -8,6 +8,7 @@ const FONT_FACES: Record<string, { family: string; url: string }> = {
 };
 
 const FONT_STACKS: Record<UIFont, string> = {
+  system: 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif',
   yahei: '"Microsoft YaHei", "Segoe UI", system-ui, sans-serif',
   pixel: '"CraftSharpZpix", "Microsoft YaHei", monospace',
   unifont: '"CraftSharpUnifont", "Microsoft YaHei", monospace',

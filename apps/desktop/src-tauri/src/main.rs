@@ -303,6 +303,50 @@ fn read_skin_data_url(path: String) -> Result<String, String> {
     Ok(format!("data:image/png;base64,{}", base64(&png)))
 }
 
+fn tray_icon_file(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    use tauri::Manager;
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("tray-icon.png"))
+}
+
+fn decode_tray_icon(bytes: &[u8]) -> Option<tauri::image::Image<'static>> {
+    let image = image::load_from_memory(bytes).ok()?.to_rgba8();
+    Some(tauri::image::Image::new_owned(
+        image.as_raw().clone(),
+        image.width(),
+        image.height(),
+    ))
+}
+
+/// 更换托盘图标；png 为空时恢复默认应用图标并删除自定义图标
+#[tauri::command]
+fn set_tray_icon(app: tauri::AppHandle, png: Option<String>) -> Result<(), String> {
+    let tray = app.tray_by_id("main").ok_or("tray icon not found")?;
+    let path = tray_icon_file(&app).ok_or("config directory unavailable")?;
+
+    let Some(png) = png else {
+        let _ = std::fs::remove_file(&path);
+        if let Some(icon) = app.default_window_icon().cloned() {
+            tray.set_icon(Some(icon))
+                .map_err(|error| error.to_string())?;
+        }
+        return Ok(());
+    };
+
+    let bytes = base64_decode(&png)?;
+    let icon = decode_tray_icon(&bytes).ok_or("invalid icon image")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    }
+    // 先落盘再换图标，下次启动创建托盘时直接读到
+    std::fs::write(&path, &bytes).map_err(|error| error.to_string())?;
+    tray.set_icon(Some(icon))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn base64(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -413,7 +457,10 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         });
 
-    if let Some(icon) = app.default_window_icon().cloned() {
+    let saved_icon = tray_icon_file(app)
+        .and_then(|path| std::fs::read(path).ok())
+        .and_then(|bytes| decode_tray_icon(&bytes));
+    if let Some(icon) = saved_icon.or_else(|| app.default_window_icon().cloned()) {
         builder = builder.icon(icon);
     }
 
@@ -487,6 +534,7 @@ fn main() {
             slots_replace_path,
             read_skin_data_url,
             entity_host_frame,
+            set_tray_icon,
             set_autostart
         ])
         .run(tauri::generate_context!())

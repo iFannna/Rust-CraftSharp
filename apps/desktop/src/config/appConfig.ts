@@ -10,7 +10,7 @@ export type { LanguageCode };
 export type ClickMode = "single" | "double";
 export type ThemeMode = "system" | "light" | "dark";
 export type SkinType = "wide" | "slim";
-export type UIFont = "yahei" | "pixel" | "unifont" | "songti" | "kaiti" | "heiti";
+export type UIFont = "system" | "yahei" | "pixel" | "unifont" | "songti" | "kaiti" | "heiti";
 
 export interface PositionConfig {
   x: number;
@@ -40,6 +40,8 @@ export interface AppearanceConfig {
   theme: ThemeMode;
   font: UIFont;
   fontSize: number;
+  /** 托盘图标 id：block/xxx.png、item/xxx.png，空串为默认应用图标 */
+  trayIcon: string;
 }
 
 export interface StatusBarConfig {
@@ -204,7 +206,7 @@ const DEFAULTS: AppConfig = {
     windowSize: null,
     lastSection: "system"
   },
-  appearance: { theme: "dark", font: "yahei", fontSize: 14 },
+  appearance: { theme: "dark", font: "yahei", fontSize: 14, trayIcon: "" },
   statusBar: { visible: true, locked: false, rememberPosition: true, position: null },
   hotbar: {
     visible: true,
@@ -348,7 +350,8 @@ function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
     appearance: {
       theme: raw.appearance?.theme ?? base.appearance.theme,
       font: raw.appearance?.font ?? base.appearance.font,
-      fontSize: clampInt(raw.appearance?.fontSize, 10, 20, base.appearance.fontSize)
+      fontSize: clampInt(raw.appearance?.fontSize, 10, 20, base.appearance.fontSize),
+      trayIcon: typeof raw.appearance?.trayIcon === "string" ? raw.appearance.trayIcon : base.appearance.trayIcon
     },
     statusBar: { ...base.statusBar, ...raw.statusBar },
     hotbar: { ...base.hotbar, ...raw.hotbar },

@@ -9,6 +9,7 @@ import { useResolvedTheme } from "@/settings/theme";
 import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
 import { AboutSection } from "@/settings/sections/aboutSection";
 import { AppearanceSection } from "@/settings/sections/appearanceSection";
+import { DebugSection } from "@/settings/sections/debugSection";
 import { HotkeysSection } from "@/settings/sections/hotkeysSection";
 import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { HudSection } from "@/settings/sections/hudSection";
@@ -17,7 +18,7 @@ import { SystemSection } from "@/settings/sections/systemSection";
 import { tOf, type MessageKey } from "@/i18n";
 import "@/settings/settings.css";
 
-type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about";
+type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
 
 ensureSettingsFonts();
 installLocalHotkeys();
@@ -36,7 +37,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: "hud", labelKey: "nav.hud", glyph: "\uE80A", Section: HudSection },
   { id: "inventory", labelKey: "nav.inventory", glyph: "\uE7B8", Section: InventorySection },
   { id: "hotkeys", labelKey: "nav.hotkeys", glyph: "\uE765", Section: HotkeysSection },
-  { id: "about", labelKey: "nav.about", glyph: "\uE946", Section: AboutSection }
+  { id: "about", labelKey: "nav.about", glyph: "\uE946", Section: AboutSection },
+  { id: "debug", labelKey: "nav.debug", glyph: "\uEBE8", Section: DebugSection }
 ];
 
 /** @tauri-apps/api 未导出该联合类型，这里按 startResizeDragging 的取值定义 */

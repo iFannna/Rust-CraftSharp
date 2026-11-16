@@ -1,12 +1,11 @@
+import { useState } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
-import { PLAYER_SKINS } from "@/entity3d/catalog";
 import { tOf } from "@/i18n";
-import { toggleEntityPreview } from "@/lib/windowControls";
 import { Button, Card, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
-import { fontOptions, skinTypeOptions, themeOptions } from "@/settings/options";
-
-const SKIN_OPTIONS: Option<string>[] = PLAYER_SKINS.map((skin) => ({ value: skin, label: skin }));
+import { TrayIconPicker } from "@/settings/components/trayIconPicker";
+import { fontOptions, themeOptions } from "@/settings/options";
+import { applyTrayIcon, trayIconUrl } from "@/settings/trayIcons";
 
 const SIZE_OPTIONS: Option<string>[] = ["10", "12", "14", "16", "18", "20"].map((size) => ({
   value: size,
@@ -16,15 +15,34 @@ const SIZE_OPTIONS: Option<string>[] = ["10", "12", "14", "16", "18", "20"].map(
 export function AppearanceSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const reset = () => {
     const defaults = defaultConfig().appearance;
     updateConfig({ appearance: defaults });
+    void applyTrayIcon(defaults.trayIcon);
+  };
+
+  const pickIcon = (trayIcon: string) => {
+    updateConfig({ appearance: { ...config.appearance, trayIcon } });
+    void applyTrayIcon(trayIcon);
+    setPickerOpen(false);
   };
 
   return (
     <>
       <SectionHead title={t("appearance.title")} />
+      <Row label={t("appearance.iconLabel")} description={t("appearance.iconDesc")}>
+        <button
+          type="button"
+          className="tray-icon-button"
+          title={t("appearance.iconTooltip")}
+          aria-label={t("aria.trayIcon")}
+          onClick={() => setPickerOpen(true)}
+        >
+          <img src={trayIconUrl(config.appearance.trayIcon)} alt="" draggable={false} />
+        </button>
+      </Row>
       <Row label={t("appearance.themeLabel")} description={t("appearance.themeDesc")}>
         <Select
           value={config.appearance.theme}
@@ -51,31 +69,17 @@ export function AppearanceSection() {
           }
         />
       </Row>
-      <Row label={t("appearance.skinLabel")} description={t("appearance.skinDesc")}>
-        <Select
-          value={config.player.skinName}
-          options={SKIN_OPTIONS}
-          ariaLabel={t("aria.skin")}
-          onChange={(skinName) => updateConfig({ player: { ...config.player, skinName, skinPath: "" } })}
-        />
-      </Row>
-      <Row label={t("appearance.skinTypeLabel")} description={t("appearance.skinTypeDesc")}>
-        <Select
-          value={config.player.skinType}
-          options={skinTypeOptions(t)}
-          ariaLabel={t("aria.skinType")}
-          onChange={(skinType) => updateConfig({ player: { ...config.player, skinType } })}
-        />
-      </Row>
-      <Row
-        label={t("appearance.customSkinLabel")}
-        description={config.player.skinPath || t("appearance.customSkinDesc")}
-      >
-        <Button onClick={() => void toggleEntityPreview()}>{t("appearance.openPreview")}</Button>
-      </Row>
       <Card className="action-card">
         <Button onClick={reset}>{t("common.restoreDefaults")}</Button>
       </Card>
+      {pickerOpen ? (
+        <TrayIconPicker
+          value={config.appearance.trayIcon}
+          t={t}
+          onPick={pickIcon}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

@@ -26,6 +26,7 @@ const THEMES: { value: ThemeMode; key: MessageKey }[] = [
 ];
 
 const FONTS: { value: UIFont; key: MessageKey }[] = [
+  { value: "system", key: "appearance.fontSystem" },
   { value: "yahei", key: "appearance.fontYahei" },
   { value: "pixel", key: "appearance.fontPixel" },
   { value: "unifont", key: "appearance.fontUnifont" },
@@ -35,8 +36,8 @@ const FONTS: { value: UIFont; key: MessageKey }[] = [
 ];
 
 const SKIN_TYPES: { value: SkinType; key: MessageKey }[] = [
-  { value: "wide", key: "appearance.skinTypeWide" },
-  { value: "slim", key: "appearance.skinTypeSlim" }
+  { value: "wide", key: "debug.skinTypeWide" },
+  { value: "slim", key: "debug.skinTypeSlim" }
 ];
 
 const CLICK_MODES: { value: ClickMode; key: MessageKey }[] = [
