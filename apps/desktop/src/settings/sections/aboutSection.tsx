@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getConfig, resetConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
-import { Button, Card, Note, SectionHead } from "@/settings/components/controls";
+import { ActionBar, Button, Card, Note, SectionHead } from "@/settings/components/controls";
 import { applyAppIcon } from "@/settings/appIcons";
 
 const ABOUT_ROWS: { labelKey: MessageKey; value: string }[] = [
@@ -30,23 +30,25 @@ export function AboutSection() {
   return (
     <>
       <SectionHead title={t("about.title")} />
-      <Card className="about-card">
-        <div className="about-product">Craft#</div>
-        <div className="about-version">{t("about.version", { version: VERSION })}</div>
-        <p className="about-desc">{t("about.desc")}</p>
-        <div className="about-divider" />
-        <div className="about-info">
+      <Card className="mb-2 p-6">
+        <div className="text-2xl font-bold tracking-tight">Craft#</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          {t("about.version", { version: VERSION })}
+        </div>
+        <p className="my-6 text-sm leading-relaxed text-muted-foreground">{t("about.desc")}</p>
+        <div className="h-px bg-border" />
+        <div className="my-5 flex flex-col gap-3.5">
           {ABOUT_ROWS.map((row) => (
-            <div key={row.labelKey} className="about-info-row">
-              <span className="about-info-label">{t(row.labelKey)}</span>
-              <span className="about-info-value">{row.value}</span>
+            <div key={row.labelKey} className="flex justify-between gap-6 text-sm">
+              <span className="text-muted-foreground">{t(row.labelKey)}</span>
+              <span>{row.value}</span>
             </div>
           ))}
         </div>
-        <div className="about-divider" />
-        <p className="about-meta">Tauri 2 · Rust · React 19 · TypeScript · Vite 6</p>
+        <div className="h-px bg-border" />
+        <p className="mt-5 text-xs text-muted-foreground">Tauri 2 · Rust · React 19 · TypeScript · Vite 6</p>
       </Card>
-      <Card className="action-card">
+      <ActionBar>
         {confirming ? (
           <>
             <Button onClick={() => setConfirming(false)}>{t("common.cancel")}</Button>
@@ -57,7 +59,7 @@ export function AboutSection() {
         ) : (
           <Button onClick={() => setConfirming(true)}>{t("common.restoreDefaults")}</Button>
         )}
-      </Card>
+      </ActionBar>
       {confirming ? <Note tone="warning">{t("about.resetWarning")}</Note> : null}
       {resetting ? <Note tone="success">{t("about.resetMessage")}</Note> : null}
     </>

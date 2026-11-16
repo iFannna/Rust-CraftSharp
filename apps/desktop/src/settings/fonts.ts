@@ -1,25 +1,27 @@
 import unifontUrl from "@assets/fonts/unifont-16.0.04.ttf";
-import zpixUrl from "@assets/fonts/zpix.ttf";
 import type { UIFont } from "@/config/appConfig";
 
 const FONT_FACES: Record<string, { family: string; url: string }> = {
-  unifont: { family: "CraftSharpUnifont", url: unifontUrl },
-  pixel: { family: "CraftSharpZpix", url: zpixUrl }
+  unifont: { family: "CraftSharpUnifont", url: unifontUrl }
 };
 
+/** 只内置 Unifont，其余走各平台自带的系统字体 */
+const SYSTEM_SANS =
+  'system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif';
+
 const FONT_STACKS: Record<UIFont, string> = {
-  system: 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif',
-  yahei: '"Microsoft YaHei", "Segoe UI", system-ui, sans-serif',
-  pixel: '"CraftSharpZpix", "Microsoft YaHei", monospace',
-  unifont: '"CraftSharpUnifont", "Microsoft YaHei", monospace',
-  songti: 'SimSun, "Microsoft YaHei", serif',
-  kaiti: 'KaiTi, "Microsoft YaHei", serif',
-  heiti: 'SimHei, "Microsoft YaHei", sans-serif'
+  system: SYSTEM_SANS,
+  yahei: SYSTEM_SANS,
+  pixel: SYSTEM_SANS,
+  unifont: '"CraftSharpUnifont", ' + SYSTEM_SANS,
+  songti: 'Georgia, "Noto Serif CJK SC", "Noto Serif SC", "Songti SC", SimSun, serif',
+  kaiti: '"Kaiti SC", KaiTi, STKaiti, "Noto Serif CJK SC", serif',
+  heiti: '"PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", SimHei, sans-serif'
 };
 
 let injected = false;
 
-/** 设置面板字体选择里只有像素字体需要内嵌文件 */
+/** 只有 Unifont 需要内嵌文件 */
 export function ensureSettingsFonts(): void {
   if (injected) return;
   const rules = Object.values(FONT_FACES)
@@ -32,5 +34,5 @@ export function ensureSettingsFonts(): void {
 }
 
 export function fontStackOf(font: UIFont): string {
-  return FONT_STACKS[font] ?? FONT_STACKS.yahei;
+  return FONT_STACKS[font] ?? SYSTEM_SANS;
 }

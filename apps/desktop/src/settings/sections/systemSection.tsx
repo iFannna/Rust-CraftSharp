@@ -4,7 +4,7 @@ import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { languageOptions } from "@/settings/options";
-import { Button, Card, Note, Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
+import { ActionBar, Button, Note, Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
 
 export function SystemSection() {
   const config = useAppConfig();
@@ -81,9 +81,9 @@ export function SystemSection() {
           onChange={(rememberNavSelection) => updateConfig({ system: { rememberNavSelection } })}
         />
       </Row>
-      <Card className="action-card">
+      <ActionBar>
         <Button onClick={resetSystem}>{t("common.restoreDefaults")}</Button>
-      </Card>
+      </ActionBar>
     </>
   );
 }

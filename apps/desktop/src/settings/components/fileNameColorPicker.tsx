@@ -55,9 +55,9 @@ export function FileNameColorPicker({
   };
 
   return (
-    <div className="color-row">
+    <div className="flex items-center gap-2">
       <span
-        className="color-well"
+        className="h-5 w-5 rounded border"
         style={{ backgroundColor: isHexColor(value) ? value : "transparent" }}
         aria-hidden="true"
       />
@@ -66,12 +66,12 @@ export function FileNameColorPicker({
         <>
           <input
             type="color"
-            className="color-picker"
+            className="h-9 w-10 cursor-pointer rounded-md border bg-transparent p-1"
             aria-label={t("aria.customColor", { label })}
             value={customColor}
             onChange={(event) => handleCustom(event.target.value)}
           />
-          <span className="color-hex">{customColor.toUpperCase()}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{customColor.toUpperCase()}</span>
         </>
       ) : null}
     </div>

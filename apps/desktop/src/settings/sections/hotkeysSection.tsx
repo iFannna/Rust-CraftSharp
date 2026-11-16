@@ -3,7 +3,7 @@ import type { HotkeysConfig } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
-import { Button, Card, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
+import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { HotkeyInput } from "@/settings/components/hotkeyInput";
 
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons" | "dropItem" | "openInventory";
@@ -102,9 +102,9 @@ export function HotkeysSection() {
           />
         </Row>
       ))}
-      <Card className="action-card">
+      <ActionBar>
         <Button onClick={resetHotkeys}>{t("common.restoreDefaults")}</Button>
-      </Card>
+      </ActionBar>
       <Note>{t("hotkeys.hint")}</Note>
     </>
   );

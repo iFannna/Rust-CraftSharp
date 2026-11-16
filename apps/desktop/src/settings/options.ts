@@ -28,7 +28,6 @@ const THEMES: { value: ThemeMode; key: MessageKey }[] = [
 const FONTS: { value: UIFont; key: MessageKey }[] = [
   { value: "system", key: "appearance.fontSystem" },
   { value: "yahei", key: "appearance.fontYahei" },
-  { value: "pixel", key: "appearance.fontPixel" },
   { value: "unifont", key: "appearance.fontUnifont" },
   { value: "songti", key: "appearance.fontSongti" },
   { value: "kaiti", key: "appearance.fontKaiti" },

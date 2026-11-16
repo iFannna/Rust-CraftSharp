@@ -1,23 +1,48 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Button as UIButton } from "@/ui/components/button";
+import { Checkbox } from "@/ui/components/checkbox";
+import { Input } from "@/ui/components/input";
+import {
+  Select as UISelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/ui/components/select";
+import { Switch } from "@/ui/components/switch";
+import { cn } from "@/ui/lib/utils";
 
 export interface Option<T extends string = string> {
   value: T;
   label: string;
 }
 
+/** Radix Select 不允许空字符串作为选项值，这里用一个内部哨兵转换 */
+const EMPTY_VALUE = "__empty__";
+const toInternal = (value: string) => (value === "" ? EMPTY_VALUE : value);
+const fromInternal = (value: string) => (value === EMPTY_VALUE ? "" : value);
+
 export function SectionHead({ title }: { title: string }) {
-  return <h2 className="section-title">{title}</h2>;
+  return <h2 className="mb-5 text-xl font-semibold tracking-tight">{title}</h2>;
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={className ? `card ${className}` : "card"}>{children}</section>;
+  return <section className={cn("rounded-lg border bg-card text-card-foreground", className)}>{children}</section>;
+}
+
+export function ActionBar({ children }: { children: ReactNode }) {
+  return <div className="flex justify-end gap-2 pt-1">{children}</div>;
 }
 
 export function SectionSubhead({ children }: { children: ReactNode }) {
-  return <div className="section-subhead">{children}</div>;
+  return (
+    <div className="mb-3 mt-6 text-xs font-medium uppercase tracking-wider text-muted-foreground first:mt-0">
+      {children}
+    </div>
+  );
 }
 
-/** 单个设置项：每项独立卡片，与原版 ui:Card 一致 */
+/** 单个设置项：默认独立卡片，plain 用于折叠卡片内部的紧凑行 */
 export function Row({
   label,
   description,
@@ -32,17 +57,20 @@ export function Row({
   plain?: boolean;
   children: ReactNode;
 }) {
-  const Tag = plain ? "div" : "section";
   return (
-    <Tag className={plain ? (disabled ? "setting-row is-disabled" : "setting-row") : disabled ? "card is-disabled" : "card"}>
-      <div className="row">
-        <div className="row-text">
-          <div className="row-label">{label}</div>
-          {description ? <div className="row-desc">{description}</div> : null}
-        </div>
-        <div className="row-control">{children}</div>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4",
+        plain ? "border-b py-3.5 last:border-b-0" : "mb-2 rounded-lg border bg-card px-4 py-3.5",
+        disabled && "opacity-50"
+      )}
+    >
+      <div className="min-w-0 space-y-1">
+        <div className="text-sm font-medium leading-snug">{label}</div>
+        {description ? <div className="text-xs leading-snug text-muted-foreground">{description}</div> : null}
       </div>
-    </Tag>
+      <div className="flex flex-none items-center justify-end">{children}</div>
+    </div>
   );
 }
 
@@ -57,17 +85,7 @@ export function Toggle({
   disabled?: boolean;
   label: string;
 }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className={checked ? "switch is-on" : "switch"}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-    />
-  );
+  return <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />;
 }
 
 export function Select<T extends string>({
@@ -83,155 +101,29 @@ export function Select<T extends string>({
   disabled?: boolean;
   ariaLabel: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(() =>
-    Math.max(0, options.findIndex((option) => option.value === value))
-  );
-  const [menuStyle, setMenuStyle] = useState<{ left: number; top: number; minWidth: number } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const current = options.find((option) => option.value === value);
-
-  // 打开时把当前项滚到可见区域，并在贴右边缘时回收菜单
-  useEffect(() => {
-    if (!open || !menuRef.current) return;
-    const menu = menuRef.current;
-    menu.querySelector<HTMLElement>(".select-option.is-selected")?.scrollIntoView({ block: "nearest" });
-    const rect = menu.getBoundingClientRect();
-    if (rect.right > window.innerWidth - 8) {
-      const left = Math.max(8, window.innerWidth - 8 - rect.width);
-      setMenuStyle((previous) =>
-        previous && Math.abs(previous.left - left) > 0.5 ? { ...previous, left } : previous
-      );
-    }
-  }, [open, menuStyle]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    // 滚动或缩放后固定定位的菜单会脱节，直接收起；菜单内部滚动不算
-    const onViewportChange = (event: Event) => {
-      if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) return;
-      setOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("scroll", onViewportChange, true);
-    window.addEventListener("resize", onViewportChange);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("scroll", onViewportChange, true);
-      window.removeEventListener("resize", onViewportChange);
-    };
-  }, [open]);
-
-  const choose = (next: T) => {
-    onChange(next);
-    setOpen(false);
-  };
-
-  const toggle = () => {
-    if (disabled) return;
-    if (open) {
-      setOpen(false);
-      return;
-    }
-    setActiveIndex(Math.max(0, options.findIndex((option) => option.value === value)));
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) {
-      const estimated = Math.min(264, options.length * 32 + 8);
-      const fitsBelow = window.innerHeight - rect.bottom - 8 >= Math.min(estimated, 160);
-      setMenuStyle({
-        left: rect.left,
-        top: fitsBelow ? rect.bottom + 4 : Math.max(8, rect.top - estimated - 4),
-        minWidth: rect.width
-      });
-    }
-    setOpen(true);
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-
-    if (!open) {
-      if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
-        event.preventDefault();
-        toggle();
-      }
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-      return;
-    }
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((index) => Math.min(options.length - 1, index + 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setActiveIndex((index) => Math.max(0, index - 1));
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const option = options[activeIndex];
-      if (option) choose(option.value);
-      return;
-    }
-    if (event.key === "Tab") setOpen(false);
-  };
-
   return (
-    <div className="select-root" ref={rootRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={open ? "select is-open" : "select"}
-        role="combobox"
+    <UISelect
+      value={toInternal(value)}
+      onValueChange={(next) => onChange(fromInternal(next) as T)}
+      disabled={disabled}
+    >
+      <SelectTrigger
         aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        disabled={disabled}
-        onClick={toggle}
-        onKeyDown={handleKeyDown}
+        className="h-9 w-auto min-w-[160px] max-w-[280px] [&>span]:truncate"
       >
-        <span className="select-value">{current?.label ?? ""}</span>
-      </button>
-      {open ? (
-        <div
-          ref={menuRef}
-          className="select-menu"
-          role="listbox"
-          aria-label={ariaLabel}
-          style={menuStyle ?? undefined}
-        >
-          {options.map((option, index) => {
-            const classes = ["select-option"];
-            if (option.value === value) classes.push("is-selected");
-            if (index === activeIndex) classes.push("is-active");
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                className={classes.join(" ")}
-                onPointerEnter={() => setActiveIndex(index)}
-                onClick={() => choose(option.value)}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" className="max-h-72 min-w-[var(--radix-select-trigger-width)]">
+        {options.map((option) => {
+          const internal = toInternal(option.value);
+          return (
+            <SelectItem key={internal} value={internal}>
+              {option.label}
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </UISelect>
   );
 }
 
@@ -249,9 +141,9 @@ export function TextField({
   disabled?: boolean;
 }) {
   return (
-    <input
+    <Input
       type="text"
-      className="text-field"
+      className="h-9 w-[220px]"
       aria-label={ariaLabel}
       placeholder={placeholder}
       value={value}
@@ -277,9 +169,9 @@ export function NumberField({
   disabled?: boolean;
 }) {
   return (
-    <input
+    <Input
       type="number"
-      className="number-field"
+      className="h-9 w-[88px]"
       aria-label={ariaLabel}
       min={min}
       max={max}
@@ -307,14 +199,17 @@ export function Button({
   variant?: "default" | "danger";
   primary?: boolean;
 }) {
-  const classes = ["button"];
-  if (primary) classes.push("is-primary");
-  if (variant === "danger") classes.push("is-danger");
-
+  const danger = variant === "danger";
   return (
-    <button type="button" className={classes.join(" ")} disabled={disabled} onClick={onClick}>
+    <UIButton
+      type="button"
+      variant={primary ? (danger ? "destructive" : "default") : "outline"}
+      className={cn(!primary && danger && "text-destructive hover:text-destructive")}
+      disabled={disabled}
+      onClick={onClick}
+    >
       {children}
-    </button>
+    </UIButton>
   );
 }
 
@@ -330,22 +225,24 @@ export function Check({
   disabled?: boolean;
 }) {
   return (
-    <label className={disabled ? "check is-disabled" : "check"}>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
+    <label className={cn("flex cursor-pointer items-center gap-2 text-sm", disabled && "opacity-50")}>
+      <Checkbox checked={checked} disabled={disabled} onCheckedChange={(next) => onChange(next === true)} />
       <span>{label}</span>
     </label>
   );
 }
 
 export function Note({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "warning" | "success" }) {
-  const classes = ["note"];
-  if (tone === "warning") classes.push("is-warning");
-  if (tone === "success") classes.push("is-success");
-
-  return <div className={classes.join(" ")}>{children}</div>;
+  return (
+    <div
+      className={cn(
+        "mb-3 rounded-lg border px-3 py-2 text-sm leading-snug",
+        tone === "info" && "border-border bg-muted/40 text-foreground",
+        tone === "warning" && "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        tone === "success" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      )}
+    >
+      {children}
+    </div>
+  );
 }

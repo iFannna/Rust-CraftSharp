@@ -10,6 +10,7 @@ import {
   type EntityId
 } from "@/entity3d";
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
+import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
 
 const ANIMATION_LABELS: Record<string, string> = {
   idle: "待机",
@@ -42,6 +43,20 @@ const resetButton = document.getElementById("resetView") as HTMLButtonElement;
 const autoRotateCheck = document.getElementById("autoRotate") as HTMLInputElement;
 const backgroundSelect = document.getElementById("background") as HTMLSelectElement;
 const wireframeCheck = document.getElementById("wireframe") as HTMLInputElement;
+
+ensureSettingsFonts();
+
+function applyAppearance() {
+  const { appearance } = getConfig();
+  const dark =
+    appearance.theme === "dark" ||
+    (appearance.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+  document.documentElement.style.setProperty("--ui-font", `${appearance.fontSize}px`);
+  document.documentElement.style.fontFamily = fontStackOf(appearance.font);
+}
+
+applyAppearance();
 
 const view = new EntityView(canvas, "persp");
 const orbit = { theta: -0.66, phi: 1.21, radius: 60, target: new THREE.Vector3(0, 16, 0) };
@@ -195,6 +210,7 @@ new ResizeObserver(() => {
 }).observe(viewport);
 
 subscribeConfig(() => {
+  applyAppearance();
   const player = getConfig().player;
   const json = JSON.stringify(player);
   // 首次回调是配置水合，不是用户修改，跳过避免重载打断当前状态

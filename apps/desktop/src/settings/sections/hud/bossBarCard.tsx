@@ -2,6 +2,7 @@ import { updateConfig, type BossBarConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import {
+  ActionBar,
   Button,
   Card,
   Check,
@@ -44,10 +45,10 @@ export function BossBarCardContent() {
       {bars.length === 0 ? <Note>{t("bossBar.empty")}</Note> : null}
 
       {bars.map((bar) => (
-        <Card key={bar.id} className="bossbar-card">
-          <div className="bossbar-header">
-            <span className="bossbar-title">{bar.name.trim() || t("bossBar.untitled")}</span>
-            <div className="bossbar-actions">
+        <Card key={bar.id} className="mb-3 space-y-4 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">{bar.name.trim() || t("bossBar.untitled")}</span>
+            <div className="flex items-center gap-3">
               <Check
                 label={t("bossBar.enable")}
                 checked={bar.enabled}
@@ -62,9 +63,9 @@ export function BossBarCardContent() {
             </div>
           </div>
 
-          <div className="bossbar-form">
-            <label className="field">
-              <span className="field-label">{t("bossBar.name")}</span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("bossBar.name")}</span>
               <TextField
                 value={bar.name}
                 ariaLabel={t("aria.bossName")}
@@ -73,8 +74,8 @@ export function BossBarCardContent() {
               />
             </label>
 
-            <div className="field">
-              <span className="field-label">{t("bossBar.color")}</span>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("bossBar.color")}</span>
               <Select
                 value={bar.color}
                 options={bossBarColorOptions(t)}
@@ -83,8 +84,8 @@ export function BossBarCardContent() {
               />
             </div>
 
-            <div className="field">
-              <span className="field-label">{t("bossBar.notch")}</span>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("bossBar.notch")}</span>
               <Select
                 value={bar.notch ?? ""}
                 options={bossBarNotchOptions(t)}
@@ -93,9 +94,9 @@ export function BossBarCardContent() {
               />
             </div>
 
-            <div className="field">
-              <span className="field-label">{t("hud.dataMapping")}</span>
-              <div className="field-inline">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("hud.dataMapping")}</span>
+              <div className="flex items-center gap-2">
                 <Toggle
                   checked={bar.dataMappingEnabled}
                   label={t("aria.enableMapping")}
@@ -111,9 +112,9 @@ export function BossBarCardContent() {
               </div>
             </div>
 
-            <div className="field">
-              <span className="field-label">{t("hud.customValue")}</span>
-              <div className="field-inline">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("hud.customValue")}</span>
+              <div className="flex items-center gap-2">
                 <Toggle
                   checked={bar.customValueEnabled}
                   label={t("aria.enableCustom")}
@@ -133,11 +134,11 @@ export function BossBarCardContent() {
         </Card>
       ))}
 
-      <Card className="action-card">
+      <ActionBar>
         <Button primary onClick={() => updateConfig({ bossBars: [...bars, newBossBar(t("bossBar.defaultName"))] })}>
           {t("bossBar.add")}
         </Button>
-      </Card>
+      </ActionBar>
     </>
   );
 }

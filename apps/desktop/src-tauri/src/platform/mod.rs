@@ -33,12 +33,6 @@ mod windows_api {
     }
 
     pub fn disable_transitions(_hwnd: isize) {}
-
-    pub fn confirm(_text: &str) -> bool {
-        false
-    }
-
-    pub fn alert(_text: &str) {}
 }
 
 pub use windows_api::*;

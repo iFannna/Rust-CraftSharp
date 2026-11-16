@@ -2,7 +2,7 @@ import { useState } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
-import { Button, Card, Note, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
+import { ActionBar, Button, Note, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
 import { AppIconPicker } from "@/settings/components/appIconPicker";
 import { fontOptions, themeOptions } from "@/settings/options";
 import { applyAppIcon, appIconUrl } from "@/settings/appIcons";
@@ -40,7 +40,7 @@ export function AppearanceSection() {
       <Row label={t("appearance.iconLabel")} description={t("appearance.iconDesc")}>
         <button
           type="button"
-          className="app-icon-button"
+          className="grid h-14 w-14 place-items-center rounded-lg border p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title={t("appearance.iconTooltip")}
           aria-label={t("aria.appIcon")}
           onClick={() => {
@@ -48,7 +48,12 @@ export function AppearanceSection() {
             setPickerOpen(true);
           }}
         >
-          <img src={appIconUrl(config.appearance.appIcon)} alt="" draggable={false} />
+          <img
+            src={appIconUrl(config.appearance.appIcon)}
+            alt=""
+            draggable={false}
+            className="h-full w-full object-cover object-top [image-rendering:pixelated]"
+          />
         </button>
       </Row>
       {iconError ? <Note tone="warning">{iconError}</Note> : null}
@@ -78,9 +83,9 @@ export function AppearanceSection() {
           }
         />
       </Row>
-      <Card className="action-card">
+      <ActionBar>
         <Button onClick={reset}>{t("common.restoreDefaults")}</Button>
-      </Card>
+      </ActionBar>
       {pickerOpen ? (
         <AppIconPicker
           value={config.appearance.appIcon}

@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getConfig } from "@/config/appConfig";
+import { openDialogWindow } from "@/lib/dialogWindow";
+import { isTauri } from "@/lib/runtime";
+import { tOf } from "@/i18n";
 import {
   clearSlotFor,
   clearSlotsByPathFor,
@@ -24,13 +26,20 @@ export function sameSlotScope(a: SlotScope, b: SlotScope): boolean {
   return a.shared === b.shared && (a.shared || a.style === b.style);
 }
 
-const inTauri = typeof window !== "undefined"
-  && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+const inTauri = isTauri();
 const RENAME_LABEL = "rename-dialog";
+const CONFIRM_LABEL = "confirm-dialog";
 
 async function showConfirm(text: string): Promise<boolean> {
   if (!inTauri) return window.confirm(text);
-  return invoke<boolean>("confirm_dialog", { text }).catch(() => false);
+  const result = await openDialogWindow<boolean>({
+    label: CONFIRM_LABEL,
+    page: "confirm",
+    params: { kind: "confirm", text },
+    width: 440,
+    height: 230
+  });
+  return result === true;
 }
 
 async function showAlert(text: string): Promise<void> {
@@ -38,62 +47,24 @@ async function showAlert(text: string): Promise<void> {
     window.alert(text);
     return;
   }
-  await invoke("alert_dialog", { text }).catch(() => undefined);
+  await openDialogWindow<boolean>({
+    label: CONFIRM_LABEL,
+    page: "confirm",
+    params: { kind: "alert", text },
+    width: 440,
+    height: 230
+  });
 }
 
-/** 重命名对话框独立成窗口，菜单所在的隐藏窗口不会弹出看不见的 prompt。 */
+/** 重命名对话框独立成窗口，避免隐藏窗口里的 prompt 不可见 */
 async function askRename(initial: string): Promise<string | null> {
-  if (!inTauri) return window.prompt("重命名", initial);
-
-  const existing = await WebviewWindow.getByLabel(RENAME_LABEL);
-  if (existing) await existing.close().catch(() => undefined);
-
-  const width = 340;
-  const height = 150;
-  const screen = window.screen as Screen & { availLeft?: number; availTop?: number };
-  const x = (screen.availLeft ?? 0) + Math.round((screen.availWidth - width) / 2);
-  const y = (screen.availTop ?? 0) + Math.round((screen.availHeight - height) / 2);
-
-  return new Promise<string | null>((resolve) => {
-    let settled = false;
-    const disposers: Array<() => void> = [];
-
-    const finish = (value: string | null) => {
-      if (settled) return;
-      settled = true;
-      for (const dispose of disposers) dispose();
-      void WebviewWindow.getByLabel(RENAME_LABEL)
-        .then((dialog) => dialog?.close())
-        .catch(() => undefined);
-      resolve(value);
-    };
-
-    void listen<string>("rename:submit", ({ payload }) => finish(payload)).then((dispose) => {
-      if (settled) dispose();
-      else disposers.push(dispose);
-    });
-    void listen("rename:cancel", () => finish(null)).then((dispose) => {
-      if (settled) dispose();
-      else disposers.push(dispose);
-    });
-
-    const dialog = new WebviewWindow(RENAME_LABEL, {
-      url: `pages/rename.html?name=${encodeURIComponent(initial)}`,
-      x,
-      y,
-      width,
-      height,
-      transparent: true,
-      decorations: false,
-      shadow: false,
-      alwaysOnTop: true,
-      skipTaskbar: true,
-      resizable: false,
-      focus: true
-    });
-
-    dialog.once("tauri://error", () => finish(null));
-    dialog.once("tauri://destroyed", () => finish(null));
+  if (!inTauri) return window.prompt(tOf(getConfig().system.language)("rename.title"), initial);
+  return openDialogWindow<string>({
+    label: RENAME_LABEL,
+    page: "rename",
+    params: { name: initial },
+    width: 360,
+    height: 190
   });
 }
 
@@ -165,7 +136,8 @@ export async function pathExists(path: string): Promise<boolean> {
 
 /** 文件丢失确认：返回是否清除所有使用该路径的格子 */
 export async function confirmMissingFile(path: string, scope: SlotScope = SHARED_SCOPE): Promise<boolean> {
-  const confirmed = await showConfirm(`文件不存在：\n${path}\n\n是否清除所有使用这个路径的格子？`);
+  const t = tOf(getConfig().system.language);
+  const confirmed = await showConfirm(t("files.missing", { path }));
   if (confirmed) clearSlotsByPathFor(path, scope.style, scope.shared);
   return confirmed;
 }
@@ -217,15 +189,16 @@ export async function renameItem(item: SlotItem, scope: SlotScope = SHARED_SCOPE
   if (!nextStem || nextStem === stem) return false;
 
   const nextPath = `${directory}${nextStem}${extension}`;
+  const t = tOf(getConfig().system.language);
   if (await pathExists(nextPath)) {
-    await showAlert(`文件 "${nextStem}${extension}" 已存在，请使用其他名称。`);
+    await showAlert(t("files.exists", { name: `${nextStem}${extension}` }));
     return false;
   }
 
   try {
     await invoke("rename_path", { from: item.path, to: nextPath });
   } catch (error) {
-    await showAlert(`重命名失败：${String(error)}`);
+    await showAlert(t("files.renameFailed", { reason: String(error) }));
     return false;
   }
 

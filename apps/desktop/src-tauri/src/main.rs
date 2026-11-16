@@ -76,18 +76,6 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
     platform::rename(&from, &to)
 }
 
-/// 原生确认框，隐藏的 WebView 里也能显示。
-#[tauri::command]
-fn confirm_dialog(text: String) -> bool {
-    platform::confirm(&text)
-}
-
-/// 原生提示框。
-#[tauri::command]
-fn alert_dialog(text: String) {
-    platform::alert(&text);
-}
-
 /// BOSS 血条数据映射：电池、内存、CPU、GPU 占用，取值 0-1。
 #[tauri::command]
 async fn system_metrics() -> metrics::SystemMetrics {
@@ -471,8 +459,6 @@ fn main() {
             copy_to_clipboard,
             read_clipboard_paths,
             rename_path,
-            confirm_dialog,
-            alert_dialog,
             register_hotkeys,
             system_metrics,
             set_hit_mask,

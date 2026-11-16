@@ -25,7 +25,7 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
   return (
     <>
       <Row plain label={t("hud.elementIcon")} description={t("hud.elementIconDesc")}>
-        <img className="element-icon" src={preview} alt="" draggable={false} />
+        <img className="h-6 [image-rendering:pixelated]" src={preview} alt="" draggable={false} />
       </Row>
       {styleOptions ? (
         <Row plain label={t("hud.iconStyle")} description={t("hud.iconStyleDesc")}>

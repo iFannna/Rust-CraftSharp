@@ -3,7 +3,7 @@ import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { Accordion } from "@/settings/components/accordion";
-import { Button, Card, SectionHead, SectionSubhead } from "@/settings/components/controls";
+import { ActionBar, Button, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { BossBarCardContent } from "@/settings/sections/hud/bossBarCard";
 import { AttackIndicatorCardContent, CrosshairCardContent } from "@/settings/sections/hud/crosshairCard";
 import { ElementCard } from "@/settings/sections/hud/elementCard";
@@ -66,11 +66,11 @@ export function HudSection() {
         <BossBarCardContent />
       </HudCard>
 
-      <Card className="action-card">
+      <ActionBar>
         <Button onClick={() => updateConfig({ hudElements: defaultConfig().hudElements, hotbar: defaultConfig().hotbar })}>
           {t("common.restoreDefaults")}
         </Button>
-      </Card>
+      </ActionBar>
     </>
   );
 }

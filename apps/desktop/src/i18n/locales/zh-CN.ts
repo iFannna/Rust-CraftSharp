@@ -4,6 +4,7 @@ export const zhCN = {
   "common.restoreDefaults": "恢复默认设置",
   "common.cancel": "取消",
   "common.confirm": "确认",
+  "common.ok": "确定",
   "common.listSeparator": "、",
   "common.version": "版本 {version}",
   "common.notSet": "未设置",
@@ -54,10 +55,9 @@ export const zhCN = {
   "appearance.fontLabel": "字体",
   "appearance.fontDesc": "选择界面显示字体",
   "appearance.fontSystem": "跟随系统",
-  "appearance.fontYahei": "微软雅黑",
-  "appearance.fontPixel": "像素字体",
+  "appearance.fontYahei": "无衬线",
   "appearance.fontUnifont": "Unifont",
-  "appearance.fontSongti": "宋体",
+  "appearance.fontSongti": "衬线",
   "appearance.fontKaiti": "楷体",
   "appearance.fontHeiti": "黑体",
   "appearance.fontSizeLabel": "字体大小",
@@ -314,7 +314,13 @@ export const zhCN = {
   "iconStyle.absorbingNormal": "普通",
   "iconStyle.absorbingHardcore": "极限模式",
   "iconStyle.expExperience": "经验条",
-  "iconStyle.expJump": "跳跃进度条"
+  "iconStyle.expJump": "跳跃进度条",
+  "rename.title": "重命名",
+  "dialog.confirmTitle": "确认",
+  "dialog.alertTitle": "提示",
+  "files.missing": "文件不存在：\n{path}\n\n是否清除所有使用这个路径的格子？",
+  "files.exists": "文件 \"{name}\" 已存在，请使用其他名称。",
+  "files.renameFailed": "重命名失败：{reason}"
 };
 
 export type Messages = typeof zhCN;

@@ -6,6 +6,7 @@ export const enUS: Messages = {
   "common.restoreDefaults": "Restore Default Settings",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
+  "common.ok": "OK",
   "common.listSeparator": ", ",
   "common.version": "Version {version}",
   "common.notSet": "Not Set",
@@ -56,12 +57,11 @@ export const enUS: Messages = {
   "appearance.fontLabel": "Font",
   "appearance.fontDesc": "Select interface display font",
   "appearance.fontSystem": "Follow System",
-  "appearance.fontYahei": "Microsoft YaHei",
-  "appearance.fontPixel": "Pixel Font",
+  "appearance.fontYahei": "Sans Serif",
   "appearance.fontUnifont": "Unifont",
-  "appearance.fontSongti": "SimSun",
-  "appearance.fontKaiti": "KaiTi",
-  "appearance.fontHeiti": "SimHei",
+  "appearance.fontSongti": "Serif",
+  "appearance.fontKaiti": "Kaiti",
+  "appearance.fontHeiti": "Heiti",
   "appearance.fontSizeLabel": "Font Size",
   "appearance.fontSizeDesc": "Select interface font size",
 
@@ -316,5 +316,11 @@ export const enUS: Messages = {
   "iconStyle.absorbingNormal": "Normal",
   "iconStyle.absorbingHardcore": "Hardcore",
   "iconStyle.expExperience": "Experience Bar",
-  "iconStyle.expJump": "Jump Bar"
+  "iconStyle.expJump": "Jump Bar",
+  "rename.title": "Rename",
+  "dialog.confirmTitle": "Confirm",
+  "dialog.alertTitle": "Notice",
+  "files.missing": "File not found:\n{path}\n\nClear every slot that uses this path?",
+  "files.exists": "The file \"{name}\" already exists. Choose another name.",
+  "files.renameFailed": "Rename failed: {reason}"
 };

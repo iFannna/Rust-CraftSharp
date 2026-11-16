@@ -1,7 +1,7 @@
 import { updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
-import { Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
+import { Row, Select, Toggle } from "@/settings/components/controls";
 import { FileNameColorPicker } from "@/settings/components/fileNameColorPicker";
 import { clickModeOptions } from "@/settings/options";
 
@@ -12,7 +12,6 @@ export function HotbarCardContent() {
 
   return (
     <>
-      <SectionHead title={t("hud.hotbarSettings")} />
       <Row plain label={t("hud.fileNameColor")} description={t("hud.fileNameColorDesc")}>
         <FileNameColorPicker
           value={hotbar.fileNameColor}

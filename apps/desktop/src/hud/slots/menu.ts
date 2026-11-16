@@ -9,10 +9,12 @@ export interface MenuItemSpec {
   separator?: boolean;
 }
 
-const MENU_WIDTH = 196;
-const ITEM_HEIGHT = 30;
+const MENU_WIDTH = 208;
+const ITEM_HEIGHT = 32;
 const SEPARATOR_HEIGHT = 9;
-const PADDING = 6;
+/** 上下内边距合计 p-1，另加 1px 边框 */
+const PADDING = 8;
+const BORDER = 2;
 const MENU_LABEL = "slot-menu";
 
 export function menuHeight(items: MenuItemSpec[]): number {
@@ -20,7 +22,7 @@ export function menuHeight(items: MenuItemSpec[]): number {
     (total, item) => total + (item.separator ? SEPARATOR_HEIGHT : ITEM_HEIGHT),
     0
   );
-  return itemsHeight + PADDING * 2;
+  return itemsHeight + PADDING + BORDER;
 }
 
 /**

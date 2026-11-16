@@ -1,22 +1,26 @@
-import { useEffect, useRef, useState, type ComponentType, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import ReactDOM from "react-dom/client";
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Bug, Info, Keyboard, LayoutDashboard, Package, Palette, Settings, type LucideIcon } from "lucide-react";
 import { getConfig, updateConfig } from "@/config/appConfig";
 import { clampToWorkArea } from "@/hud/shared/windowPlacement";
 import { useAppConfig } from "@/config/useAppConfig";
-import { useResolvedTheme } from "@/settings/theme";
-import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
+import { ensureSettingsFonts } from "@/settings/fonts";
 import { AboutSection } from "@/settings/sections/aboutSection";
 import { AppearanceSection } from "@/settings/sections/appearanceSection";
 import { DebugSection } from "@/settings/sections/debugSection";
 import { HotkeysSection } from "@/settings/sections/hotkeysSection";
 import { installLocalHotkeys } from "@/lib/localHotkeys";
+import { isTauri } from "@/lib/runtime";
 import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
 import { SystemSection } from "@/settings/sections/systemSection";
 import { tOf, type MessageKey } from "@/i18n";
-import "@/settings/settings.css";
+import { ThemeRoot } from "@/ui/theme-root";
+import { TitleBar } from "@/ui/title-bar";
+import { cn } from "@/ui/lib/utils";
+import "@/ui/styles.css";
 
 type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
 
@@ -26,19 +30,18 @@ installLocalHotkeys();
 interface NavItem {
   id: SectionId;
   labelKey: MessageKey;
-  /** Segoe Fluent Icons 字形，与原版 wpf-ui SymbolIcon 一致 */
-  glyph: string;
+  Icon: LucideIcon;
   Section: ComponentType;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "system", labelKey: "nav.system", glyph: "\uE713", Section: SystemSection },
-  { id: "appearance", labelKey: "nav.appearance", glyph: "\uE790", Section: AppearanceSection },
-  { id: "hud", labelKey: "nav.hud", glyph: "\uE80A", Section: HudSection },
-  { id: "inventory", labelKey: "nav.inventory", glyph: "\uE7B8", Section: InventorySection },
-  { id: "hotkeys", labelKey: "nav.hotkeys", glyph: "\uE765", Section: HotkeysSection },
-  { id: "about", labelKey: "nav.about", glyph: "\uE946", Section: AboutSection },
-  { id: "debug", labelKey: "nav.debug", glyph: "\uEBE8", Section: DebugSection }
+  { id: "system", labelKey: "nav.system", Icon: Settings, Section: SystemSection },
+  { id: "appearance", labelKey: "nav.appearance", Icon: Palette, Section: AppearanceSection },
+  { id: "hud", labelKey: "nav.hud", Icon: LayoutDashboard, Section: HudSection },
+  { id: "inventory", labelKey: "nav.inventory", Icon: Package, Section: InventorySection },
+  { id: "hotkeys", labelKey: "nav.hotkeys", Icon: Keyboard, Section: HotkeysSection },
+  { id: "about", labelKey: "nav.about", Icon: Info, Section: AboutSection },
+  { id: "debug", labelKey: "nav.debug", Icon: Bug, Section: DebugSection }
 ];
 
 /** @tauri-apps/api 未导出该联合类型，这里按 startResizeDragging 的取值定义 */
@@ -53,26 +56,23 @@ type ResizeDirection =
   | "West";
 
 const RESIZE_EDGES: { direction: ResizeDirection; className: string }[] = [
-  { direction: "North", className: "resize-north" },
-  { direction: "South", className: "resize-south" },
-  { direction: "East", className: "resize-east" },
-  { direction: "West", className: "resize-west" },
-  { direction: "NorthEast", className: "resize-north-east" },
-  { direction: "NorthWest", className: "resize-north-west" },
-  { direction: "SouthEast", className: "resize-south-east" },
-  { direction: "SouthWest", className: "resize-south-west" }
+  { direction: "North", className: "left-2 right-2 top-0 h-1 cursor-ns-resize" },
+  { direction: "South", className: "bottom-0 left-2 right-2 h-1 cursor-ns-resize" },
+  { direction: "East", className: "bottom-2 right-0 top-2 w-1 cursor-ew-resize" },
+  { direction: "West", className: "bottom-2 left-0 top-2 w-1 cursor-ew-resize" },
+  { direction: "NorthEast", className: "right-0 top-0 h-2 w-2 cursor-nesw-resize" },
+  { direction: "NorthWest", className: "left-0 top-0 h-2 w-2 cursor-nwse-resize" },
+  { direction: "SouthEast", className: "bottom-0 right-0 h-2 w-2 cursor-nwse-resize" },
+  { direction: "SouthWest", className: "bottom-0 left-0 h-2 w-2 cursor-nesw-resize" }
 ];
 
-const isTauriRuntime = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
 function windowApi() {
-  return isTauriRuntime() ? getCurrentWindow() : null;
+  return isTauri() ? getCurrentWindow() : null;
 }
 
 function SettingsApp() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
-  const theme = useResolvedTheme(config.appearance.theme);
   const [active, setActive] = useState<SectionId>(() => {
     const system = getConfig().system;
     const saved = system.lastSection as SectionId;
@@ -87,10 +87,8 @@ function SettingsApp() {
     maximizedRef.current = maximized;
   }, [maximized]);
 
-  // 语言切换时同步窗口标题与文档语言，读屏和任务栏保持一致
   useEffect(() => {
     const title = t("window.title");
-    document.documentElement.lang = config.system.language;
     document.title = title;
     void windowApi()?.setTitle(title).catch(() => undefined);
   }, [config.system.language, t]);
@@ -206,78 +204,70 @@ function SettingsApp() {
     void windowApi()?.hide().catch(() => undefined);
   };
 
-  const fontStyle = {
-    fontFamily: fontStackOf(config.appearance.font),
-    "--ui-font": `${config.appearance.fontSize}px`
-  } as CSSProperties;
-
   return (
-    <div className="settings-root" data-theme={theme} style={fontStyle}>
-      {maximized
-        ? null
-        : RESIZE_EDGES.map((edge) => (
-            <div
-              key={edge.direction}
-              className={`resize-handle ${edge.className}`}
-              aria-hidden="true"
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                void windowApi()?.startResizeDragging(edge.direction).catch(() => undefined);
-              }}
-            />
-          ))}
-
-      <header className="titlebar" data-tauri-drag-region>
-        <span className="titlebar-title" data-tauri-drag-region>
-          Craft#
-        </span>
-        <div className="caption-buttons">
-          <button type="button" className="caption-button" aria-label={t("window.minimize")} onClick={minimize}>
-            <span aria-hidden="true">{"\uE921"}</span>
-          </button>
-          <button
-            type="button"
-            className="caption-button"
-            aria-label={maximized ? t("window.restore") : t("window.maximize")}
-            onClick={toggleMaximize}
-          >
-            <span aria-hidden="true">{maximized ? "\uE923" : "\uE922"}</span>
-          </button>
-          <button type="button" className="caption-button is-close" aria-label={t("window.close")} onClick={close}>
-            <span aria-hidden="true">{"\uE8BB"}</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="settings-body">
-        <nav className="sidebar" aria-label={t("window.sections")}>
-          <div className="nav-list">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={item.id === active ? "nav-item is-active" : "nav-item"}
-                aria-current={item.id === active ? "page" : undefined}
-                onClick={() => selectSection(item.id)}
-              >
-                <span className="nav-icon" aria-hidden="true">
-                  {item.glyph}
-                </span>
-                {t(item.labelKey)}
-              </button>
+    <ThemeRoot>
+      <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+        {maximized
+          ? null
+          : RESIZE_EDGES.map((edge) => (
+              <div
+                key={edge.direction}
+                className={cn("fixed z-50", edge.className)}
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  void windowApi()?.startResizeDragging(edge.direction).catch(() => undefined);
+                }}
+              />
             ))}
-          </div>
-          <div className="sidebar-footer">v0.1.0 Craft#</div>
-        </nav>
 
-        {/* key 让切换分区时内容区回到顶部 */}
-        <main className="content" key={active}>
-          <div className="content-inner">
-            <ActiveSection />
-          </div>
-        </main>
+        <TitleBar
+          title="Craft#"
+          maximized={maximized}
+          labels={{
+            minimize: t("window.minimize"),
+            maximize: t("window.maximize"),
+            restore: t("window.restore"),
+            close: t("window.close")
+          }}
+          onMinimize={minimize}
+          onMaximize={toggleMaximize}
+          onClose={close}
+        />
+
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-56 flex-none flex-col border-r p-2" aria-label={t("window.sections")}>
+            <div className="flex flex-col gap-1">
+              {NAV_ITEMS.map(({ id, labelKey, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={cn(
+                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors",
+                    id === active
+                      ? "bg-secondary font-medium text-secondary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )}
+                  aria-current={id === active ? "page" : undefined}
+                  onClick={() => selectSection(id)}
+                >
+                  <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+            <div className="mt-auto px-3 py-3 text-xs text-muted-foreground">v0.1.0 Craft#</div>
+          </nav>
+
+          {/* key 让切换分区时内容区回到顶部 */}
+          <main className="ui-scroll min-w-0 flex-1 overflow-y-auto p-8" key={active}>
+            <div className="max-w-3xl pb-10">
+              <ActiveSection />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ThemeRoot>
   );
 }
 

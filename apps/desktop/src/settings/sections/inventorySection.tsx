@@ -5,6 +5,7 @@ import { tOf } from "@/i18n";
 import { setInventoryVisible } from "@/lib/windowControls";
 import { Accordion } from "@/settings/components/accordion";
 import {
+  ActionBar,
   Button,
   Note,
   NumberField,
@@ -98,7 +99,7 @@ export function InventorySection() {
           description={t("inventory.opacityDesc")}
           disabled={!inventory.grayOverlay}
         >
-          <div className="inline-value">
+          <div className="flex items-center gap-2">
             <NumberField
               value={inventory.grayOverlayOpacity}
               min={0}
@@ -107,7 +108,7 @@ export function InventorySection() {
               disabled={!inventory.grayOverlay}
               onChange={(grayOverlayOpacity) => patch({ grayOverlayOpacity })}
             />
-            <span className="inline-suffix">{t("inventory.opacityMax")}</span>
+            <span className="text-xs text-muted-foreground">{t("inventory.opacityMax")}</span>
           </div>
         </Row>
         <Row plain label={t("inventory.hideStatusBar")} description={t("inventory.hideStatusBarDesc")}>
@@ -184,11 +185,11 @@ export function InventorySection() {
           />
         </Row>
         <Note>{t("inventory.note")}</Note>
-        <div className="action-card">
+        <ActionBar>
           <Button onClick={() => updateConfig({ inventory: defaultConfig().inventory })}>
             {t("common.restoreDefaults")}
           </Button>
-        </div>
+        </ActionBar>
       </Accordion>
     </>
   );

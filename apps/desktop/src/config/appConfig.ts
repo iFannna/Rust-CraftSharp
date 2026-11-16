@@ -10,6 +10,7 @@ export type { LanguageCode };
 export type ClickMode = "single" | "double";
 export type ThemeMode = "system" | "light" | "dark";
 export type SkinType = "wide" | "slim";
+/** pixel 为旧版配置保留，读取时迁移为 system */
 export type UIFont = "system" | "yahei" | "pixel" | "unifont" | "songti" | "kaiti" | "heiti";
 
 export interface PositionConfig {
@@ -395,11 +396,17 @@ function migrateLegacyInventory(config: AppConfig): AppConfig {
   }
 }
 
+/** 旧版内置像素字体已移除，读取时并入系统字体 */
+function normalizeConfig(config: AppConfig): AppConfig {
+  if (config.appearance.font !== "pixel") return config;
+  return { ...config, appearance: { ...config.appearance, font: "system" } };
+}
+
 function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return migrateLegacyInventory(defaultConfig());
-    return mergeConfig(DEFAULTS, JSON.parse(raw) as Partial<AppConfig>);
+    return normalizeConfig(mergeConfig(DEFAULTS, JSON.parse(raw) as Partial<AppConfig>));
   } catch {
     return defaultConfig();
   }

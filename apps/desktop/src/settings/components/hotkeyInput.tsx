@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useI18n } from "@/i18n/useI18n";
 import { captureHotkey, isModifierCode } from "@/settings/hotkey";
+import { Button } from "@/ui/components/button";
+import { Input } from "@/ui/components/input";
+import { cn } from "@/ui/lib/utils";
 
 /** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空，可配置是否必须带修饰键 */
 export function HotkeyInput({
@@ -25,7 +29,6 @@ export function HotkeyInput({
     setError(null);
   };
 
-  // 捕获结束主动失焦，避免输入框残留捕获态
   const finishAndBlur = () => {
     stopRecording();
     inputRef.current?.blur();
@@ -52,7 +55,6 @@ export function HotkeyInput({
       return;
     }
 
-    // 单按修饰键继续等待主键
     if (isModifierCode(event.code)) return;
 
     const captured = captureHotkey(event.nativeEvent);
@@ -71,15 +73,17 @@ export function HotkeyInput({
   };
 
   return (
-    <div className="hotkey-field">
-      <div className="hotkey-line">
-        <input
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <Input
           ref={inputRef}
           type="text"
           readOnly
-          className={["shortcut-input", recording ? "is-recording" : "", error ? "is-invalid" : ""]
-            .filter(Boolean)
-            .join(" ")}
+          className={cn(
+            "h-9 w-[190px] text-center",
+            recording && "border-ring",
+            error && "border-destructive focus-visible:ring-destructive"
+          )}
           aria-label={label}
           value={recording ? "" : value}
           placeholder={
@@ -94,18 +98,20 @@ export function HotkeyInput({
           onBlur={stopRecording}
           onKeyDown={handleKeyDown}
         />
-        <button
+        <Button
           type="button"
-          className="hotkey-clear"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
           aria-label={t("hotkeys.clear")}
           title={t("hotkeys.clear")}
           disabled={!value}
           onClick={clear}
         >
-          <span aria-hidden="true">{"\uE711"}</span>
-        </button>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
-      {error ? <span className="inline-error">{error}</span> : null}
+      {error ? <span className="text-xs text-destructive">{error}</span> : null}
     </div>
   );
 }
