@@ -73,7 +73,7 @@
 cd D:\develop\code\rust\CraftSharp\apps\desktop
 npm install
 npm run build
-CARGO_NET_OFFLINE=true npm run tauri dev
+CARGO_NET_OFFLINE=true npm start
 ```
 
 构建注意：全局 `CARGO_HOME/config.toml` 写死了 `127.0.0.1:7897` 代理。代理未启动时，cargo 会直接失败；用 `--config 'http.proxy=""'` 拉取依赖，依赖齐了之后用 `CARGO_NET_OFFLINE=true` 构建和启动，不改全局配置。

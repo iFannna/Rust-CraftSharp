@@ -27,6 +27,7 @@ export function textureAssets(assetsRoot: string): Plugin {
     KINDS.map((kind) => [kind, resolve(assetsRoot, "minecraft/textures", kind)])
   ) as Record<TextureKind, string>;
   let outDir = "";
+  let copied = false;
 
   return {
     name: "craftsharp:texture-assets",
@@ -53,13 +54,14 @@ export function textureAssets(assetsRoot: string): Plugin {
       });
     },
     closeBundle() {
-      if (!outDir) return;
+      if (!outDir || copied) return;
       for (const kind of KINDS) {
         cpSync(dirs[kind], join(outDir, "textures", kind), {
           recursive: true,
           filter: (src) => !extname(src) || extname(src) === ".png"
         });
       }
+      copied = true;
     }
   };
 }

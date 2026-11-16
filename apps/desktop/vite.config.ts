@@ -34,14 +34,9 @@ export default defineConfig({
     fs: {
       allow: ["../.."]
     },
-    // 窗口创建时依赖树已经编译完，打开设置、HUD 不必再等首次转换
+    // HMR 模式启动时先编译入口，首个窗口不用等现场转换
     warmup: {
-      clientFiles: [
-        "./src/settings/index.tsx",
-        "./src/settings/sections/*.tsx",
-        "./src/windows/hud.ts",
-        "./src/App.tsx"
-      ]
+      clientFiles: ["./src/settings/index.tsx", "./src/windows/hud.ts", "./src/App.tsx"]
     }
   },
   envPrefix: ["VITE_", "TAURI_"],

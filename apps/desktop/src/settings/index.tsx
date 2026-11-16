@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import ReactDOM from "react-dom/client";
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -14,35 +14,19 @@ import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
 import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, PackageIcon, PaletteIcon, SettingsIcon, type IconProps } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
+import { AboutSection } from "@/settings/sections/aboutSection";
+import { AppearanceSection } from "@/settings/sections/appearanceSection";
+import { DebugSection } from "@/settings/sections/debugSection";
+import { HotkeysSection } from "@/settings/sections/hotkeysSection";
+import { HudSection } from "@/settings/sections/hudSection";
+import { InventorySection } from "@/settings/sections/inventorySection";
+import { SystemSection } from "@/settings/sections/systemSection";
 import "@/ui/styles.css";
 
 type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
 
 ensureSettingsFonts();
 installLocalHotkeys();
-
-// 分区按需加载，首屏只取当前分区
-const SystemSection = lazy(() =>
-  import("@/settings/sections/systemSection").then((module) => ({ default: module.SystemSection }))
-);
-const AppearanceSection = lazy(() =>
-  import("@/settings/sections/appearanceSection").then((module) => ({ default: module.AppearanceSection }))
-);
-const HudSection = lazy(() =>
-  import("@/settings/sections/hudSection").then((module) => ({ default: module.HudSection }))
-);
-const InventorySection = lazy(() =>
-  import("@/settings/sections/inventorySection").then((module) => ({ default: module.InventorySection }))
-);
-const HotkeysSection = lazy(() =>
-  import("@/settings/sections/hotkeysSection").then((module) => ({ default: module.HotkeysSection }))
-);
-const AboutSection = lazy(() =>
-  import("@/settings/sections/aboutSection").then((module) => ({ default: module.AboutSection }))
-);
-const DebugSection = lazy(() =>
-  import("@/settings/sections/debugSection").then((module) => ({ default: module.DebugSection }))
-);
 
 interface NavItem {
   id: SectionId;
@@ -209,9 +193,7 @@ function SettingsApp() {
           {/* key 让切换分区时内容区回到顶部 */}
           <main className="ui-scroll-auto settings-main min-w-0 flex-1 overflow-y-auto" key={active}>
             <div className="settings-content mx-auto max-w-[1120px] pb-10">
-              <Suspense fallback={null}>
-                <ActiveSection />
-              </Suspense>
+              <ActiveSection />
             </div>
           </main>
         </div>
