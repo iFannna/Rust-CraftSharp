@@ -40,8 +40,8 @@ export interface AppearanceConfig {
   theme: ThemeMode;
   font: UIFont;
   fontSize: number;
-  /** 托盘图标 id：block/xxx.png、item/xxx.png，空串为默认应用图标 */
-  trayIcon: string;
+  /** 应用图标 id：block/xxx.png、item/xxx.png，空串为默认应用图标 */
+  appIcon: string;
 }
 
 export interface StatusBarConfig {
@@ -206,7 +206,7 @@ const DEFAULTS: AppConfig = {
     windowSize: null,
     lastSection: "system"
   },
-  appearance: { theme: "dark", font: "yahei", fontSize: 14, trayIcon: "" },
+  appearance: { theme: "dark", font: "yahei", fontSize: 14, appIcon: "" },
   statusBar: { visible: true, locked: false, rememberPosition: true, position: null },
   hotbar: {
     visible: true,
@@ -338,6 +338,13 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function appearanceIconValue(raw: Partial<AppearanceConfig> | undefined): string | undefined {
+  if (typeof raw?.appIcon === "string") return raw.appIcon;
+  // 兼容上一版字段名
+  const legacy = (raw as { trayIcon?: unknown } | undefined)?.trayIcon;
+  return typeof legacy === "string" ? legacy : undefined;
+}
+
 function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
   const language = raw.system?.language;
   return {
@@ -351,7 +358,7 @@ function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
       theme: raw.appearance?.theme ?? base.appearance.theme,
       font: raw.appearance?.font ?? base.appearance.font,
       fontSize: clampInt(raw.appearance?.fontSize, 10, 20, base.appearance.fontSize),
-      trayIcon: typeof raw.appearance?.trayIcon === "string" ? raw.appearance.trayIcon : base.appearance.trayIcon
+      appIcon: appearanceIconValue(raw.appearance) ?? base.appearance.appIcon
     },
     statusBar: { ...base.statusBar, ...raw.statusBar },
     hotbar: { ...base.hotbar, ...raw.hotbar },

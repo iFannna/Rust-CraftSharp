@@ -3,7 +3,7 @@ import { getConfig, resetConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
 import { Button, Card, Note, SectionHead } from "@/settings/components/controls";
-import { applyTrayIcon } from "@/settings/trayIcons";
+import { applyAppIcon } from "@/settings/appIcons";
 
 const ABOUT_ROWS: { labelKey: MessageKey; value: string }[] = [
   { labelKey: "about.author", value: "iFannna" },
@@ -22,7 +22,7 @@ export function AboutSection() {
 
   const handleReset = () => {
     resetConfig();
-    void applyTrayIcon(getConfig().appearance.trayIcon);
+    void applyAppIcon(getConfig().appearance.appIcon);
     setConfirming(false);
     setResetting(true);
   };

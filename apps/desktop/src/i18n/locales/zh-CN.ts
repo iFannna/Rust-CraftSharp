@@ -43,7 +43,8 @@ export const zhCN = {
 
   "appearance.title": "外观设置",
   "appearance.iconLabel": "图标",
-  "appearance.iconDesc": "选择系统托盘图标",
+  "appearance.iconDesc": "选择应用图标",
+  "appearance.iconCanceled": "已取消管理员授权，程序文件图标未更新",
   "appearance.iconTooltip": "点击更换图标",
   "appearance.themeLabel": "主题",
   "appearance.themeDesc": "选择界面显示风格",
@@ -198,7 +199,7 @@ export const zhCN = {
   "aria.elementCurrent": "{label}当前值",
   "aria.elementMax": "{label}最大值",
   "aria.theme": "主题",
-  "aria.trayIcon": "系统托盘图标",
+  "aria.appIcon": "应用图标",
   "aria.font": "界面字体",
   "aria.fontSize": "界面字体大小",
   "aria.skin": "默认皮肤",

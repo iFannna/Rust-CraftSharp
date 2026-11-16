@@ -2,10 +2,10 @@ import { useState } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
-import { Button, Card, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
-import { TrayIconPicker } from "@/settings/components/trayIconPicker";
+import { Button, Card, Note, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
+import { AppIconPicker } from "@/settings/components/appIconPicker";
 import { fontOptions, themeOptions } from "@/settings/options";
-import { applyTrayIcon, trayIconUrl } from "@/settings/trayIcons";
+import { applyAppIcon, appIconUrl } from "@/settings/appIcons";
 
 const SIZE_OPTIONS: Option<string>[] = ["10", "12", "14", "16", "18", "20"].map((size) => ({
   value: size,
@@ -16,17 +16,22 @@ export function AppearanceSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [iconError, setIconError] = useState<string | null>(null);
+
+  const reportIconError = (error: string | null) => {
+    setIconError(error === "canceled" ? t("appearance.iconCanceled") : error);
+  };
 
   const reset = () => {
     const defaults = defaultConfig().appearance;
     updateConfig({ appearance: defaults });
-    void applyTrayIcon(defaults.trayIcon);
+    void applyAppIcon(defaults.appIcon).then(reportIconError);
   };
 
-  const pickIcon = (trayIcon: string) => {
-    updateConfig({ appearance: { ...config.appearance, trayIcon } });
-    void applyTrayIcon(trayIcon);
+  const pickIcon = (appIcon: string) => {
+    updateConfig({ appearance: { ...config.appearance, appIcon } });
     setPickerOpen(false);
+    void applyAppIcon(appIcon).then(reportIconError);
   };
 
   return (
@@ -35,14 +40,18 @@ export function AppearanceSection() {
       <Row label={t("appearance.iconLabel")} description={t("appearance.iconDesc")}>
         <button
           type="button"
-          className="tray-icon-button"
+          className="app-icon-button"
           title={t("appearance.iconTooltip")}
-          aria-label={t("aria.trayIcon")}
-          onClick={() => setPickerOpen(true)}
+          aria-label={t("aria.appIcon")}
+          onClick={() => {
+            setIconError(null);
+            setPickerOpen(true);
+          }}
         >
-          <img src={trayIconUrl(config.appearance.trayIcon)} alt="" draggable={false} />
+          <img src={appIconUrl(config.appearance.appIcon)} alt="" draggable={false} />
         </button>
       </Row>
+      {iconError ? <Note tone="warning">{iconError}</Note> : null}
       <Row label={t("appearance.themeLabel")} description={t("appearance.themeDesc")}>
         <Select
           value={config.appearance.theme}
@@ -73,8 +82,8 @@ export function AppearanceSection() {
         <Button onClick={reset}>{t("common.restoreDefaults")}</Button>
       </Card>
       {pickerOpen ? (
-        <TrayIconPicker
-          value={config.appearance.trayIcon}
+        <AppIconPicker
+          value={config.appearance.appIcon}
           t={t}
           onPick={pickIcon}
           onClose={() => setPickerOpen(false)}

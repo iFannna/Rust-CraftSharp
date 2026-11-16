@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod appicon;
 mod autostart;
 mod desktop;
 mod dragdrop;
@@ -303,48 +304,12 @@ fn read_skin_data_url(path: String) -> Result<String, String> {
     Ok(format!("data:image/png;base64,{}", base64(&png)))
 }
 
-fn tray_icon_file(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    use tauri::Manager;
-    app.path()
-        .app_config_dir()
-        .ok()
-        .map(|dir| dir.join("tray-icon.png"))
-}
-
-fn decode_tray_icon(bytes: &[u8]) -> Option<tauri::image::Image<'static>> {
-    let image = image::load_from_memory(bytes).ok()?.to_rgba8();
-    Some(tauri::image::Image::new_owned(
-        image.as_raw().clone(),
-        image.width(),
-        image.height(),
-    ))
-}
-
-/// 更换托盘图标；png 为空时恢复默认应用图标并删除自定义图标
+/// 更换应用图标：托盘、窗口、程序文件与快捷方式一起更新
 #[tauri::command]
-fn set_tray_icon(app: tauri::AppHandle, png: Option<String>) -> Result<(), String> {
-    let tray = app.tray_by_id("main").ok_or("tray icon not found")?;
-    let path = tray_icon_file(&app).ok_or("config directory unavailable")?;
-
-    let Some(png) = png else {
-        let _ = std::fs::remove_file(&path);
-        if let Some(icon) = app.default_window_icon().cloned() {
-            tray.set_icon(Some(icon))
-                .map_err(|error| error.to_string())?;
-        }
-        return Ok(());
-    };
-
-    let bytes = base64_decode(&png)?;
-    let icon = decode_tray_icon(&bytes).ok_or("invalid icon image")?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    }
-    // 先落盘再换图标，下次启动创建托盘时直接读到
-    std::fs::write(&path, &bytes).map_err(|error| error.to_string())?;
-    tray.set_icon(Some(icon))
-        .map_err(|error| error.to_string())?;
-    Ok(())
+async fn set_app_icon(app: tauri::AppHandle, png: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || appicon::apply(&app, png))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 fn base64(data: &[u8]) -> String {
@@ -361,7 +326,7 @@ fn base64(data: &[u8]) -> String {
     out
 }
 
-fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     let mut out = Vec::with_capacity(data.len() / 4 * 3);
     let mut buf = [0u8; 4];
     let mut n = 0;
@@ -457,10 +422,7 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         });
 
-    let saved_icon = tray_icon_file(app)
-        .and_then(|path| std::fs::read(path).ok())
-        .and_then(|bytes| decode_tray_icon(&bytes));
-    if let Some(icon) = saved_icon.or_else(|| app.default_window_icon().cloned()) {
+    if let Some(icon) = appicon::tray_icon(app).or_else(|| app.default_window_icon().cloned()) {
         builder = builder.icon(icon);
     }
 
@@ -469,6 +431,8 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 fn main() {
+    appicon::run_helper_if_requested();
+
     // 第二个实例只负责唤醒已有实例打开设置，不再初始化任何窗口
     if !singleinstance::acquire() {
         return;
@@ -479,6 +443,7 @@ fn main() {
             use tauri::Manager;
 
             create_tray(app.handle())?;
+            appicon::startup(app.handle());
             singleinstance::watch(app.handle().clone());
 
             let slots_path = app.path().app_config_dir().unwrap_or_default().join("slots.json");
@@ -534,7 +499,7 @@ fn main() {
             slots_replace_path,
             read_skin_data_url,
             entity_host_frame,
-            set_tray_icon,
+            set_app_icon,
             set_autostart
         ])
         .run(tauri::generate_context!())

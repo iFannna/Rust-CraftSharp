@@ -1,25 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import type { TFunction } from "@/i18n";
-import { DEFAULT_TRAY_ICON, DEFAULT_TRAY_ICON_URL, TRAY_ICON_GROUPS, trayIconUrl } from "@/settings/trayIcons";
+import { DEFAULT_APP_ICON, DEFAULT_APP_ICON_URL, APP_ICON_GROUPS, appIconUrl } from "@/settings/appIcons";
 
-interface TrayIconPickerProps {
+interface AppIconPickerProps {
   value: string;
   t: TFunction;
   onPick: (id: string) => void;
   onClose: () => void;
 }
 
-/** 托盘图标选择：老版分类结构，选中即应用并关闭 */
-export function TrayIconPicker({ value, t, onPick, onClose }: TrayIconPickerProps) {
+/** 应用图标选择：老版分类结构，选中即应用并关闭 */
+export function AppIconPicker({ value, t, onPick, onClose }: AppIconPickerProps) {
   const [active, setActive] = useState(
-    () => `${TRAY_ICON_GROUPS[0].id}:${TRAY_ICON_GROUPS[0].categories[0].id}`
+    () => `${APP_ICON_GROUPS[0].id}:${APP_ICON_GROUPS[0].categories[0].id}`
   );
   const closeRef = useRef<HTMLButtonElement>(null);
   const closeHandler = useRef(onClose);
   closeHandler.current = onClose;
 
   const [groupId, categoryId] = active.split(":");
-  const group = TRAY_ICON_GROUPS.find((item) => item.id === groupId) ?? TRAY_ICON_GROUPS[0];
+  const group = APP_ICON_GROUPS.find((item) => item.id === groupId) ?? APP_ICON_GROUPS[0];
   const category = group.categories.find((item) => item.id === categoryId) ?? group.categories[0];
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export function TrayIconPicker({ value, t, onPick, onClose }: TrayIconPickerProp
 
         <div className="icon-picker-body">
           <nav className="icon-picker-nav" aria-label={t("iconPicker.title")}>
-            {TRAY_ICON_GROUPS.map((item) => (
+            {APP_ICON_GROUPS.map((item) => (
               <div key={item.id}>
                 <div className="icon-picker-group">{t(item.labelKey)}</div>
                 {item.categories.map((entry) => {
@@ -73,12 +73,12 @@ export function TrayIconPicker({ value, t, onPick, onClose }: TrayIconPickerProp
           <div className="icon-picker-grid">
             <button
               type="button"
-              className={value === DEFAULT_TRAY_ICON ? "icon-picker-cell is-selected" : "icon-picker-cell"}
+              className={value === DEFAULT_APP_ICON ? "icon-picker-cell is-selected" : "icon-picker-cell"}
               title={t("iconPicker.defaultIcon")}
               aria-label={t("iconPicker.defaultIcon")}
-              onClick={() => onPick(DEFAULT_TRAY_ICON)}
+              onClick={() => onPick(DEFAULT_APP_ICON)}
             >
-              <img src={DEFAULT_TRAY_ICON_URL} alt="" draggable={false} />
+              <img src={DEFAULT_APP_ICON_URL} alt="" draggable={false} />
             </button>
             {category.entries.map((entry) => (
               <button
@@ -89,7 +89,7 @@ export function TrayIconPicker({ value, t, onPick, onClose }: TrayIconPickerProp
                 aria-label={entry.file}
                 onClick={() => onPick(entry.id)}
               >
-                <img src={trayIconUrl(entry.id)} alt="" loading="lazy" decoding="async" draggable={false} />
+                <img src={appIconUrl(entry.id)} alt="" loading="lazy" decoding="async" draggable={false} />
               </button>
             ))}
           </div>

@@ -21,6 +21,7 @@ const DIB_RGB_COLORS: u32 = 0;
 const BI_RGB: u32 = 0;
 const CLSCTX_INPROC_SERVER: u32 = 1;
 const STGM_READ: u32 = 0;
+const STGM_READWRITE: u32 = 2;
 const SLGP_RAWPATH: u32 = 4;
 const COINIT_APARTMENTTHREADED: u32 = 0x2;
 
@@ -109,7 +110,7 @@ struct IShellLinkWVtbl {
     get_show_cmd: usize,
     set_show_cmd: usize,
     get_icon_location: usize,
-    set_icon_location: usize,
+    set_icon_location: unsafe extern "system" fn(*mut c_void, *const u16, i32) -> i32,
     set_relative_path: usize,
     resolve: unsafe extern "system" fn(*mut c_void, isize, u32) -> i32,
     set_path: usize,
@@ -123,6 +124,7 @@ struct IPersistFileVtbl {
     get_class_id: usize,
     is_dirty: usize,
     load: unsafe extern "system" fn(*mut c_void, *const u16, u32) -> i32,
+    save: unsafe extern "system" fn(*mut c_void, *const u16, i32) -> i32,
 }
 
 #[link(name = "shell32")]
@@ -384,4 +386,84 @@ unsafe fn resolve_link(path: &str) -> Option<String> {
 
     ((*link_vtbl).release)(link);
     target
+}
+
+/// 改写快捷方式的图标位置，保存后资源管理器立即采用新图标
+pub fn set_shortcut_icon(path: &str, icon: &str) -> bool {
+    unsafe {
+        let hr = CoInitializeEx(std::ptr::null_mut(), COINIT_APARTMENTTHREADED);
+        let initialized = hr >= 0;
+        let ok = write_link(path, icon);
+        if initialized {
+            CoUninitialize();
+        }
+        ok
+    }
+}
+
+unsafe fn write_link(path: &str, icon: &str) -> bool {
+    let mut link: *mut c_void = std::ptr::null_mut();
+    let hr = CoCreateInstance(
+        &CLSID_SHELL_LINK,
+        std::ptr::null_mut(),
+        CLSCTX_INPROC_SERVER,
+        &IID_ISHELL_LINK_W,
+        &mut link,
+    );
+    if hr < 0 || link.is_null() {
+        return false;
+    }
+
+    let link_vtbl = *(link as *mut *const IShellLinkWVtbl);
+    let mut persist: *mut c_void = std::ptr::null_mut();
+    let mut saved = false;
+
+    if ((*link_vtbl).query_interface)(link, &IID_IPERSIST_FILE, &mut persist) >= 0 && !persist.is_null() {
+        let persist_vtbl = *(persist as *mut *const IPersistFileVtbl);
+        let wide_path = wide(path);
+
+        if ((*persist_vtbl).load)(persist, wide_path.as_ptr(), STGM_READWRITE) >= 0 {
+            let wide_icon = wide(icon);
+            if ((*link_vtbl).set_icon_location)(link, wide_icon.as_ptr(), 0) >= 0 {
+                saved = ((*persist_vtbl).save)(persist, wide_path.as_ptr(), 1) >= 0;
+            }
+        }
+
+        ((*persist_vtbl).release)(persist);
+    }
+
+    ((*link_vtbl).release)(link);
+    saved
+}
+
+#[cfg(test)]
+mod tests {
+    fn any_start_menu_shortcut() -> Option<std::path::PathBuf> {
+        let appdata = std::env::var("APPDATA").ok()?;
+        let root = std::path::Path::new(&appdata).join(r"Microsoft\Windows\Start Menu\Programs");
+        let mut stack = vec![root];
+        while let Some(dir) = stack.pop() {
+            let entries = std::fs::read_dir(dir).ok()?;
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().map(|ext| ext.eq_ignore_ascii_case("lnk")).unwrap_or(false) {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn writes_copied_shortcut_icon() {
+        let Some(source) = any_start_menu_shortcut() else { return };
+        let target = std::env::temp_dir().join(format!("craftsharp-lnk-test-{}.lnk", std::process::id()));
+        std::fs::copy(&source, &target).unwrap();
+        let path = target.to_str().unwrap();
+        assert!(super::set_shortcut_icon(path, r"C:\Windows\explorer.exe,0"));
+        assert!(super::shortcut_target(path).is_some());
+        let _ = std::fs::remove_file(&target);
+    }
 }

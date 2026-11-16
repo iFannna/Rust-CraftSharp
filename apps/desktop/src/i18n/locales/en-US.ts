@@ -45,7 +45,8 @@ export const enUS: Messages = {
 
   "appearance.title": "Appearance Settings",
   "appearance.iconLabel": "Icon",
-  "appearance.iconDesc": "Select system tray icon",
+  "appearance.iconDesc": "Select app icon",
+  "appearance.iconCanceled": "Administrator permission was cancelled; the program file icon was not updated",
   "appearance.iconTooltip": "Click to change icon",
   "appearance.themeLabel": "Theme",
   "appearance.themeDesc": "Select interface display style",
@@ -200,7 +201,7 @@ export const enUS: Messages = {
   "aria.elementCurrent": "{label} current value",
   "aria.elementMax": "{label} max value",
   "aria.theme": "Theme",
-  "aria.trayIcon": "System tray icon",
+  "aria.appIcon": "App icon",
   "aria.font": "Interface font",
   "aria.fontSize": "Interface font size",
   "aria.skin": "Default skin",

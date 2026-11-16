@@ -1,33 +1,33 @@
 /**
- * 托盘图标资源：26.3 官方方块与物品贴图，按创造栏分类。
- * 选择结果只存 id，选中后绘制 32px PNG 交给 Rust 设置托盘并落盘。
+ * 应用图标资源：26.3 官方方块与物品贴图，按创造栏分类。
+ * 选择结果只存 id，源图交给 Rust 统一生成托盘、任务栏与 exe 图标。
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import appIconUrl from "../../src-tauri/icons/icon.ico?url";
+import defaultAppIconUrl from "../../src-tauri/icons/icon.ico?url";
 import blockCategories from "@assets/minecraft/textures/block/data/categories.json";
 import itemCategories from "@assets/minecraft/textures/item/data/categories.json";
 import type { MessageKey } from "@/i18n";
 
-export const DEFAULT_TRAY_ICON = "";
-export const DEFAULT_TRAY_ICON_URL = appIconUrl;
+export const DEFAULT_APP_ICON = "";
+export const DEFAULT_APP_ICON_URL = defaultAppIconUrl;
 
-interface TrayIconEntry {
+interface AppIconEntry {
   id: string;
   file: string;
   url: string;
 }
 
-export interface TrayIconCategory {
+export interface AppIconCategory {
   id: string;
   labelKey: MessageKey;
-  entries: TrayIconEntry[];
+  entries: AppIconEntry[];
 }
 
-export interface TrayIconGroup {
+export interface AppIconGroup {
   id: "block" | "item";
   labelKey: MessageKey;
-  categories: TrayIconCategory[];
+  categories: AppIconCategory[];
 }
 
 const blockUrls = import.meta.glob("@assets/minecraft/textures/block/*.png", {
@@ -42,7 +42,7 @@ const itemUrls = import.meta.glob("@assets/minecraft/textures/item/*.png", {
   import: "default"
 }) as Record<string, string>;
 
-function collect(urls: Record<string, string>, kind: "block" | "item"): TrayIconEntry[] {
+function collect(urls: Record<string, string>, kind: "block" | "item"): AppIconEntry[] {
   return Object.entries(urls)
     .map(([path, url]) => {
       const file = path.slice(path.lastIndexOf("/") + 1);
@@ -56,14 +56,14 @@ const ITEMS = collect(itemUrls, "item");
 const URLS = new Map([...BLOCKS, ...ITEMS].map((entry) => [entry.id, entry.url]));
 
 function byCategory(
-  entries: TrayIconEntry[],
+  entries: AppIconEntry[],
   categories: Record<string, string[]>,
   category: string
-): TrayIconEntry[] {
+): AppIconEntry[] {
   return entries.filter((entry) => categories[entry.file]?.includes(category));
 }
 
-export const TRAY_ICON_GROUPS: TrayIconGroup[] = [
+export const APP_ICON_GROUPS: AppIconGroup[] = [
   {
     id: "block",
     labelKey: "iconPicker.block",
@@ -90,33 +90,35 @@ export const TRAY_ICON_GROUPS: TrayIconGroup[] = [
   }
 ];
 
-export function trayIconUrl(id: string): string {
-  return URLS.get(id) ?? appIconUrl;
+export function appIconUrl(id: string): string {
+  return URLS.get(id) ?? defaultAppIconUrl;
 }
 
-async function renderTrayIconPng(id: string): Promise<string> {
+/** 动画贴图是竖向帧条，只取首帧的方形区域，避免被压扁 */
+async function renderIconSource(id: string): Promise<string> {
   const image = new Image();
-  image.src = trayIconUrl(id);
+  image.src = appIconUrl(id);
   await image.decode();
 
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
   const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
+  canvas.width = side;
+  canvas.height = side;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("2d context unavailable");
-  context.imageSmoothingEnabled = false;
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, side, side, 0, 0, side, side);
 
   const prefix = "data:image/png;base64,";
   return canvas.toDataURL("image/png").slice(prefix.length);
 }
 
-/** 立即替换托盘图标；id 为空时恢复默认应用图标并删除自定义图标文件 */
-export async function applyTrayIcon(id: string): Promise<void> {
+/** 应用图标；返回 null 表示成功，否则是可展示的错误信息 */
+export async function applyAppIcon(id: string): Promise<string | null> {
   try {
-    const png = id ? await renderTrayIconPng(id) : null;
-    await invoke("set_tray_icon", { png });
-  } catch {
-    // 托盘不可用时保持现状，配置仍会记录用户的选择
+    const png = id ? await renderIconSource(id) : null;
+    await invoke("set_app_icon", { png });
+    return null;
+  } catch (error) {
+    return typeof error === "string" ? error : "无法更新应用图标";
   }
 }

@@ -16,7 +16,13 @@ mod shell_windows {
     pub fn shortcut_target(_path: &str) -> Option<String> {
         None
     }
+
+    pub fn set_shortcut_icon(_path: &str, _icon: &str) -> bool {
+        false
+    }
 }
+
+pub(crate) use shell_windows::{set_shortcut_icon, shortcut_target};
 
 use std::collections::HashMap;
 use std::fs;
