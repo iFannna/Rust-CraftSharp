@@ -1,0 +1,51 @@
+/* 桌面窗口统一滚动条：细条、透明轨道、无箭头 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  margin: 8px 0;
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: hsl(var(--border, 0 0% 89.8%)) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground, 0 0% 45.1%) / 0.5) padding-box;
+}
+
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-corner {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+/* 预留滚动条宽度，滑块显隐不改变内容尺寸 */
+.ui-scroll,
+.ui-scroll-auto {
+  scrollbar-gutter: stable;
+}
+
+/* 自动隐藏：平时透明，滚动或鼠标靠近右侧时淡入 */
+.ui-scroll-auto {
+  --scrollbar-alpha: 0;
+  scrollbar-gutter: stable;
+}
+
+.ui-scroll-auto::-webkit-scrollbar-thumb {
+  background: hsl(var(--border, 0 0% 89.8%) / var(--scrollbar-alpha)) padding-box;
+}
+
+.ui-scroll-auto::-webkit-scrollbar-thumb:hover {
+  background: hsl(
+      var(--muted-foreground, 0 0% 45.1%) / calc(var(--scrollbar-alpha) * 0.5)
+    )
+    padding-box;
+}

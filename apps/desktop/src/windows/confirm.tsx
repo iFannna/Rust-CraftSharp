@@ -38,7 +38,7 @@ function ConfirmDialog() {
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
           <div className="flex min-h-0 flex-1 gap-3">
             <Icon className="mt-0.5 h-5 w-5 flex-none text-muted-foreground" />
-            <p className="ui-scroll min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
+            <p className="ui-scroll-auto min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
               {text}
             </p>
           </div>

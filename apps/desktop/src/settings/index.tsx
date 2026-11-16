@@ -191,7 +191,7 @@ function SettingsApp() {
           </nav>
 
           {/* key 让切换分区时内容区回到顶部 */}
-          <main className="ui-scroll min-w-0 flex-1 overflow-y-auto p-8" key={active}>
+          <main className="ui-scroll-auto min-w-0 flex-1 overflow-y-auto p-8" key={active}>
             <div className="max-w-3xl pb-10">
               <ActiveSection />
             </div>

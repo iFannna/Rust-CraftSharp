@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>CraftSharp 3D 预览</title>
+    <link rel="stylesheet" href="/src/ui/scrollbar.css" />
     <script>
       try {
         const config = JSON.parse(localStorage.getItem("craftsharp.config.v1") || "{}");
@@ -395,7 +396,7 @@
       <canvas id="canvas"></canvas>
       <div id="status"></div>
     </div>
-    <div id="panel">
+    <div id="panel" class="ui-scroll-auto">
       <div class="group">
         <h3>实体</h3>
         <div class="row">

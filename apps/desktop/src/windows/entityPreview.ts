@@ -13,6 +13,7 @@ import {
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
 import { isTauri } from "@/lib/runtime";
 import { ensureSettingsFonts, fontStackOf } from "@/settings/fonts";
+import "@/ui/scrollbars";
 
 const ANIMATION_LABELS: Record<string, string> = {
   idle: "待机",

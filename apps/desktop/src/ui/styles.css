@@ -1,3 +1,5 @@
+@import "./scrollbar.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -88,32 +90,6 @@
 }
 
 @layer utilities {
-  .ui-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-  }
-
-  .ui-scroll::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  .ui-scroll::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background: hsl(var(--border));
-    background-clip: padding-box;
-  }
-
-  .ui-scroll::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
-    background-clip: padding-box;
-  }
-
-  .ui-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
   .drag-region {
     -webkit-app-region: drag;
   }

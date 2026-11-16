@@ -83,6 +83,14 @@
 - 权限补齐 `confirm-dialog`、`app-icon-picker`、`entity-preview`。
 - `tsc --noEmit` 与 `vite build` 通过；真实窗口冒烟留给用户。
 
+## 滚动条统一
+
+- 共享 `ui/scrollbar.css`：10px 细条、透明轨道、圆角滑块，轨道上下留 8px，隐藏上下箭头与交汇方块；React 窗口和 3D 预览页引同一份。
+- 所有滚动容器加 `scrollbar-gutter: stable`，滑块显隐不再改变内容宽度，折叠展开不会引起横向重排。
+- 两种可见模式：`ui-scroll` 常驻，用于图标选择分类/网格和下拉列表；`ui-scroll-auto` 默认隐藏滑块，滚动或鼠标进入右侧 24px 时立即显示，停止 1.2 秒后用 0.6 秒缓慢淡出。
+- 自动隐藏由 `ui/scrollbars.ts` 统一处理，委托 wheel、pointermove 与 scroll 事件，通过 CSS 变量逐帧改变滑块透明度实现淡出，3D 预览页同样接入。
+- 设置面板内容区、确认框长文本、3D 预览控制栏使用自动隐藏；下拉列表自带的上下翻页按钮已删除，面板宽度固定为触发器宽度，避免和下拉框对不齐。
+
 ## 清理
 
 - 已删除不再引用的 `settings.css`、`windows/rename.ts`、`windows/menu.ts`。
@@ -94,4 +102,5 @@
 - [x] 设置面板全量
 - [x] 独立窗口
 - [x] 窗口壳统一
+- [x] 滚动条统一
 - [x] 清理
