@@ -18,6 +18,27 @@ mod hitmask;
 #[cfg(windows)]
 mod hotkeys;
 
+/// 给自定义标题栏安装最大化按钮分屏命中。
+#[tauri::command]
+fn install_caption_hook(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let _ = window.set_maximizable(true);
+        let hwnd = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
+        let label = window.label().to_string();
+        let hook_app = app.clone();
+        app.run_on_main_thread(move || {
+            platform::install_caption_hook(hwnd, hook_app, label);
+        })
+        .map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, window);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) -> Vec<String> {
     #[cfg(windows)]
@@ -369,6 +390,37 @@ fn slots_replace_path(from: String, to: String, style: String, shared: bool) {
     slots::replace_path(&slots::Scope::new(style, shared), &from, &to);
 }
 
+fn show_settings(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let Some(window) = app.get_webview_window("settings") else {
+        return;
+    };
+    let _ = window.show();
+    if window.is_minimized().unwrap_or(false) {
+        let _ = window.unminimize();
+    }
+    let _ = window.set_focus();
+}
+
+/// 托盘左键切换：可见时立即收起，隐藏或最小化时恢复并聚焦。
+fn toggle_settings(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let Some(window) = app.get_webview_window("settings") else {
+        return;
+    };
+    let visible = window.is_visible().unwrap_or(false);
+    let minimized = window.is_minimized().unwrap_or(false);
+    if !visible || minimized {
+        show_settings(app);
+        return;
+    }
+
+    let _ = window.minimize();
+    let _ = window.hide();
+}
+
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -397,6 +449,10 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 app.exit(0);
                 return;
             }
+            if id == "settings" {
+                show_settings(app);
+                return;
+            }
             let _ = app.emit("tray-action", id);
         })
         .on_tray_icon_event(|tray, event| {
@@ -406,7 +462,7 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let _ = tray.app_handle().emit("tray-action", "settings".to_string());
+                toggle_settings(tray.app_handle());
             }
         });
 
@@ -441,10 +497,15 @@ fn main() {
             hud::inventory::init(app.handle());
             slots::on_changed(hud::inventory::slots_changed);
             install_drag_hover(app.handle());
-            // MC 窗口与快捷栏一样直接显隐，不做系统过渡动画
+            // HUD、快捷栏、宿主窗口直接显隐；设置与预览保留系统过渡动画
             for window in app.webview_windows().values() {
                 if let Ok(hwnd) = window.hwnd() {
-                    platform::disable_transitions(hwnd.0 as isize);
+                    let instant = matches!(window.label(), "main" | "hud" | "entity-view");
+                    if instant {
+                        platform::disable_transitions(hwnd.0 as isize);
+                    } else {
+                        platform::enable_transitions(hwnd.0 as isize);
+                    }
                 }
             }
             dragdrop::install_all(app.handle());
@@ -486,7 +547,8 @@ fn main() {
             read_skin_data_url,
             entity_host_frame,
             set_app_icon,
-            set_autostart
+            set_autostart,
+            install_caption_hook
         ])
         .run(tauri::generate_context!())
         .expect("error while running CraftSharp");

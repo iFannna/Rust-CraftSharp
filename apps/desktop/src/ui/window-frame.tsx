@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
@@ -52,6 +53,11 @@ export function WindowFrame({
   const [maximized, setMaximized] = useState(false);
   const maximizedListener = useRef(onMaximizedChange);
   maximizedListener.current = onMaximizedChange;
+
+  useEffect(() => {
+    if (controls !== "full" || !isTauri()) return;
+    void invoke("install_caption_hook").catch(() => undefined);
+  }, [controls]);
 
   useEffect(() => {
     if (!resizable) return;

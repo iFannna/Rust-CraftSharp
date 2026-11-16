@@ -48,6 +48,7 @@ export function TitleBar({
             </button>
             <button
               type="button"
+              data-caption="maximize"
               className={captionClass}
               aria-label={maximized ? labels.restore : labels.maximize}
               onClick={onMaximize}

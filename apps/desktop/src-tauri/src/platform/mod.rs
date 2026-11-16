@@ -31,8 +31,19 @@ mod windows_api {
     pub fn read_file_paths() -> Vec<String> {
         Vec::new()
     }
+}
 
+#[cfg(windows)]
+mod window_fx;
+#[cfg(not(windows))]
+mod window_fx {
     pub fn disable_transitions(_hwnd: isize) {}
+    pub fn enable_transitions(_hwnd: isize) {}
+    pub fn animate_window(_hwnd: isize, _visible: bool) -> bool {
+        false
+    }
+    pub fn install_caption_hook(_hwnd: isize, _app: tauri::AppHandle, _label: String) {}
 }
 
 pub use windows_api::*;
+pub use window_fx::*;

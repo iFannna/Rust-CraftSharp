@@ -11,21 +11,36 @@ async function windowOf(label: WindowLabel): Promise<WebviewWindow | null> {
   return WebviewWindow.getByLabel(label);
 }
 
+const pendingVisibility = new Map<WindowLabel, number>();
+
 async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
   const target = await windowOf(label);
   if (!target) return;
 
-  if (visible) {
-    await target.show();
-    if (focus) await target.setFocus();
-  } else {
-    if (label === WINDOW_LABEL.settings) {
-      // 设置面板收起时，从它打开的展示窗口一起收起
-      const picker = await WebviewWindow.getByLabel(WINDOW_LABEL.iconPicker);
-      await picker?.close().catch(() => undefined);
-    }
-    await target.hide();
+  if (!visible && label === WINDOW_LABEL.settings) {
+    // 设置面板收起时，从它打开的展示窗口一起收起
+    const picker = await WebviewWindow.getByLabel(WINDOW_LABEL.iconPicker);
+    await picker?.close().catch(() => undefined);
   }
+
+  const token = (pendingVisibility.get(label) ?? 0) + 1;
+  pendingVisibility.set(label, token);
+
+  if (!visible) {
+    // 先最小化播放系统动画，再隐藏移除任务栏按钮
+    await target.minimize().catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    if (pendingVisibility.get(label) !== token) return;
+    await target.hide().catch(() => undefined);
+    return;
+  }
+
+  await target.show().catch(() => undefined);
+  if (pendingVisibility.get(label) !== token) return;
+  if (await target.isMinimized().catch(() => false)) {
+    await target.unminimize().catch(() => undefined);
+  }
+  if (focus) await target.setFocus().catch(() => undefined);
 }
 
 /** 状态栏由 Rust 原生窗口绘制，显隐走独立命令 */
@@ -59,7 +74,11 @@ export async function setSettingsVisible(visible: boolean) {
 export async function toggleSettings() {
   const target = await windowOf("settings");
   if (!target) return;
-  const visible = await target.isVisible();
+  const [visible, minimized] = await Promise.all([target.isVisible(), target.isMinimized()]);
+  if (minimized) {
+    await setVisible("settings", true, true);
+    return;
+  }
   await setVisible("settings", !visible, !visible);
 }
 
@@ -70,7 +89,11 @@ export async function setCrosshairVisible(visible: boolean) {
 export async function toggleEntityPreview() {
   const target = await windowOf("entity-preview");
   if (!target) return;
-  const visible = await target.isVisible();
+  const [visible, minimized] = await Promise.all([target.isVisible(), target.isMinimized()]);
+  if (minimized) {
+    await setVisible("entity-preview", true, true);
+    return;
+  }
   await setVisible("entity-preview", !visible, !visible);
 }
 

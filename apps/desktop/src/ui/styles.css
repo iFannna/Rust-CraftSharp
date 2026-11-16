@@ -109,3 +109,9 @@
   min-width: 0;
   max-width: 55%;
 }
+
+/* 最大化按钮被原生覆盖层接管时，由 Rust 直接写入悬停类 */
+.caption-max-hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}

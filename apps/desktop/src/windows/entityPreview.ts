@@ -60,6 +60,7 @@ if (isTauri()) {
       .isMaximized()
       .then((maximized) => {
         document.body.classList.toggle("maximized", maximized);
+        if (maximized) maximizeButton.classList.remove("caption-max-hover");
         const label = maximized ? "还原" : "最大化";
         maximizeButton.setAttribute("aria-label", label);
         maximizeButton.title = label;
@@ -84,6 +85,9 @@ if (isTauri()) {
   });
   void currentWindow.onResized(syncMaximized);
   syncMaximized();
+
+  // 最大化按钮交给系统命中，悬停态由原生直接写入 DOM
+  void invoke("install_caption_hook").catch(() => undefined);
 
   for (const handle of document.querySelectorAll<HTMLElement>("[data-resize]")) {
     handle.addEventListener("pointerdown", (event) => {
