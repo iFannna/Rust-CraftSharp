@@ -60,16 +60,16 @@ export function Row({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-4",
+        "settings-row flex items-center justify-between gap-4",
         plain ? "border-b py-3.5 last:border-b-0" : "mb-2 rounded-lg border bg-card px-4 py-3.5",
         disabled && "opacity-50"
       )}
     >
-      <div className="min-w-0 space-y-1">
+      <div className="settings-row-label min-w-0 space-y-1">
         <div className="text-sm font-medium leading-snug">{label}</div>
         {description ? <div className="text-xs leading-snug text-muted-foreground">{description}</div> : null}
       </div>
-      <div className="flex flex-none items-center justify-end">{children}</div>
+      <div className="settings-row-control flex flex-none items-center justify-end">{children}</div>
     </div>
   );
 }
@@ -109,7 +109,7 @@ export function Select<T extends string>({
     >
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-9 w-auto min-w-[160px] max-w-[280px] [&>span]:truncate"
+        className="h-9 w-auto min-w-[140px] max-w-[280px] [&>span]:truncate"
       >
         <SelectValue />
       </SelectTrigger>
@@ -143,7 +143,7 @@ export function TextField({
   return (
     <Input
       type="text"
-      className="h-9 w-[220px]"
+      className="h-9 w-[220px] max-w-full"
       aria-label={ariaLabel}
       placeholder={placeholder}
       value={value}
@@ -171,7 +171,7 @@ export function NumberField({
   return (
     <Input
       type="number"
-      className="h-9 w-[88px]"
+      className="h-9 w-[88px] max-w-full"
       aria-label={ariaLabel}
       min={min}
       max={max}

@@ -80,7 +80,7 @@ export function HotkeyInput({
           type="text"
           readOnly
           className={cn(
-            "h-9 w-[190px] text-center",
+            "h-9 w-[190px] max-w-full text-center",
             recording && "border-ring",
             error && "border-destructive focus-visible:ring-destructive"
           )}

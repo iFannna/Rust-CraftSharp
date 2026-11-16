@@ -98,3 +98,14 @@
     -webkit-app-region: no-drag;
   }
 }
+
+/* 设置面板流式布局：内容区随窗口伸缩 */
+.settings-main {
+  padding: clamp(20px, 2.5vw, 40px);
+}
+
+.settings-row-control {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+}

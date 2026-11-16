@@ -47,8 +47,8 @@ export function BossBarCardContent() {
       {bars.map((bar) => (
         <Card key={bar.id} className="mb-3 space-y-4 p-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold">{bar.name.trim() || t("bossBar.untitled")}</span>
-            <div className="flex items-center gap-3">
+            <span className="min-w-0 truncate text-sm font-semibold">{bar.name.trim() || t("bossBar.untitled")}</span>
+            <div className="flex flex-none items-center gap-3">
               <Check
                 label={t("bossBar.enable")}
                 checked={bar.enabled}
@@ -63,7 +63,7 @@ export function BossBarCardContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid gap-x-4 gap-y-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs text-muted-foreground">{t("bossBar.name")}</span>
               <TextField
