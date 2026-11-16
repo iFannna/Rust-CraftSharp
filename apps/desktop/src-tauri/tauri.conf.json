@@ -54,6 +54,34 @@
         "resizable": true,
         "visible": false,
         "shadow": true
+      },
+      {
+        "label": "entity-preview",
+        "title": "CraftSharp 3D 预览",
+        "url": "pages/entity-preview.html",
+        "width": 1000,
+        "height": 680,
+        "minWidth": 760,
+        "minHeight": 480,
+        "center": true,
+        "resizable": true,
+        "visible": false
+      },
+      {
+        "label": "entity-view",
+        "title": "CraftSharp Entity View",
+        "url": "pages/entity-view.html",
+        "width": 360,
+        "height": 360,
+        "x": -32000,
+        "y": -32000,
+        "transparent": true,
+        "decorations": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "visible": true,
+        "shadow": false
       }
     ],
     "security": {

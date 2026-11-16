@@ -291,6 +291,82 @@ fn slots_clear_by_path(path: String, style: String, shared: bool) {
     slots::clear_by_path(&slots::Scope::new(style, shared), &path);
 }
 
+/// 自定义皮肤读为 data URL，预览与物品栏共用
+#[tauri::command]
+fn read_skin_data_url(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|error| error.to_string())?;
+    let image = image::load_from_memory(&bytes).map_err(|error| error.to_string())?;
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|error| error.to_string())?;
+    Ok(format!("data:image/png;base64,{}", base64(&png)))
+}
+
+fn base64(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b = [chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0)];
+        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
+        out.push(TABLE[(n >> 18) as usize & 63] as char);
+        out.push(TABLE[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 { TABLE[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
+fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(data.len() / 4 * 3);
+    let mut buf = [0u8; 4];
+    let mut n = 0;
+    for byte in data.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' | b'\r' | b'\n' => continue,
+            _ => return Err("invalid base64".into()),
+        };
+        buf[n] = value;
+        n += 1;
+        if n == 4 {
+            out.push((buf[0] << 2) | (buf[1] >> 4));
+            out.push((buf[1] << 4) | (buf[2] >> 2));
+            out.push((buf[2] << 6) | buf[3]);
+            n = 0;
+        }
+    }
+    match n {
+        2 => out.push((buf[0] << 2) | (buf[1] >> 4)),
+        3 => {
+            out.push((buf[0] << 2) | (buf[1] >> 4));
+            out.push((buf[1] << 4) | (buf[2] >> 2));
+        }
+        _ => {}
+    }
+    Ok(out)
+}
+
+/// 离屏窗口推来的 3D 玩家帧，解码后交给物品栏合成
+#[tauri::command]
+fn entity_host_frame(data_url: String) {
+    let Some(data) = data_url.strip_prefix("data:image/png;base64,") else {
+        return;
+    };
+    let Ok(bytes) = base64_decode(data) else {
+        return;
+    };
+    let Ok(image) = image::load_from_memory(&bytes) else {
+        return;
+    };
+    let rgba = image.to_rgba8();
+    hud::inventory::entity_frame(rgba.width(), rgba.height(), rgba.as_raw());
+}
+
 #[tauri::command]
 fn slots_replace_path(from: String, to: String, style: String, shared: bool) {
     slots::replace_path(&slots::Scope::new(style, shared), &from, &to);
@@ -305,12 +381,13 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let status_bar = MenuItem::with_id(app, "statusBar", "显示/隐藏状态栏", true, None::<&str>)?;
     let inventory = MenuItem::with_id(app, "inventory", "显示/隐藏物品栏", true, None::<&str>)?;
     let crosshair = MenuItem::with_id(app, "crosshair", "显示/隐藏准星", true, None::<&str>)?;
+    let preview3d = MenuItem::with_id(app, "preview3d", "3D 预览", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "退出 CraftSharp", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
-        &[&settings, &status_bar, &inventory, &crosshair, &separator, &quit],
+        &[&settings, &status_bar, &inventory, &crosshair, &preview3d, &separator, &quit],
     )?;
 
     let mut builder = TrayIconBuilder::with_id("main")
@@ -408,6 +485,8 @@ fn main() {
             slots_move,
             slots_clear_by_path,
             slots_replace_path,
+            read_skin_data_url,
+            entity_host_frame,
             set_autostart
         ])
         .run(tauri::generate_context!())

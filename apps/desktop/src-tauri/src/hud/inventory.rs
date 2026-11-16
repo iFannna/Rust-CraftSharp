@@ -103,6 +103,14 @@ fn stop_shift_sampler() {
     }
 }
 
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PlayerCfg {
+    pub skin_name: String,
+    pub skin_type: String,
+    pub skin_path: String,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct InventoryCfg {
@@ -126,6 +134,7 @@ pub struct InventoryCfg {
     pub cut_slot: Option<String>,
     pub drop_key: String,
     pub open_inventory: String,
+    pub player: PlayerCfg,
 }
 
 impl Default for InventoryCfg {
@@ -151,6 +160,7 @@ impl Default for InventoryCfg {
             cut_slot: None,
             drop_key: "q".into(),
             open_inventory: "e".into(),
+            player: PlayerCfg::default(),
         }
     }
 }
@@ -218,6 +228,11 @@ pub struct State {
     last_click_slot: Option<usize>,
     last_click_at: u64,
     tooltip_slot: Option<usize>,
+    /// 3D 玩家预览帧，离屏窗口经 entity_host_frame 推入
+    entity: Option<Rc<sprite::Sprite>>,
+    /// 已下发的预览尺寸与皮肤指纹，避免重复重建
+    entity_meta: Option<String>,
+    look_at: u64,
     tracked: bool,
     frame: Option<Frame>,
     dib: Option<Dib>,
@@ -281,6 +296,9 @@ pub fn init(app: &AppHandle) {
         last_click_slot: None,
         last_click_at: 0,
         tooltip_slot: None,
+        entity: None,
+        entity_meta: None,
+        look_at: 0,
         tracked: false,
         frame: None,
         dib: None,
@@ -341,6 +359,7 @@ pub fn apply(config: InventoryCfg) {
             set_visible_inner(state);
         }
         refresh_tooltip(state);
+        sync_entity_setup(state);
         render(state);
     });
 }
@@ -527,6 +546,75 @@ fn install_icon(app: &AppHandle, key: &str, decoded: Option<std::sync::Arc<crate
     });
 }
 
+/// 离屏窗口推来的 3D 帧，按玩家区域合成进物品栏帧
+pub fn entity_frame(width: u32, height: u32, rgba: &[u8]) {
+    with_state(|state| {
+        state.entity = Some(Rc::new(sprite::from_rgba(width, height, rgba)));
+        if state.visible {
+            render(state);
+        }
+    });
+}
+
+/// 玩家预览尺寸或皮肤变化时下发一次重建
+fn sync_entity_setup(state: &mut State) {
+    let Some(player) = &state.layout.player else { return };
+    let cfg = &state.config.player;
+    let key = format!(
+        "{}x{}|{}|{}|{}",
+        player.width.round() as u32,
+        player.height.round() as u32,
+        cfg.skin_name,
+        cfg.skin_type,
+        cfg.skin_path
+    );
+    if state.entity_meta.as_deref() == Some(key.as_str()) {
+        return;
+    }
+    state.entity_meta = Some(key);
+    let payload = serde_json::json!({
+        "width": player.width.max(1.0).round() as u32,
+        "height": player.height.max(1.0).round() as u32,
+        "skin": if cfg.skin_name.is_empty() { "steve" } else { cfg.skin_name.as_str() },
+        "skinType": if cfg.skin_type.is_empty() { "wide" } else { cfg.skin_type.as_str() },
+        "skinPath": cfg.skin_path,
+    });
+    let _ = state.app.emit_to("entity-view", "entity-setup", payload);
+    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": state.visible }));
+}
+
+/// 光标在窗口内时按 WPF 契约换算头身跟随角度，节流到 30ms
+fn sync_entity_look(state: &mut State, x: f32, y: f32) {
+    if !state.visible {
+        return;
+    }
+    let now = w::ticks();
+    if now.saturating_sub(state.look_at) < 30 {
+        return;
+    }
+    state.look_at = now;
+    let Some(player) = &state.layout.player else { return };
+    let Some((rx, ry, _, _)) = state.rect else { return };
+    let unit = state.unit.max(0.001);
+    let margin = 6.0 * unit;
+    let display = (player.height - 12.0 * unit).max(1.0);
+    let neck_x = rx as f32 + player.left + player.width / 2.0;
+    let neck_y = ry as f32 + player.top + player.height - margin + display * (24.0 / 32.0);
+    let cursor_x = rx as f32 + x;
+    let cursor_y = ry as f32 + y;
+    let work = w::work_area(state.hwnd);
+    let max_x = (neck_x - work.left as f32).max(work.right as f32 - neck_x).max(1.0);
+    let max_y = (neck_y - work.top as f32).max(work.bottom as f32 - neck_y).max(1.0);
+    let ratio_x = ((cursor_x - neck_x) / max_x).clamp(-1.0, 1.0);
+    let ratio_y = ((cursor_y - neck_y) / max_y).clamp(-1.0, 1.0);
+    let payload = serde_json::json!({
+        "bodyYaw": ratio_x * 45.0,
+        "bodyPitch": -ratio_y * 10.0,
+        "headPitch": -ratio_y * 10.0,
+    });
+    let _ = state.app.emit_to("entity-view", "entity-look", payload);
+}
+
 /// 数据变化后刷新图标与画面。
 pub fn slots_changed() {
     with_state(|state| {
@@ -594,6 +682,7 @@ fn render(state: &mut State) {
         layout: &state.layout,
         background: &state.background,
         icons: &state.icons,
+        entity: state.entity.as_deref(),
         hover,
         hover_green,
         drag_source: if state.distribute.is_some() {
@@ -639,6 +728,7 @@ fn hover_green(state: &State, index: usize) -> bool {
 pub fn set_visible_inner(state: &mut State) {
     let visible = state.config.visible;
     state.visible = visible;
+    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": visible }));
 
     crate::hud::overlay::set_visible(visible && state.config.gray_overlay, state.config.gray_overlay_opacity);
 
@@ -1253,6 +1343,7 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
         state.tracked = true;
         w::track_leave(state.hwnd);
     }
+    sync_entity_look(state, x, y);
 
     if state.moving.is_some() {
         if let Some(moving) = &state.moving {

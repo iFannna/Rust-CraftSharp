@@ -138,6 +138,7 @@ export interface HotkeysConfig {
 export interface PlayerConfig {
   skinPath: string;
   skinType: SkinType;
+  skinName: string;
 }
 
 export interface AppConfig {
@@ -252,7 +253,7 @@ const DEFAULTS: AppConfig = {
     dropItem: "Q",
     openInventory: "E"
   },
-  player: { skinPath: "", skinType: "wide" }
+  player: { skinPath: "", skinType: "wide", skinName: "steve" }
 };
 
 export function defaultConfig(): AppConfig {

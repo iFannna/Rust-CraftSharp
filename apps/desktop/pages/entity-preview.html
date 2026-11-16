@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CraftSharp 3D 预览</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #202020;
+        --card: #2d2d2d;
+        --line: #3d3d3d;
+        --text: #f3f3f3;
+        --muted: #a8a8a8;
+        --accent: #0078d4;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        display: flex;
+        height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px "Microsoft YaHei", sans-serif;
+        user-select: none;
+      }
+      #viewport {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+        background: #171717;
+      }
+      #viewport.checker {
+        background: repeating-conic-gradient(#2a2a2a 0% 25%, #1c1c1c 0% 50%) 0 0 / 24px 24px;
+      }
+      #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+      #canvas.dragging { cursor: grabbing; }
+      #panel {
+        width: 280px;
+        flex: none;
+        overflow-y: auto;
+        padding: 14px;
+        border-left: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .group { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+      .group h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+      .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+      .row:first-of-type { margin-top: 0; }
+      label { flex: none; width: 52px; color: var(--muted); font-size: 13px; }
+      select, button {
+        flex: 1;
+        min-width: 0;
+        background: #383838;
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 5px 8px;
+        font: inherit;
+        font-size: 13px;
+      }
+      button { cursor: pointer; flex: none; padding: 5px 12px; }
+      button:hover, select:hover { border-color: var(--accent); }
+      button.on { background: var(--accent); border-color: var(--accent); }
+      input[type="range"] { flex: 1; accent-color: var(--accent); }
+      input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+      .check { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; width: auto; }
+      #status {
+        position: absolute;
+        left: 10px;
+        bottom: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(23, 23, 23, 0.75);
+        padding: 3px 8px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      #speedValue { flex: none; width: 40px; text-align: right; color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div id="viewport">
+      <canvas id="canvas"></canvas>
+      <div id="status"></div>
+    </div>
+    <div id="panel">
+      <div class="group">
+        <h3>实体</h3>
+        <div class="row">
+          <label for="entity">模型</label>
+          <select id="entity"></select>
+        </div>
+      </div>
+      <div class="group" id="skinGroup">
+        <h3>皮肤</h3>
+        <div class="row">
+          <label for="skin">默认</label>
+          <select id="skin"></select>
+        </div>
+        <div class="row">
+          <label>类型</label>
+          <label class="check"><input type="checkbox" id="slim" />slim 细臂</label>
+        </div>
+        <div class="row">
+          <label>自定义</label>
+          <button id="skinFile">选择皮肤文件</button>
+          <input type="file" id="skinInput" accept="image/png,image/jpeg" hidden />
+        </div>
+      </div>
+      <div class="group">
+        <h3>动作</h3>
+        <div class="row">
+          <label for="animation">姿态</label>
+          <select id="animation"></select>
+        </div>
+        <div class="row">
+          <label>播放</label>
+          <button id="play">暂停</button>
+          <input type="range" id="speed" min="0.25" max="2" step="0.25" value="1" />
+          <span id="speedValue">1x</span>
+        </div>
+      </div>
+      <div class="group">
+        <h3>相机</h3>
+        <div class="row">
+          <button id="resetView">重置视角</button>
+          <label class="check"><input type="checkbox" id="autoRotate" />自动旋转</label>
+        </div>
+        <div class="row" style="color: var(--muted); font-size: 12px">左键拖拽旋转，滚轮缩放</div>
+      </div>
+      <div class="group">
+        <h3>显示</h3>
+        <div class="row">
+          <label for="background">背景</label>
+          <select id="background">
+            <option value="dark">深色</option>
+            <option value="checker">棋盘格</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="wireframe" />线框模式</label>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/windows/entityPreview.ts"></script>
+  </body>
+</html>

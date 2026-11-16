@@ -138,6 +138,11 @@ function inventoryConfig() {
     cutSlot: clipboard?.cut && sameSlotScope(clipboard.scope, { style: inventory.style, shared: inventory.sharedData })
       ? clipboard.slotId
       : null,
+    player: {
+      skinName: config.player.skinName,
+      skinType: config.player.skinType,
+      skinPath: config.player.skinPath
+    },
     dropKey: config.hotkeys.dropItem,
     openInventory: config.hotkeys.openInventory
   };

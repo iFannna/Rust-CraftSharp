@@ -60,6 +60,7 @@
 - P1 已补齐：单实例，命名互斥体 `Local\CraftSharp.SingleInstance` 保证只跑一份，第二次启动通过命名事件唤醒已有实例打开设置后直接退出
 - P1 已补齐：桌面图标显隐，`Ctrl+Alt+D` 查找 Progman 下的 SysListView32 并切换可见性，设置面板快捷键页加入对应项
 - P1 未完成：3D 玩家预览、壁纸引擎、皮肤上传
+- 下一步：通用实体 3D 渲染（P3 玩家预览、P4 皮肤预览、姿态库、生物渲染能力），需求与步骤见 `docs/refactor/entity3d-plan.md`
 - 未实测项：右键菜单的打开位置、管理员运行、重命名会真的动桌面文件或弹窗；原生文件拖入需要从资源管理器拖，未自动化。本轮只验证了打开命令与路径判断
 - 图标链路实测：`SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES` 与不带 `USEFILEATTRIBUTES` 结果逐字节相同，.lnk 得到带角标的快捷方式图标
 - 图标已知差异：Chromium 不能解码 TIFF，`.tif/.tiff` 会回退占位图；其余原版支持的图片格式都能直读

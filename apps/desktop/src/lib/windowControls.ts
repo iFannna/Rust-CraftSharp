@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
 
-export type WindowLabel = "main" | "settings";
+export type WindowLabel = "main" | "settings" | "entity-preview";
 
 async function windowOf(label: WindowLabel): Promise<WebviewWindow | null> {
   return WebviewWindow.getByLabel(label);
@@ -61,11 +61,18 @@ export async function setCrosshairVisible(visible: boolean) {
   updateConfig({ hudElements: { crosshairVisible: visible } });
 }
 
+export async function toggleEntityPreview() {
+  const target = await windowOf("entity-preview");
+  if (!target) return;
+  const visible = await target.isVisible();
+  await setVisible("entity-preview", !visible, !visible);
+}
+
 export async function toggleCrosshair() {
   await setCrosshairVisible(!getConfig().hudElements.crosshairVisible);
 }
 
-export type WindowAction = "settings" | "statusBar" | "inventory" | "crosshair";
+export type WindowAction = "settings" | "statusBar" | "inventory" | "crosshair" | "preview3d";
 
 /** 托盘与热键共用的动作分发 */
 export async function applyWindowAction(action: WindowAction) {
@@ -81,6 +88,9 @@ export async function applyWindowAction(action: WindowAction) {
       break;
     case "crosshair":
       await toggleCrosshair();
+      break;
+    case "preview3d":
+      await toggleEntityPreview();
       break;
     default:
       break;

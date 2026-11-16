@@ -68,6 +68,8 @@ pub struct Layout {
     pub height: f32,
     pub slot_size: f32,
     pub slots: Vec<SlotBox>,
+    /// 玩家预览区域，3D 帧合成位置
+    pub player: Option<SlotBox>,
     /// 全部格子的外接矩形，拖出判定用
     pub bounds: (f32, f32, f32, f32),
 }
@@ -75,17 +77,20 @@ pub struct Layout {
 pub fn compute(style: Style, unit: f32, background: &Sprite) -> Layout {
     let coords: Vec<Coord> = serde_json::from_str(style.coords).unwrap_or_default();
     let mut slots = Vec::new();
+    let mut player = None;
     for coord in coords {
-        if coord.slot_id == "player" {
-            continue;
-        }
-        slots.push(SlotBox {
-            id: coord.slot_id,
+        let slot = SlotBox {
+            id: coord.slot_id.clone(),
             left: coord.x * unit,
             top: coord.y * unit,
             width: coord.width * unit,
             height: coord.height * unit,
-        });
+        };
+        if coord.slot_id == "player" {
+            player = Some(slot);
+            continue;
+        }
+        slots.push(slot);
     }
 
     let mut left = f32::MAX;
@@ -110,6 +115,7 @@ pub fn compute(style: Style, unit: f32, background: &Sprite) -> Layout {
         height: background.height as f32 * unit,
         slot_size: 16.0 * unit,
         slots,
+        player,
         bounds: (left, top, right, bottom),
     }
 }
@@ -138,6 +144,7 @@ pub struct Model<'a> {
     pub layout: &'a Layout,
     pub background: &'a Sprite,
     pub icons: &'a [Option<SlotIcon>],
+    pub entity: Option<&'a Sprite>,
     pub hover: Option<usize>,
     pub hover_green: bool,
     pub drag_source: Option<usize>,
@@ -147,6 +154,9 @@ pub struct Model<'a> {
 pub fn draw(frame: &mut Frame, model: &Model) {
     frame.clear();
     frame.draw(model.background, 0.0, 0.0, model.layout.width, model.layout.height);
+    if let (Some(player), Some(entity)) = (&model.layout.player, model.entity) {
+        frame.draw(entity, player.left, player.top, player.width, player.height);
+    }
 
     for (index, slot) in model.layout.slots.iter().enumerate() {
         let Some(Some(icon)) = model.icons.get(index) else { continue };

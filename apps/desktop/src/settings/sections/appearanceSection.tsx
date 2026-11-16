@@ -1,7 +1,16 @@
-import type { ThemeMode, UIFont } from "@/config/appConfig";
+import type { SkinType, ThemeMode, UIFont } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { Button, Card, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
+import { PLAYER_SKINS } from "@/entity3d/catalog";
+import { toggleEntityPreview } from "@/lib/windowControls";
+
+const SKIN_OPTIONS: Option<string>[] = PLAYER_SKINS.map((skin) => ({ value: skin, label: skin }));
+
+const SKIN_TYPE_OPTIONS: Option<SkinType>[] = [
+  { value: "wide", label: "经典 wide" },
+  { value: "slim", label: "纤细 slim" }
+];
 
 const THEME_OPTIONS: Option<ThemeMode>[] = [
   { value: "system", label: "跟随系统" },
@@ -59,6 +68,25 @@ export function AppearanceSection() {
             updateConfig({ appearance: { ...config.appearance, fontSize: Number(size) } })
           }
         />
+      </Row>
+      <Row label="默认皮肤" description="物品栏与 3D 预览使用的内置皮肤">
+        <Select
+          value={config.player.skinName}
+          options={SKIN_OPTIONS}
+          ariaLabel="默认皮肤"
+          onChange={(skinName) => updateConfig({ player: { ...config.player, skinName, skinPath: "" } })}
+        />
+      </Row>
+      <Row label="模型类型" description="经典手臂或纤细手臂，需与皮肤匹配">
+        <Select
+          value={config.player.skinType}
+          options={SKIN_TYPE_OPTIONS}
+          ariaLabel="模型类型"
+          onChange={(skinType) => updateConfig({ player: { ...config.player, skinType } })}
+        />
+      </Row>
+      <Row label="自定义皮肤" description={config.player.skinPath || "未选择，在 3D 预览窗口里选择皮肤文件"}>
+        <Button onClick={() => void toggleEntityPreview()}>打开 3D 预览</Button>
       </Row>
       <Card className="action-card">
         <Button onClick={reset}>恢复默认设置</Button>
