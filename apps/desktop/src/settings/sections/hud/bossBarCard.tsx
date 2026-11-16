@@ -1,11 +1,6 @@
-import {
-  updateConfig,
-  type BossBarColor,
-  type BossBarConfig,
-  type BossBarNotch,
-  type DataMappingType
-} from "@/config/appConfig";
+import { updateConfig, type BossBarConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
+import { tOf } from "@/i18n";
 import {
   Button,
   Card,
@@ -14,42 +9,17 @@ import {
   NumberField,
   Select,
   TextField,
-  Toggle,
-  type Option
+  Toggle
 } from "@/settings/components/controls";
+import { bossBarColorOptions, bossBarNotchOptions, dataMappingOptions } from "@/settings/options";
 
-const COLOR_OPTIONS: Option<BossBarColor>[] = [
-  { value: "blue", label: "蓝色" },
-  { value: "green", label: "绿色" },
-  { value: "pink", label: "粉色" },
-  { value: "purple", label: "紫色" },
-  { value: "red", label: "红色" },
-  { value: "white", label: "白色" },
-  { value: "yellow", label: "黄色" }
-];
-
-const NOTCH_OPTIONS: Option<BossBarNotch | "">[] = [
-  { value: "", label: "无分段" },
-  { value: "notched_6", label: "6 段" },
-  { value: "notched_10", label: "10 段" },
-  { value: "notched_12", label: "12 段" },
-  { value: "notched_20", label: "20 段" }
-];
-
-const MAPPING_OPTIONS: Option<DataMappingType>[] = [
-  { value: "battery", label: "电池电量" },
-  { value: "memory", label: "内存占用" },
-  { value: "cpu", label: "CPU 占用" },
-  { value: "gpu", label: "GPU 占用" }
-];
-
-function newBossBar(): BossBarConfig {
+function newBossBar(name: string): BossBarConfig {
   const suffix = typeof crypto.randomUUID === "function"
     ? crypto.randomUUID().slice(0, 8)
     : Date.now().toString(36);
   return {
     id: `boss_${suffix}`,
-    name: "BOSS",
+    name,
     color: "blue",
     notch: null,
     enabled: true,
@@ -62,6 +32,7 @@ function newBossBar(): BossBarConfig {
 
 export function BossBarCardContent() {
   const config = useAppConfig();
+  const t = tOf(config.system.language);
   const bars = config.bossBars;
 
   const patch = (id: string, next: Partial<BossBarConfig>) => {
@@ -70,85 +41,89 @@ export function BossBarCardContent() {
 
   return (
     <>
-      {bars.length === 0 ? <Note>还没有 BOSS 血条，点下方按钮添加。</Note> : null}
+      {bars.length === 0 ? <Note>{t("bossBar.empty")}</Note> : null}
 
       {bars.map((bar) => (
         <Card key={bar.id} className="bossbar-card">
           <div className="bossbar-header">
-            <span className="bossbar-title">{bar.name.trim() || "未命名"}</span>
+            <span className="bossbar-title">{bar.name.trim() || t("bossBar.untitled")}</span>
             <div className="bossbar-actions">
-              <Check label="启用" checked={bar.enabled} onChange={(enabled) => patch(bar.id, { enabled })} />
+              <Check
+                label={t("bossBar.enable")}
+                checked={bar.enabled}
+                onChange={(enabled) => patch(bar.id, { enabled })}
+              />
               <Button
                 variant="danger"
                 onClick={() => updateConfig({ bossBars: bars.filter((item) => item.id !== bar.id) })}
               >
-                删除
+                {t("bossBar.delete")}
               </Button>
             </div>
           </div>
 
           <div className="bossbar-form">
             <label className="field">
-              <span className="field-label">名称</span>
+              <span className="field-label">{t("bossBar.name")}</span>
               <TextField
                 value={bar.name}
-                ariaLabel="BOSS 名称"
-                placeholder="显示在血条上方"
+                ariaLabel={t("aria.bossName")}
+                placeholder={t("bossBar.namePlaceholder")}
                 onChange={(name) => patch(bar.id, { name })}
               />
             </label>
 
             <div className="field">
-              <span className="field-label">颜色</span>
+              <span className="field-label">{t("bossBar.color")}</span>
               <Select
                 value={bar.color}
-                options={COLOR_OPTIONS}
-                ariaLabel="BOSS 血条颜色"
+                options={bossBarColorOptions(t)}
+                ariaLabel={t("aria.bossColor")}
                 onChange={(color) => patch(bar.id, { color })}
               />
             </div>
 
             <div className="field">
-              <span className="field-label">分段</span>
+              <span className="field-label">{t("bossBar.notch")}</span>
               <Select
                 value={bar.notch ?? ""}
-                options={NOTCH_OPTIONS}
-                ariaLabel="BOSS 血条分段"
+                options={bossBarNotchOptions(t)}
+                ariaLabel={t("aria.bossNotch")}
                 onChange={(notch) => patch(bar.id, { notch: notch === "" ? null : (notch as BossBarConfig["notch"]) })}
               />
             </div>
 
             <div className="field">
-              <span className="field-label">数据映射</span>
+              <span className="field-label">{t("hud.dataMapping")}</span>
               <div className="field-inline">
                 <Toggle
                   checked={bar.dataMappingEnabled}
-                  label="启用数据映射"
+                  label={t("aria.enableMapping")}
                   onChange={(dataMappingEnabled) => patch(bar.id, { dataMappingEnabled })}
                 />
                 <Select
                   value={bar.dataMappingType}
-                  options={MAPPING_OPTIONS}
+                  options={dataMappingOptions(t)}
                   disabled={!bar.dataMappingEnabled}
-                  ariaLabel="数据映射类型"
+                  ariaLabel={t("hud.dataMappingType")}
                   onChange={(dataMappingType) => patch(bar.id, { dataMappingType })}
                 />
               </div>
             </div>
 
             <div className="field">
-              <span className="field-label">自定义数值</span>
+              <span className="field-label">{t("hud.customValue")}</span>
               <div className="field-inline">
                 <Toggle
                   checked={bar.customValueEnabled}
-                  label="启用自定义数值"
+                  label={t("aria.enableCustom")}
                   onChange={(customValueEnabled) => patch(bar.id, { customValueEnabled })}
                 />
                 <NumberField
                   value={bar.currentValue}
                   min={0}
                   max={100}
-                  ariaLabel="自定义数值"
+                  ariaLabel={t("hud.customValue")}
                   disabled={!bar.customValueEnabled}
                   onChange={(currentValue) => patch(bar.id, { currentValue })}
                 />
@@ -159,8 +134,8 @@ export function BossBarCardContent() {
       ))}
 
       <Card className="action-card">
-        <Button primary onClick={() => updateConfig({ bossBars: [...bars, newBossBar()] })}>
-          添加 BOSS 血条
+        <Button primary onClick={() => updateConfig({ bossBars: [...bars, newBossBar(t("bossBar.defaultName"))] })}>
+          {t("bossBar.add")}
         </Button>
       </Card>
     </>

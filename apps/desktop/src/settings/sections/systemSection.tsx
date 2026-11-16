@@ -1,18 +1,15 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { LanguageCode } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
-import { Button, Card, Note, Row, SectionHead, Select, Toggle, type Option } from "@/settings/components/controls";
-
-const LANGUAGE_OPTIONS: Option<LanguageCode>[] = [
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en-US", label: "English" }
-];
+import { tOf } from "@/i18n";
+import { languageOptions } from "@/settings/options";
+import { Button, Card, Note, Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
 
 export function SystemSection() {
   const config = useAppConfig();
-  const [autoStartError, setAutoStartError] = useState<string | null>(null);
+  const t = tOf(config.system.language);
+  const [autoStartFailed, setAutoStartFailed] = useState(false);
 
   const resetSystem = () => {
     const defaults = defaultConfig().system;
@@ -21,20 +18,19 @@ export function SystemSection() {
 
   return (
     <>
-      <SectionHead title="系统设置" />
-      <Row label="语言 / Language" description="选择界面显示语言">
+      <SectionHead title={t("system.title")} />
+      <Row label={t("system.languageLabel")} description={t("system.languageDesc")}>
         <Select
           value={config.system.language}
-          options={LANGUAGE_OPTIONS}
-          ariaLabel="界面语言"
+          options={languageOptions()}
+          ariaLabel={t("system.languageAria")}
           onChange={(language) => updateConfig({ system: { language } })}
         />
       </Row>
-      {config.system.language === "en-US" ? <Note>英文界面后续版本提供。</Note> : null}
-      <Row label="开机自启动" description="系统启动时自动运行 CraftSharp">
+      <Row label={t("system.autoStartLabel")} description={t("system.autoStartDesc")}>
         <Toggle
           checked={config.system.autoStart}
-          label="开机自启动"
+          label={t("system.autoStartLabel")}
           onChange={(autoStart) => {
             if (!("__TAURI_INTERNALS__" in window)) {
               updateConfig({ system: { autoStart } });
@@ -42,51 +38,51 @@ export function SystemSection() {
             }
             void invoke("set_autostart", { enabled: autoStart })
               .then(() => {
-                setAutoStartError(null);
+                setAutoStartFailed(false);
                 updateConfig({ system: { autoStart } });
               })
-              .catch(() => setAutoStartError("写入开机启动项失败，请检查系统权限"));
+              .catch(() => setAutoStartFailed(true));
           }}
         />
       </Row>
-      {autoStartError ? <Note tone="warning">{autoStartError}</Note> : null}
-      <Row label="默认打开面板" description="程序启动时自动打开设置面板窗口">
+      {autoStartFailed ? <Note tone="warning">{t("system.autoStartError")}</Note> : null}
+      <Row label={t("system.defaultOpenLabel")} description={t("system.defaultOpenDesc")}>
         <Toggle
           checked={config.system.defaultOpenSettings}
-          label="默认打开面板"
+          label={t("system.defaultOpenLabel")}
           onChange={(defaultOpenSettings) => updateConfig({ system: { defaultOpenSettings } })}
         />
       </Row>
-      <Row label="记住窗口位置" description="下次启动时恢复设置窗口的位置">
+      <Row label={t("system.rememberPositionLabel")} description={t("system.rememberPositionDesc")}>
         <Toggle
           checked={config.system.rememberWindowPosition}
-          label="记住窗口位置"
+          label={t("system.rememberPositionLabel")}
           onChange={(rememberWindowPosition) => updateConfig({ system: { rememberWindowPosition } })}
         />
       </Row>
-      <Row label="记住窗口大小" description="下次启动时恢复设置窗口的大小">
+      <Row label={t("system.rememberSizeLabel")} description={t("system.rememberSizeDesc")}>
         <Toggle
           checked={config.system.rememberWindowSize}
-          label="记住窗口大小"
+          label={t("system.rememberSizeLabel")}
           onChange={(rememberWindowSize) => updateConfig({ system: { rememberWindowSize } })}
         />
       </Row>
-      <Row label="记住卡片状态" description="下次启动时恢复设置页面卡片的展开/折叠状态">
+      <Row label={t("system.rememberCardsLabel")} description={t("system.rememberCardsDesc")}>
         <Toggle
           checked={config.system.rememberCardStates}
-          label="记住卡片状态"
+          label={t("system.rememberCardsLabel")}
           onChange={(rememberCardStates) => updateConfig({ system: { rememberCardStates } })}
         />
       </Row>
-      <Row label="记住菜单选项" description="下次启动时恢复上次选中的设置页面">
+      <Row label={t("system.rememberNavLabel")} description={t("system.rememberNavDesc")}>
         <Toggle
           checked={config.system.rememberNavSelection}
-          label="记住菜单选项"
+          label={t("system.rememberNavLabel")}
           onChange={(rememberNavSelection) => updateConfig({ system: { rememberNavSelection } })}
         />
       </Row>
       <Card className="action-card">
-        <Button onClick={resetSystem}>恢复默认设置</Button>
+        <Button onClick={resetSystem}>{t("common.restoreDefaults")}</Button>
       </Card>
     </>
   );

@@ -1,39 +1,42 @@
 import { useState } from "react";
 import { resetConfig } from "@/config/appConfig";
+import { useAppConfig } from "@/config/useAppConfig";
+import { tOf, type MessageKey } from "@/i18n";
 import { Button, Card, Note, SectionHead } from "@/settings/components/controls";
 
-const ABOUT_ROWS: { label: string; value: string }[] = [
-  { label: "作者", value: "iFannna" },
-  { label: "许可证", value: "MIT License" },
-  { label: "项目地址", value: "GitHub" },
-  { label: "版权", value: "© 2025 iFannna" }
+const ABOUT_ROWS: { labelKey: MessageKey; value: string }[] = [
+  { labelKey: "about.author", value: "iFannna" },
+  { labelKey: "about.license", value: "MIT License" },
+  { labelKey: "about.projectUrl", value: "GitHub" },
+  { labelKey: "about.copyright", value: "© 2025 iFannna" }
 ];
 
+const VERSION = "0.1.0";
+
 export function AboutSection() {
+  const config = useAppConfig();
+  const t = tOf(config.system.language);
   const [confirming, setConfirming] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const handleReset = () => {
     resetConfig();
     setConfirming(false);
-    setMessage("已恢复全部默认设置。窗口显隐不会立即全部联动，重新打开对应窗口后生效。");
+    setResetting(true);
   };
 
   return (
     <>
-      <SectionHead title="关于" />
+      <SectionHead title={t("about.title")} />
       <Card className="about-card">
         <div className="about-product">Craft#</div>
-        <div className="about-version">版本 0.1.0</div>
-        <p className="about-desc">
-          一款 Minecraft 主题风格的桌面管理工具，集成 HUD 状态栏、物品栏与准星。当前版本从 .NET 8 +
-          WPF 迁移到 Tauri 2。
-        </p>
+        <div className="about-version">{t("about.version", { version: VERSION })}</div>
+        <p className="about-desc">{t("about.desc")}</p>
         <div className="about-divider" />
         <div className="about-info">
           {ABOUT_ROWS.map((row) => (
-            <div key={row.label} className="about-info-row">
-              <span className="about-info-label">{row.label}</span>
+            <div key={row.labelKey} className="about-info-row">
+              <span className="about-info-label">{t(row.labelKey)}</span>
               <span className="about-info-value">{row.value}</span>
             </div>
           ))}
@@ -44,19 +47,17 @@ export function AboutSection() {
       <Card className="action-card">
         {confirming ? (
           <>
-            <Button onClick={() => setConfirming(false)}>取消</Button>
+            <Button onClick={() => setConfirming(false)}>{t("common.cancel")}</Button>
             <Button variant="danger" primary onClick={handleReset}>
-              确认恢复全部默认设置
+              {t("about.confirmReset")}
             </Button>
           </>
         ) : (
-          <Button onClick={() => setConfirming(true)}>恢复默认设置</Button>
+          <Button onClick={() => setConfirming(true)}>{t("common.restoreDefaults")}</Button>
         )}
       </Card>
-      {confirming ? (
-        <Note tone="warning">这会清空所有自定义设置，包括热键、样式与格子数据关联的配置。确认后立即生效。</Note>
-      ) : null}
-      {message ? <Note tone="success">{message}</Note> : null}
+      {confirming ? <Note tone="warning">{t("about.resetWarning")}</Note> : null}
+      {resetting ? <Note tone="success">{t("about.resetMessage")}</Note> : null}
     </>
   );
 }

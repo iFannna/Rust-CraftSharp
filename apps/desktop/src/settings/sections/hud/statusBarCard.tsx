@@ -1,35 +1,37 @@
 import { updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
+import { tOf } from "@/i18n";
 import { setStatusBarVisible } from "@/lib/windowControls";
 import { Row, Toggle } from "@/settings/components/controls";
 
 export function StatusBarCardContent() {
   const config = useAppConfig();
+  const t = tOf(config.system.language);
   const statusBar = config.statusBar;
 
   return (
     <>
-      <Row plain label="显示状态栏" description="在桌面显示状态栏窗口">
+      <Row plain label={t("hud.showStatusBar")} description={t("hud.showStatusBarDesc")}>
         <Toggle
           checked={statusBar.visible}
-          label="显示状态栏"
+          label={t("hud.showStatusBar")}
           onChange={(visible) => {
             // 窗口操作失败不影响配置写入，配置仍是唯一事实来源
             void setStatusBarVisible(visible).catch(() => undefined);
           }}
         />
       </Row>
-      <Row plain label="锁定位置" description="防止快捷栏被意外拖动">
+      <Row plain label={t("hud.lockPosition")} description={t("hud.lockPositionDesc")}>
         <Toggle
           checked={statusBar.locked}
-          label="锁定位置"
+          label={t("hud.lockPosition")}
           onChange={(locked) => updateConfig({ statusBar: { locked } })}
         />
       </Row>
-      <Row plain label="记住位置" description="下次启动时恢复状态栏窗口位置">
+      <Row plain label={t("hud.rememberPosition")} description={t("hud.rememberPositionDesc")}>
         <Toggle
           checked={statusBar.rememberPosition}
-          label="记住位置"
+          label={t("hud.rememberPosition")}
           onChange={(rememberPosition) => updateConfig({ statusBar: { rememberPosition } })}
         />
       </Row>

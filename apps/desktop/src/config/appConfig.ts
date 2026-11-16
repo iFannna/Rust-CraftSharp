@@ -3,9 +3,12 @@
  * 后续迁移 settings.json 时只替换本文件的读写实现。
  */
 
+import { isLanguage, type LanguageCode } from "@/i18n";
+
+export type { LanguageCode };
+
 export type ClickMode = "single" | "double";
 export type ThemeMode = "system" | "light" | "dark";
-export type LanguageCode = "zh-CN" | "en-US";
 export type SkinType = "wide" | "slim";
 export type UIFont = "yahei" | "pixel" | "unifont" | "songti" | "kaiti" | "heiti";
 
@@ -334,9 +337,14 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 }
 
 function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
+  const language = raw.system?.language;
   return {
     version: CONFIG_VERSION,
-    system: { ...base.system, ...raw.system },
+    system: {
+      ...base.system,
+      ...raw.system,
+      language: isLanguage(language) ? language : base.system.language
+    },
     appearance: {
       theme: raw.appearance?.theme ?? base.appearance.theme,
       font: raw.appearance?.font ?? base.appearance.font,

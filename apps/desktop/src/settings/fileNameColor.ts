@@ -1,18 +1,20 @@
 /** 文件名颜色：字段只存一个字符串，"auto" 表示按文件名自动取色，其余为十六进制 */
 
+import type { MessageKey } from "@/i18n";
+
 export const AUTO_FILE_NAME_COLOR = "auto";
 export const DEFAULT_FILE_NAME_COLOR = "#FCFCFC";
 
-export const FILE_NAME_COLOR_PRESETS: { value: string; label: string }[] = [
-  { value: "#FCFCFC", label: "白色" },
-  { value: "#A8A8A8", label: "灰色" },
-  { value: "#FCFC54", label: "黄色" },
-  { value: "#5454FC", label: "蓝色" },
-  { value: "#FC54FC", label: "粉色" },
-  { value: "#A800A8", label: "紫色" },
-  { value: "#FC5454", label: "红色" },
-  { value: "#54FCFC", label: "青色" },
-  { value: "#00A800", label: "绿色" }
+export const FILE_NAME_COLOR_PRESETS: { value: string; labelKey: MessageKey }[] = [
+  { value: "#FCFCFC", labelKey: "color.white" },
+  { value: "#A8A8A8", labelKey: "color.gray" },
+  { value: "#FCFC54", labelKey: "color.yellow" },
+  { value: "#5454FC", labelKey: "color.blue" },
+  { value: "#FC54FC", labelKey: "color.pink" },
+  { value: "#A800A8", labelKey: "color.purple" },
+  { value: "#FC5454", labelKey: "color.red" },
+  { value: "#54FCFC", labelKey: "color.cyan" },
+  { value: "#00A800", labelKey: "color.green" }
 ];
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;

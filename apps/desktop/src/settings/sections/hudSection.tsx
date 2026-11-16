@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
+import { useAppConfig } from "@/config/useAppConfig";
+import { tOf } from "@/i18n";
 import { Accordion } from "@/settings/components/accordion";
 import { Button, Card, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { BossBarCardContent } from "@/settings/sections/hud/bossBarCard";
@@ -19,51 +21,54 @@ function HudCard({ id, title, children }: { id: string; title: string; children:
 }
 
 export function HudSection() {
+  const config = useAppConfig();
+  const t = tOf(config.system.language);
+
   return (
     <>
-      <SectionHead title="HUD 设置" />
-      <SectionSubhead>状态栏设置</SectionSubhead>
-      <HudCard id="HudElement_StatusBar" title="状态栏">
+      <SectionHead title={t("hud.title")} />
+      <SectionSubhead>{t("hud.statusBarSettings")}</SectionSubhead>
+      <HudCard id="HudElement_StatusBar" title={t("hud.statusBar")}>
         <StatusBarCardContent />
       </HudCard>
-      <HudCard id="HudElement_Hotbar" title="快捷栏">
+      <HudCard id="HudElement_Hotbar" title={t("hud.hotbar")}>
         <HotbarCardContent />
       </HudCard>
-      <HudCard id="HudElement_Health" title="生命值">
-        <ElementCard id="health" label="生命值" />
+      <HudCard id="HudElement_Health" title={t("hud.health")}>
+        <ElementCard id="health" label={t("hud.health")} />
       </HudCard>
-      <HudCard id="HudElement_Food" title="饥饿值">
-        <ElementCard id="food" label="饥饿值" />
+      <HudCard id="HudElement_Food" title={t("hud.food")}>
+        <ElementCard id="food" label={t("hud.food")} />
       </HudCard>
-      <HudCard id="HudElement_Air" title="空气值">
-        <ElementCard id="air" label="空气值" />
+      <HudCard id="HudElement_Air" title={t("hud.air")}>
+        <ElementCard id="air" label={t("hud.air")} />
       </HudCard>
-      <HudCard id="HudElement_Armor" title="护甲值">
-        <ElementCard id="armor" label="护甲值" />
+      <HudCard id="HudElement_Armor" title={t("hud.armor")}>
+        <ElementCard id="armor" label={t("hud.armor")} />
       </HudCard>
-      <HudCard id="HudElement_Absorbing" title="伤害吸收">
-        <ElementCard id="absorbing" label="伤害吸收" />
+      <HudCard id="HudElement_Absorbing" title={t("hud.absorbing")}>
+        <ElementCard id="absorbing" label={t("hud.absorbing")} />
       </HudCard>
-      <HudCard id="HudElement_ExpBar" title="经验条">
-        <ElementCard id="expBar" label="经验条" />
+      <HudCard id="HudElement_ExpBar" title={t("hud.expBar")}>
+        <ElementCard id="expBar" label={t("hud.expBar")} />
       </HudCard>
 
-      <SectionSubhead>准星设置</SectionSubhead>
-      <HudCard id="HudElement_Crosshair" title="准星">
+      <SectionSubhead>{t("hud.crosshairSettings")}</SectionSubhead>
+      <HudCard id="HudElement_Crosshair" title={t("hud.crosshair")}>
         <CrosshairCardContent />
       </HudCard>
-      <HudCard id="HudElement_AttackIndicator" title="攻击指示器">
+      <HudCard id="HudElement_AttackIndicator" title={t("hud.attackIndicator")}>
         <AttackIndicatorCardContent />
       </HudCard>
 
-      <SectionSubhead>BOSS 血条设置</SectionSubhead>
-      <HudCard id="HudElement_BossBar" title="BOSS 血条">
+      <SectionSubhead>{t("hud.bossBarSettings")}</SectionSubhead>
+      <HudCard id="HudElement_BossBar" title={t("hud.bossBar")}>
         <BossBarCardContent />
       </HudCard>
 
       <Card className="action-card">
         <Button onClick={() => updateConfig({ hudElements: defaultConfig().hudElements, hotbar: defaultConfig().hotbar })}>
-          恢复默认设置
+          {t("common.restoreDefaults")}
         </Button>
       </Card>
     </>

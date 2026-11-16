@@ -1,33 +1,34 @@
 import type { HudElementId } from "@/config/appConfig";
+import type { MessageKey } from "@/i18n";
 
 /** 原版状态栏图标样式，值为文件名前缀，空串表示默认 */
 export interface IconStyleOption {
   value: string;
-  label: string;
+  labelKey: MessageKey;
 }
 
 const HEART_STYLES: IconStyleOption[] = [
-  { value: "", label: "默认" },
-  { value: "poisoned", label: "剧毒" },
-  { value: "withered", label: "凋零" },
-  { value: "frozen", label: "冰冻" },
-  { value: "hardcore", label: "硬核" },
-  { value: "vehicle", label: "载具" }
+  { value: "", labelKey: "iconStyle.heartNormal" },
+  { value: "poisoned", labelKey: "iconStyle.heartPoisoned" },
+  { value: "withered", labelKey: "iconStyle.heartWithered" },
+  { value: "frozen", labelKey: "iconStyle.heartFrozen" },
+  { value: "hardcore", labelKey: "iconStyle.heartHardcore" },
+  { value: "vehicle", labelKey: "iconStyle.heartVehicle" }
 ];
 
 const FOOD_STYLES: IconStyleOption[] = [
-  { value: "", label: "默认" },
-  { value: "hunger", label: "饥饿" }
+  { value: "", labelKey: "iconStyle.foodNormal" },
+  { value: "hunger", labelKey: "iconStyle.foodHunger" }
 ];
 
 const EXP_STYLES: IconStyleOption[] = [
-  { value: "", label: "普通" },
-  { value: "jump", label: "跳跃" }
+  { value: "", labelKey: "iconStyle.expExperience" },
+  { value: "jump", labelKey: "iconStyle.expJump" }
 ];
 
 const ABSORBING_STYLES: IconStyleOption[] = [
-  { value: "", label: "默认" },
-  { value: "hardcore", label: "硬核" }
+  { value: "", labelKey: "iconStyle.absorbingNormal" },
+  { value: "hardcore", labelKey: "iconStyle.absorbingHardcore" }
 ];
 
 export function iconStyleOptions(id: HudElementId): IconStyleOption[] | null {

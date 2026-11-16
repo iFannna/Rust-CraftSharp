@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useI18n } from "@/i18n/useI18n";
 import { captureHotkey, isModifierCode } from "@/settings/hotkey";
 
 /** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空，可配置是否必须带修饰键 */
@@ -14,6 +15,7 @@ export function HotkeyInput({
   /** 本地快捷键允许单键，如 Q / E */
   allowSingle?: boolean;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +57,12 @@ export function HotkeyInput({
 
     const captured = captureHotkey(event.nativeEvent);
     if (!captured.text) {
-      setError("该按键不支持，请换一个");
+      setError(t("hotkeys.unsupported"));
       return;
     }
 
     if (!captured.hasModifier && !allowSingle) {
-      setError("至少需要一个修饰键（Ctrl / Alt / Shift）");
+      setError(t("hotkeys.needModifier"));
       return;
     }
 
@@ -80,7 +82,11 @@ export function HotkeyInput({
             .join(" ")}
           aria-label={label}
           value={recording ? "" : value}
-          placeholder={recording ? (allowSingle ? "请按下按键…" : "请按下组合键…") : "未设置"}
+          placeholder={
+            recording
+              ? t(allowSingle ? "hotkeys.pressKey" : "hotkeys.pressCombination")
+              : t("common.notSet")
+          }
           onFocus={() => {
             setRecording(true);
             setError(null);
@@ -91,8 +97,8 @@ export function HotkeyInput({
         <button
           type="button"
           className="hotkey-clear"
-          aria-label="清除快捷键"
-          title="清除快捷键"
+          aria-label={t("hotkeys.clear")}
+          title={t("hotkeys.clear")}
           disabled={!value}
           onClick={clear}
         >

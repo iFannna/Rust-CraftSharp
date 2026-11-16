@@ -14,6 +14,7 @@ import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
 import { SystemSection } from "@/settings/sections/systemSection";
+import { tOf, type MessageKey } from "@/i18n";
 import "@/settings/settings.css";
 
 type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about";
@@ -23,19 +24,19 @@ installLocalHotkeys();
 
 interface NavItem {
   id: SectionId;
-  label: string;
+  labelKey: MessageKey;
   /** Segoe Fluent Icons 字形，与原版 wpf-ui SymbolIcon 一致 */
   glyph: string;
   Section: ComponentType;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "system", label: "系统", glyph: "\uE713", Section: SystemSection },
-  { id: "appearance", label: "外观", glyph: "\uE790", Section: AppearanceSection },
-  { id: "hud", label: "HUD", glyph: "\uE80A", Section: HudSection },
-  { id: "inventory", label: "物品栏", glyph: "\uE7B8", Section: InventorySection },
-  { id: "hotkeys", label: "快捷键", glyph: "\uE765", Section: HotkeysSection },
-  { id: "about", label: "关于", glyph: "\uE946", Section: AboutSection }
+  { id: "system", labelKey: "nav.system", glyph: "\uE713", Section: SystemSection },
+  { id: "appearance", labelKey: "nav.appearance", glyph: "\uE790", Section: AppearanceSection },
+  { id: "hud", labelKey: "nav.hud", glyph: "\uE80A", Section: HudSection },
+  { id: "inventory", labelKey: "nav.inventory", glyph: "\uE7B8", Section: InventorySection },
+  { id: "hotkeys", labelKey: "nav.hotkeys", glyph: "\uE765", Section: HotkeysSection },
+  { id: "about", labelKey: "nav.about", glyph: "\uE946", Section: AboutSection }
 ];
 
 /** @tauri-apps/api 未导出该联合类型，这里按 startResizeDragging 的取值定义 */
@@ -68,6 +69,7 @@ function windowApi() {
 
 function SettingsApp() {
   const config = useAppConfig();
+  const t = tOf(config.system.language);
   const theme = useResolvedTheme(config.appearance.theme);
   const [active, setActive] = useState<SectionId>(() => {
     const system = getConfig().system;
@@ -82,6 +84,14 @@ function SettingsApp() {
   useEffect(() => {
     maximizedRef.current = maximized;
   }, [maximized]);
+
+  // 语言切换时同步窗口标题与文档语言，读屏和任务栏保持一致
+  useEffect(() => {
+    const title = t("window.title");
+    document.documentElement.lang = config.system.language;
+    document.title = title;
+    void windowApi()?.setTitle(title).catch(() => undefined);
+  }, [config.system.language, t]);
 
   const selectSection = (id: SectionId) => {
     setActive(id);
@@ -220,25 +230,25 @@ function SettingsApp() {
           Craft#
         </span>
         <div className="caption-buttons">
-          <button type="button" className="caption-button" aria-label="最小化" onClick={minimize}>
+          <button type="button" className="caption-button" aria-label={t("window.minimize")} onClick={minimize}>
             <span aria-hidden="true">{"\uE921"}</span>
           </button>
           <button
             type="button"
             className="caption-button"
-            aria-label={maximized ? "还原" : "最大化"}
+            aria-label={maximized ? t("window.restore") : t("window.maximize")}
             onClick={toggleMaximize}
           >
             <span aria-hidden="true">{maximized ? "\uE923" : "\uE922"}</span>
           </button>
-          <button type="button" className="caption-button is-close" aria-label="关闭" onClick={close}>
+          <button type="button" className="caption-button is-close" aria-label={t("window.close")} onClick={close}>
             <span aria-hidden="true">{"\uE8BB"}</span>
           </button>
         </div>
       </header>
 
       <div className="settings-body">
-        <nav className="sidebar" aria-label="设置分区">
+        <nav className="sidebar" aria-label={t("window.sections")}>
           <div className="nav-list">
             {NAV_ITEMS.map((item) => (
               <button
@@ -251,7 +261,7 @@ function SettingsApp() {
                 <span className="nav-icon" aria-hidden="true">
                   {item.glyph}
                 </span>
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>

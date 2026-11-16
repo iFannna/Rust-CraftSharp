@@ -30,6 +30,7 @@ import inventoryCoords from "@assets/minecraft/textures/gui/container/coordinate
 import nautilusCoords from "@assets/minecraft/textures/gui/container/coordinate/nautilus.json";
 import shulkerBoxCoords from "@assets/minecraft/textures/gui/container/coordinate/shulker_box.json";
 import smithingCoords from "@assets/minecraft/textures/gui/container/coordinate/smithing.json";
+import type { MessageKey } from "@/i18n";
 
 export interface SlotCoord {
   slot_id: string;
@@ -41,7 +42,7 @@ export interface SlotCoord {
 
 export interface ContainerStyle {
   file: string;
-  name: string;
+  nameKey: MessageKey;
   url: string;
   coords: SlotCoord[];
 }
@@ -50,22 +51,22 @@ const PLAYER_SLOT_ID = "player";
 
 // 顺序与原样式预览一致，按文件名枚举
 export const CONTAINER_STYLES: ContainerStyle[] = [
-  { file: "brewing_stand.png", name: "酿造台", url: brewingStandUrl, coords: brewingStandCoords },
-  { file: "cartography_table.png", name: "制图台", url: cartographyTableUrl, coords: cartographyTableCoords },
-  { file: "crafter.png", name: "合成器", url: crafterUrl, coords: crafterCoords },
-  { file: "crafting_table.png", name: "工作台", url: craftingTableUrl, coords: craftingTableCoords },
-  { file: "dispenser.png", name: "发射器", url: dispenserUrl, coords: dispenserCoords },
-  { file: "furnace.png", name: "熔炉", url: furnaceUrl, coords: furnaceCoords },
-  { file: "generic_54.png", name: "大箱子", url: generic54Url, coords: generic54Coords },
-  { file: "grindstone.png", name: "砂轮", url: grindstoneUrl, coords: grindstoneCoords },
-  { file: "hopper.png", name: "漏斗", url: hopperUrl, coords: hopperCoords },
-  { file: "horse.png", name: "马", url: horseUrl, coords: horseCoords },
-  { file: "inventory.png", name: "物品栏", url: inventoryUrl, coords: inventoryCoords },
-  { file: "nautilus.png", name: "鹦鹉螺", url: nautilusUrl, coords: nautilusCoords },
-  { file: "shulker_box.png", name: "潜影盒", url: shulkerBoxUrl, coords: shulkerBoxCoords },
-  { file: "smithing.png", name: "锻造台", url: smithingUrl, coords: smithingCoords },
+  { file: "brewing_stand.png", nameKey: "inventoryStyle.brewingStand", url: brewingStandUrl, coords: brewingStandCoords },
+  { file: "cartography_table.png", nameKey: "inventoryStyle.cartographyTable", url: cartographyTableUrl, coords: cartographyTableCoords },
+  { file: "crafter.png", nameKey: "inventoryStyle.crafter", url: crafterUrl, coords: crafterCoords },
+  { file: "crafting_table.png", nameKey: "inventoryStyle.craftingTable", url: craftingTableUrl, coords: craftingTableCoords },
+  { file: "dispenser.png", nameKey: "inventoryStyle.dispenser", url: dispenserUrl, coords: dispenserCoords },
+  { file: "furnace.png", nameKey: "inventoryStyle.furnace", url: furnaceUrl, coords: furnaceCoords },
+  { file: "generic_54.png", nameKey: "inventoryStyle.largeChest", url: generic54Url, coords: generic54Coords },
+  { file: "grindstone.png", nameKey: "inventoryStyle.grindstone", url: grindstoneUrl, coords: grindstoneCoords },
+  { file: "hopper.png", nameKey: "inventoryStyle.hopper", url: hopperUrl, coords: hopperCoords },
+  { file: "horse.png", nameKey: "inventoryStyle.horse", url: horseUrl, coords: horseCoords },
+  { file: "inventory.png", nameKey: "inventoryStyle.inventory", url: inventoryUrl, coords: inventoryCoords },
+  { file: "nautilus.png", nameKey: "inventoryStyle.nautilus", url: nautilusUrl, coords: nautilusCoords },
+  { file: "shulker_box.png", nameKey: "inventoryStyle.shulkerBox", url: shulkerBoxUrl, coords: shulkerBoxCoords },
+  { file: "smithing.png", nameKey: "inventoryStyle.smithing", url: smithingUrl, coords: smithingCoords },
   // 标签页物品栏没有独立坐标，与原实现一样回退到 inventory.json
-  { file: "tab_inventory.png", name: "标签页物品栏", url: tabInventoryUrl, coords: inventoryCoords }
+  { file: "tab_inventory.png", nameKey: "inventoryStyle.tabInventory", url: tabInventoryUrl, coords: inventoryCoords }
 ];
 
 export const DEFAULT_STYLE = "inventory.png";

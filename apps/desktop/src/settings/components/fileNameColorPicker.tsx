@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { MessageKey } from "@/i18n";
+import { useI18n } from "@/i18n/useI18n";
 import {
   AUTO_FILE_NAME_COLOR,
   FILE_NAME_COLOR_PRESETS,
@@ -7,12 +9,12 @@ import {
   isPresetColor,
   toColorInputValue
 } from "@/settings/fileNameColor";
-import { Select, type Option } from "@/settings/components/controls";
+import { Select } from "@/settings/components/controls";
 
-const CHOICES: Option[] = [
-  ...FILE_NAME_COLOR_PRESETS.map((preset) => ({ value: preset.value, label: `${preset.label} ${preset.value}` })),
-  { value: AUTO_FILE_NAME_COLOR, label: "自动（按文件名取色）" },
-  { value: "custom", label: "自定义…" }
+const CHOICES: { value: string; labelKey: MessageKey }[] = [
+  ...FILE_NAME_COLOR_PRESETS.map((preset) => ({ value: preset.value, labelKey: preset.labelKey })),
+  { value: AUTO_FILE_NAME_COLOR, labelKey: "color.auto" },
+  { value: "custom", labelKey: "color.custom" }
 ];
 
 /** value 只存一个字段：auto、预设色或十六进制，自定义色记在组件内供再次编辑 */
@@ -25,8 +27,15 @@ export function FileNameColorPicker({
   onChange: (next: string) => void;
   label: string;
 }) {
+  const { t } = useI18n();
   const [customColor, setCustomColor] = useState(() => toColorInputValue(value));
   const choice = colorSelectValueOf(value);
+  const options = CHOICES.map((option) => ({
+    value: option.value,
+    label: option.value.startsWith("#")
+      ? `${t(option.labelKey)} ${option.value}`
+      : t(option.labelKey)
+  }));
 
   useEffect(() => {
     if (isHexColor(value) && !isPresetColor(value)) setCustomColor(toColorInputValue(value));
@@ -52,13 +61,13 @@ export function FileNameColorPicker({
         style={{ backgroundColor: isHexColor(value) ? value : "transparent" }}
         aria-hidden="true"
       />
-      <Select value={choice} options={CHOICES} onChange={handleSelect} ariaLabel={label} />
+      <Select value={choice} options={options} onChange={handleSelect} ariaLabel={label} />
       {choice === "custom" ? (
         <>
           <input
             type="color"
             className="color-picker"
-            aria-label={`${label}自定义颜色`}
+            aria-label={t("aria.customColor", { label })}
             value={customColor}
             onChange={(event) => handleCustom(event.target.value)}
           />
