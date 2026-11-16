@@ -44,7 +44,7 @@ const backgroundSelect = document.getElementById("background") as HTMLSelectElem
 const wireframeCheck = document.getElementById("wireframe") as HTMLInputElement;
 
 const view = new EntityView(canvas, "persp");
-const orbit = { theta: -2.48, phi: 1.21, radius: 60, target: new THREE.Vector3(0, 16, 0) };
+const orbit = { theta: -0.66, phi: 1.21, radius: 60, target: new THREE.Vector3(0, 16, 0) };
 let entity: EntityId = "player";
 let customSkinUrl: string | null = null;
 let lastPlayerJson: string | null = null;
@@ -72,13 +72,14 @@ function fillAnimations(preferred?: string) {
 function resetOrbit() {
   if (!view.model) return;
   // 先按当前姿态应用到骨骼，包围盒才反映俯卧或滑翔等姿态
+  view.player.snap();
   view.player.apply(view.model);
   const bounds = new THREE.Box3().setFromObject(view.model.group);
   const center = bounds.getCenter(new THREE.Vector3());
   const size = bounds.getSize(new THREE.Vector3());
   orbit.target.copy(center);
   orbit.radius = Math.max(size.x, size.y, size.z) * 1.1 + 10;
-  orbit.theta = -2.48;
+  orbit.theta = -0.66;
   orbit.phi = 1.21;
 }
 

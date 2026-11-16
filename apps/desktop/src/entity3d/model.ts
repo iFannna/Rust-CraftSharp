@@ -1,5 +1,5 @@
 // 实体模型 schema 与 three.js 骨骼树构建
-// schema 坐标：y 向上脚底为 0，模型面向 -z，单位为贴图像素
+// schema 坐标：y 向上脚底为 0，模型面向 +z，单位为贴图像素
 import * as THREE from "three";
 
 export interface UvRect {
@@ -45,40 +45,45 @@ export interface BuiltModel {
   dispose: () => void;
 }
 
-// BoxGeometry 面序 [+x, -x, +y, -y, +z, -z] 对应的 UV 面与顶点序
-// 本 schema 模型面向 -z；映射经带字探针贴图标定：背面 u 翻转，底面 v 翻转
-const FACE_ORDER: Array<{ face: keyof UvRect; order: number[] }> = [
-  { face: "right", order: [3, 2, 0, 1] },
-  { face: "left", order: [3, 2, 0, 1] },
-  { face: "top", order: [3, 2, 0, 1] },
-  { face: "bottom", order: [0, 1, 3, 2] },
-  { face: "back", order: [2, 3, 1, 0] },
-  { face: "front", order: [3, 2, 0, 1] }
+// Java ModelPart.Cube 的六面 UV 映射，按 three BoxGeometry 面序（+x,-x,+y,-y,+z,-z）。
+// 本项目正面朝 +z、角色左侧为 +x；每面贴图左沿在几何上的位置由官方顶点表推导：
+// 正面 x 最小、背面 x 最大、左侧 z 最大、右侧 z 最小、顶面 x 最小、底面 x 最大；
+// 竖直方向贴图顶沿在 y 最大处，顶面在 z 最小处，底面在 z 最小处。
+const FACE_UV: Array<{
+  rect: keyof UvRect;
+  uAxis: "x" | "y" | "z";
+  uAtMax: boolean;
+  vAxis: "x" | "y" | "z";
+  vAtMax: boolean;
+}> = [
+  { rect: "left", uAxis: "z", uAtMax: false, vAxis: "y", vAtMax: true },
+  { rect: "right", uAxis: "z", uAtMax: true, vAxis: "y", vAtMax: true },
+  { rect: "top", uAxis: "x", uAtMax: true, vAxis: "z", vAtMax: false },
+  { rect: "bottom", uAxis: "x", uAtMax: false, vAxis: "z", vAtMax: false },
+  { rect: "front", uAxis: "x", uAtMax: true, vAxis: "y", vAtMax: true },
+  { rect: "back", uAxis: "x", uAtMax: false, vAxis: "y", vAtMax: true }
 ];
 
-function faceVertices(rect: number[], tw: number, th: number): THREE.Vector2[] {
-  const [x1, y1, w, h] = rect;
-  const x2 = x1 + w;
-  const y2 = y1 + h;
-  return [
-    new THREE.Vector2(x1 / tw, 1 - y2 / th),
-    new THREE.Vector2(x2 / tw, 1 - y2 / th),
-    new THREE.Vector2(x2 / tw, 1 - y1 / th),
-    new THREE.Vector2(x1 / tw, 1 - y1 / th)
-  ];
-}
-
 function applyUvs(box: THREE.BoxGeometry, uv: UvRect, mirror: boolean, tw: number, th: number) {
+  const position = box.attributes.position as THREE.BufferAttribute;
   const data: number[] = [];
-  for (const { face, order } of FACE_ORDER) {
-    const rect = uv[face];
-    const verts = faceVertices(rect, tw, th);
-    const uSum = (rect[0] * 2 + rect[2]) / tw;
-    for (const index of order) {
-      const v = verts[index];
-      data.push(mirror ? uSum - v.x : v.x, v.y);
+  FACE_UV.forEach(({ rect: rectKey, uAxis, uAtMax, vAxis, vAtMax }, slot) => {
+    const [rx, ry, rw, rh] = uv[rectKey];
+    for (let i = slot * 4; i < slot * 4 + 4; i += 1) {
+      const px = position.getX(i);
+      const py = position.getY(i);
+      const pz = position.getZ(i);
+      const isMax = (axis: "x" | "y" | "z") =>
+        (axis === "x" ? px : axis === "y" ? py : pz) > -1e-4 ? 1 : 0;
+      const uFlag = isMax(uAxis);
+      const vFlag = isMax(vAxis);
+      const uIdx = uAtMax ? uFlag : 1 - uFlag;
+      const vIdx = vAtMax ? 1 - vFlag : vFlag;
+      const u = (rx + uIdx * rw) / tw;
+      const v = 1 - (ry + vIdx * rh) / th;
+      data.push(mirror ? (rx * 2 + rw) / tw - u : u, v);
     }
-  }
+  });
   (box.attributes.uv as THREE.BufferAttribute).set(new Float32Array(data));
   box.attributes.uv.needsUpdate = true;
 }
@@ -132,6 +137,8 @@ export function buildModel(def: ModelDef, textures: Map<string, THREE.Texture>):
     const node = new THREE.Object3D();
     node.name = bone.name;
     node.position.set(bone.pivot[0], bone.pivot[1], bone.pivot[2]);
+    // MC 骨骼旋转按先 X 后 Y 后 Z 施加，three 用 ZYX 对应同一顺序
+    node.rotation.order = "ZYX";
     node.rotation.set(
       THREE.MathUtils.degToRad(bone.rotation[0]),
       THREE.MathUtils.degToRad(bone.rotation[1]),

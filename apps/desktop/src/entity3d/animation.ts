@@ -49,6 +49,12 @@ export class AnimationPlayer {
     this.fade = this.previous ? 0 : 1;
   }
 
+  /** 跳过交叉淡入直接到位，取景前用 */
+  snap() {
+    this.previous = null;
+    this.fade = 1;
+  }
+
   update(dt: number) {
     if (!this.playing) return;
     this.time += dt * this.speed;
@@ -77,7 +83,8 @@ export class AnimationPlayer {
           const target = new THREE.Euler(
             THREE.MathUtils.degToRad(v[0]),
             THREE.MathUtils.degToRad(v[1]),
-            THREE.MathUtils.degToRad(v[2])
+            THREE.MathUtils.degToRad(v[2]),
+            "ZYX"
           );
           if (weight >= 1) node.rotation.copy(target);
           else {

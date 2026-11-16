@@ -46,13 +46,13 @@ export function createScene(canvas: HTMLCanvasElement, kind: "ortho" | "persp"):
     bounds.getCenter(center);
     bounds.getSize(size);
     if (camera instanceof THREE.OrthographicCamera) {
-      // 玩家脚底 0 头顶 32，相机对准半高，正前方
+      // 玩家脚底 0 头顶 32，相机对准半高，从正面 +z 方向看
       const targetY = mode === "player" ? 16 : center.y;
-      camera.position.set(0, targetY, -100);
+      camera.position.set(0, targetY, 100);
       camera.lookAt(0, targetY, 0);
     } else {
       const radius = Math.max(size.x, size.y, size.z) * 0.75 + 8;
-      camera.position.set(-radius * 0.7, center.y + radius * 0.35, -radius * 0.9);
+      camera.position.set(-radius * 0.7, center.y + radius * 0.35, radius * 0.9);
       camera.lookAt(center);
     }
     camera.updateProjectionMatrix();

@@ -609,8 +609,9 @@ fn sync_entity_look(state: &mut State, x: f32, y: f32) {
     let ratio_y = ((cursor_y - neck_y) / max_y).clamp(-1.0, 1.0);
     let payload = serde_json::json!({
         "bodyYaw": ratio_x * 45.0,
-        "bodyPitch": -ratio_y * 10.0,
-        "headPitch": -ratio_y * 10.0,
+        // 模型正面朝 +z：绕 X 轴正角度低头，光标在下方时 ratio_y 为正
+        "bodyPitch": ratio_y * 10.0,
+        "headPitch": ratio_y * 10.0,
     });
     let _ = state.app.emit_to("entity-view", "entity-look", payload);
 }

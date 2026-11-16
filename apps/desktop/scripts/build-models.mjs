@@ -36,13 +36,15 @@ function expandUv(c) {
 }
 
 function convertBone(b) {
-  // Java 子骨骼 PartPose 是相对父骨骼的偏移，根骨骼才是绝对坐标
+  // Java 模型空间 y 向下、正面朝 -z；本项目 y 向上、正面朝 +z。
+  // 两者相差绕 X 轴 180°，属于刚体旋转：x 不变，y、z 取反，旋转角 (x,-y,-z)。
+  // 子骨骼 PartPose 是相对父骨骼的偏移，根骨骼才是绝对坐标
   const pivot = b.parent
-    ? [b.pivot[0], -b.pivot[1], b.pivot[2]]
-    : [b.pivot[0], 24 - b.pivot[1], b.pivot[2]];
-  const rotation = [-b.rest[0] * DEG, b.rest[1] * DEG, -b.rest[2] * DEG];
+    ? [b.pivot[0], -b.pivot[1], -b.pivot[2]]
+    : [b.pivot[0], 24 - b.pivot[1], -b.pivot[2]];
+  const rotation = [b.rest[0] * DEG, -b.rest[1] * DEG, -b.rest[2] * DEG];
   const cubes = b.cubes.map((c) => ({
-    origin: [c.x, -c.y - c.h, c.z],
+    origin: [c.x, -c.y - c.h, -c.z - c.d],
     size: [c.w, c.h, c.d],
     inflate: c.inflate,
     mirror: c.mirror,

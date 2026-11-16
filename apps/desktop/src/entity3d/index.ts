@@ -144,12 +144,13 @@ export class EntityView {
     if (!this.model) return;
     this.player.update(dt);
     this.player.apply(this.model);
-    const body = this.model.bones.get("body");
+    // 注视按 WPF 契约作用于整个模型组，头部再绕脖子额外俯仰
+    this.model.group.rotation.set(
+      THREE.MathUtils.degToRad(this.look.pitch),
+      THREE.MathUtils.degToRad(this.look.yaw),
+      0
+    );
     const head = this.model.bones.get("head");
-    if (body) {
-      body.rotation.y += THREE.MathUtils.degToRad(this.look.yaw);
-      body.rotation.x += THREE.MathUtils.degToRad(this.look.pitch);
-    }
     if (head) head.rotation.x += THREE.MathUtils.degToRad(this.look.headPitch);
     this.kit.renderer.render(this.kit.scene, this.kit.camera);
   }

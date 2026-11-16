@@ -3,7 +3,7 @@
 // 生物步态来自 CreeperModel / IronGolemModel / VillagerModel.setupAnim
 // 末影龙来自 EnderDragonRenderer.DragonModel.renderToBuffer
 // wave/swim 关键帧来自基岩官方 player.animation.json（Mojang bedrock-samples）
-// 旋转存储为本项目约定角度：(-x_java, y_java, -z_java) 弧度转角度
+// 旋转存储为本项目约定角度：Java 模型空间绕 X 轴转 180° 后的 (x,-y,-z) 弧度转角度
 // 用法：node scripts/build-animations.mjs
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +15,7 @@ const DEG = 180 / Math.PI;
 const SAMPLES = 32;
 
 // Java 弧度旋转向量转本项目角度
-const rot = (x, y, z) => [-x * DEG, y * DEG, -z * DEG];
+const rot = (x, y, z) => [x * DEG, -y * DEG, -z * DEG];
 
 function bake(duration, fn, loop = true) {
   const tracks = {};
@@ -63,7 +63,7 @@ const idle = bake(4, (t) => {
   const age = t * 20;
   const bob = (side) => ({
     rotation: [
-      -side * Math.sin(age * 0.067) * 0.05 * DEG,
+      side * Math.sin(age * 0.067) * 0.05 * DEG,
       0,
       -side * (Math.cos(age * 0.09) * 0.05 + 0.05) * DEG
     ]
@@ -77,8 +77,8 @@ const crouch = still({
   head: { position: [0, -4.2, 0] },
   right_arm: { rotation: rot(0.4, 0, 0), position: [0, -3.2, 0] },
   left_arm: { rotation: rot(0.4, 0, 0), position: [0, -3.2, 0] },
-  right_leg: { position: [0, -0.2, 4] },
-  left_leg: { position: [0, -0.2, 4] }
+  right_leg: { position: [0, -0.2, -4] },
+  left_leg: { position: [0, -0.2, -4] }
 });
 
 // 坐下：riding 分支
@@ -100,8 +100,8 @@ const trident = bake(4, (t) => {
   const age = t * 20;
   const bobZ = (Math.cos(age * 0.09) * 0.05 + 0.05) * DEG;
   return {
-    right_arm: { rotation: [Math.PI * DEG, 0, -bobZ] },
-    left_arm: { rotation: [Math.sin(age * 0.067) * 0.05 * DEG, 0, bobZ] }
+    right_arm: { rotation: [-Math.PI * DEG, 0, -bobZ] },
+    left_arm: { rotation: [-Math.sin(age * 0.067) * 0.05 * DEG, 0, bobZ] }
   };
 });
 
@@ -109,14 +109,14 @@ const trident = bake(4, (t) => {
 const wave = bake(0.45, (t, phase) => {
   const sway = Math.cos(phase) * 2.865;
   return {
-    left_arm: { rotation: [-sway, 180, 135] },
-    right_arm: { rotation: [-sway, 180, -153] }
+    left_arm: { rotation: [sway, -180, 135] },
+    right_arm: { rotation: [sway, -180, -153] }
   };
 });
 
 // 鞘翅滑翔：整体水平来自 LivingEntityRenderer fallFlying，头部 -π/4 来自 setupAnim，手臂后掠 π/2
 const fly = still({
-  root: { rotation: [-90, 0, 0] },
+  root: { rotation: [90, 0, 0] },
   head: { rotation: rot(-Math.PI / 4, 0, 0) },
   right_arm: { rotation: rot(Math.PI / 2, 0, 0) },
   left_arm: { rotation: rot(Math.PI / 2, 0, 0) },
@@ -126,14 +126,14 @@ const fly = still({
 
 // 游泳：手臂关键帧来自基岩 swim，腿部踢水来自 setupAnim swimAmount 分支
 const swimArms = {
-  left_arm: [[0, 0, 180, -180], [0.7, 0, 180, -287.2], [1.1, -90, 180, -180], [1.3, 0, 180, -180]],
-  right_arm: [[0, 0, 180, 180], [0.7, 0, 180, 287.2], [1.1, -90, 180, 180], [1.3, 0, 180, 180]]
+  left_arm: [[0, 0, -180, -180], [0.7, 0, -180, -287.2], [1.1, 90, -180, -180], [1.3, 0, -180, -180]],
+  right_arm: [[0, 0, -180, 180], [0.7, 0, -180, 287.2], [1.1, 90, -180, 180], [1.3, 0, -180, 180]]
 };
 const swim = {
   loop: true,
   duration: 1.3,
   tracks: {
-    root: { rotation: [[0, -90, 0, 0]] },
+    root: { rotation: [[0, 90, 0, 0]] },
     left_arm: { rotation: swimArms.left_arm },
     right_arm: { rotation: swimArms.right_arm },
     left_leg: { rotation: Array.from({ length: SAMPLES + 1 }, (_, i) => {
