@@ -12,6 +12,21 @@
   "app": {
     "windows": [
       {
+        "label": "settings",
+        "title": "CraftSharp 设置",
+        "url": "pages/settings.html",
+        "width": 1080,
+        "height": 720,
+        "minWidth": 720,
+        "minHeight": 480,
+        "center": true,
+        "decorations": false,
+        "resizable": true,
+        "visible": false,
+        "shadow": true,
+        "create": false
+      },
+      {
         "label": "main",
         "title": "CraftSharp",
         "url": "pages/index.html",
@@ -24,7 +39,8 @@
         "center": false,
         "resizable": true,
         "visible": false,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "create": false
       },
       {
         "label": "hud",
@@ -39,35 +55,8 @@
         "resizable": false,
         "focus": false,
         "visible": false,
-        "shadow": false
-      },
-      {
-        "label": "settings",
-        "title": "CraftSharp 设置",
-        "url": "pages/settings.html",
-        "width": 1080,
-        "height": 720,
-        "minWidth": 720,
-        "minHeight": 480,
-        "center": true,
-        "decorations": false,
-        "resizable": true,
-        "visible": false,
-        "shadow": true
-      },
-      {
-        "label": "entity-preview",
-        "title": "CraftSharp 3D 预览",
-        "url": "pages/entity-preview.html",
-        "width": 1000,
-        "height": 680,
-        "minWidth": 760,
-        "minHeight": 480,
-        "center": true,
-        "decorations": false,
-        "shadow": true,
-        "resizable": true,
-        "visible": false
+        "shadow": false,
+        "create": false
       },
       {
         "label": "entity-view",
@@ -83,7 +72,8 @@
         "resizable": false,
         "focus": false,
         "visible": true,
-        "shadow": false
+        "shadow": false,
+        "create": false
       }
     ],
     "security": {

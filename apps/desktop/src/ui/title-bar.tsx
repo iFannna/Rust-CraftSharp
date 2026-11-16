@@ -1,4 +1,4 @@
-import { Copy, Minus, Square, X } from "lucide-react";
+import { CopyIcon, MinusIcon, SquareIcon, XIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 
 const captionClass =
@@ -44,7 +44,7 @@ export function TitleBar({
               aria-label={labels.minimize}
               onClick={onMinimize}
             >
-              <Minus className="h-4 w-4" />
+              <MinusIcon className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -53,7 +53,7 @@ export function TitleBar({
               aria-label={maximized ? labels.restore : labels.maximize}
               onClick={onMaximize}
             >
-              {maximized ? <Copy className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+              {maximized ? <CopyIcon className="h-4 w-4" /> : <SquareIcon className="h-4 w-4" />}
             </button>
           </>
         ) : null}
@@ -63,7 +63,7 @@ export function TitleBar({
           aria-label={labels.close}
           onClick={onClose}
         >
-          <X className="h-4 w-4" />
+          <XIcon className="h-4 w-4" />
         </button>
       </div>
     </header>

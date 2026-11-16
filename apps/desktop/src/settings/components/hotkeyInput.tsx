@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { X } from "lucide-react";
+import { XIcon } from "@/ui/icons";
 import { useI18n } from "@/i18n/useI18n";
 import { captureHotkey, isModifierCode } from "@/settings/hotkey";
 import { Button } from "@/ui/components/button";
@@ -108,7 +108,7 @@ export function HotkeyInput({
           disabled={!value}
           onClick={clear}
         >
-          <X className="h-4 w-4" />
+          <XIcon className="h-4 w-4" />
         </Button>
       </div>
       {error ? <span className="text-xs text-destructive">{error}</span> : null}

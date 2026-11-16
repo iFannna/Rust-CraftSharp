@@ -1,43 +1,4 @@
 import type { HudElementId } from "@/config/appConfig";
-import type { MessageKey } from "@/i18n";
-
-/** 原版状态栏图标样式，值为文件名前缀，空串表示默认 */
-export interface IconStyleOption {
-  value: string;
-  labelKey: MessageKey;
-}
-
-const HEART_STYLES: IconStyleOption[] = [
-  { value: "", labelKey: "iconStyle.heartNormal" },
-  { value: "poisoned", labelKey: "iconStyle.heartPoisoned" },
-  { value: "withered", labelKey: "iconStyle.heartWithered" },
-  { value: "frozen", labelKey: "iconStyle.heartFrozen" },
-  { value: "hardcore", labelKey: "iconStyle.heartHardcore" },
-  { value: "vehicle", labelKey: "iconStyle.heartVehicle" }
-];
-
-const FOOD_STYLES: IconStyleOption[] = [
-  { value: "", labelKey: "iconStyle.foodNormal" },
-  { value: "hunger", labelKey: "iconStyle.foodHunger" }
-];
-
-const EXP_STYLES: IconStyleOption[] = [
-  { value: "", labelKey: "iconStyle.expExperience" },
-  { value: "jump", labelKey: "iconStyle.expJump" }
-];
-
-const ABSORBING_STYLES: IconStyleOption[] = [
-  { value: "", labelKey: "iconStyle.absorbingNormal" },
-  { value: "hardcore", labelKey: "iconStyle.absorbingHardcore" }
-];
-
-export function iconStyleOptions(id: HudElementId): IconStyleOption[] | null {
-  if (id === "health") return HEART_STYLES;
-  if (id === "food") return FOOD_STYLES;
-  if (id === "absorbing") return ABSORBING_STYLES;
-  if (id === "expBar") return EXP_STYLES;
-  return null;
-}
 
 // 直接打包全部状态图标，避免运行时按需拼路径
 const heartFiles = import.meta.glob(

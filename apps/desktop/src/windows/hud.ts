@@ -153,6 +153,23 @@ function push() {
   void invoke("inventory_apply", { config: inventoryConfig() }).catch(() => undefined);
   void invoke("crosshair_apply", { config: crosshairConfig() }).catch(() => undefined);
   void invoke("bossbar_apply", { bars: bossBarList(getConfig().bossBars) }).catch(() => undefined);
+  cacheForStartup();
+}
+
+let cacheTimer = 0;
+
+/** 把同一份参数镜像到磁盘，下次启动原生窗口可以直接先画，不必等本页就绪 */
+function cacheForStartup() {
+  window.clearTimeout(cacheTimer);
+  cacheTimer = window.setTimeout(() => {
+    const payload = JSON.stringify({
+      hud: buildConfig(),
+      inventory: inventoryConfig(),
+      crosshair: crosshairConfig(),
+      bossBars: bossBarList(getConfig().bossBars)
+    });
+    void invoke("hud_cache_write", { payload }).catch(() => undefined);
+  }, 250);
 }
 
 subscribeConfig(push);

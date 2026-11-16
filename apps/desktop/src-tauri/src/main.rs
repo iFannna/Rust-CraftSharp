@@ -150,6 +150,12 @@ fn hud_visible(visible: bool) {
     hud::set_visible(visible);
 }
 
+/// 控制页推送最终参数，写入磁盘供下次启动原生层直接恢复。
+#[tauri::command]
+fn hud_cache_write(app: tauri::AppHandle, payload: String) {
+    let _ = hud::cache::save(&app, &payload);
+}
+
 /// 前端推送物品栏配置，原生窗口重建布局并按需显隐。
 #[tauri::command]
 fn inventory_apply(config: hud::inventory::InventoryCfg) {
@@ -475,7 +481,27 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// 隐藏窗口默认会被 WebView2 降频，设置面板和 HUD 控制页要等首次显示才补渲染。
+/// 启动时关掉后台降频与遮挡判定，让隐藏页在启动阶段就完成加载。
+#[cfg(windows)]
+fn keep_hidden_webviews_active() {
+    const FLAGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=CalculateNativeWinOcclusion";
+    let existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+    if existing.contains("disable-background-timer-throttling") {
+        return;
+    }
+    let merged = if existing.is_empty() {
+        FLAGS.to_string()
+    } else {
+        format!("{existing} {FLAGS}")
+    };
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", merged);
+}
+
 fn main() {
+    #[cfg(windows)]
+    keep_hidden_webviews_active();
+
     appicon::run_helper_if_requested();
 
     // 第二个实例只负责唤醒已有实例打开设置，不再初始化任何窗口
@@ -488,17 +514,25 @@ fn main() {
             use tauri::Manager;
 
             create_tray(app.handle())?;
-            appicon::startup(app.handle());
             singleinstance::watch(app.handle().clone());
 
             let slots_path = app.path().app_config_dir().unwrap_or_default().join("slots.json");
             slots::init(app.handle(), slots_path);
 
+            // 原生状态栏先于 WebView 建好，启动就能按上次的参数出画面
             hud::init(app.handle());
             hud::inventory::init(app.handle());
+            hud::cache::restore(app.handle());
             slots::on_changed(hud::inventory::slots_changed);
+
+            // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序
+            for config in app.config().app.windows.iter() {
+                tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
+            }
+
+            appicon::startup(app.handle());
             install_drag_hover(app.handle());
-            // HUD、快捷栏、宿主窗口直接显隐；设置与预览保留系统过渡动画
+            // HUD、快捷栏、宿主窗口直接显隐；其余窗口保留系统过渡动画
             for window in app.webview_windows().values() {
                 if let Ok(hwnd) = window.hwnd() {
                     let instant = matches!(window.label(), "main" | "hud" | "entity-view");
@@ -528,6 +562,7 @@ fn main() {
             toggle_desktop_icons,
             hud_apply,
             hud_visible,
+            hud_cache_write,
             inventory_apply,
             inventory_visible,
             crosshair_apply,

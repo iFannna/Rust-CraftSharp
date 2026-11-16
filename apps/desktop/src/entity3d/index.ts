@@ -16,11 +16,6 @@ const animModules = import.meta.glob("@assets/animations/*/*.json", { eager: tru
   string,
   { default: AnimationClip }
 >;
-const textureUrls = import.meta.glob("@assets/minecraft/textures/entity/**/*.png", {
-  eager: true,
-  query: "?url",
-  import: "default"
-}) as Record<string, string>;
 
 const models = new Map<string, ModelDef>();
 for (const [key, mod] of Object.entries(modelModules)) {
@@ -36,11 +31,6 @@ for (const [key, mod] of Object.entries(animModules)) {
   animations.get(entity)!.set(name, mod.default);
 }
 
-const textureKeys = new Map<string, string>();
-for (const key of Object.keys(textureUrls)) {
-  textureKeys.set(key.slice(key.indexOf("textures/") + 9), key);
-}
-
 const loader = new THREE.TextureLoader();
 const textures = new Map<string, THREE.Texture>();
 
@@ -54,12 +44,10 @@ function prepare(texture: THREE.Texture) {
 
 export async function loadTexture(name: string): Promise<void> {
   if (textures.has(name)) return;
-  const key = textureKeys.get(name);
-  if (!key) throw new Error(`missing texture ${name}`);
-  textures.set(name, prepare(await loader.loadAsync(textureUrls[key])));
+  textures.set(name, prepare(await loader.loadAsync(`/textures/${name}`)));
 }
 
-// 只加载已注册模型引用的贴图，实体系贴图目录留全量备用但不进启动开销
+// 只加载已注册模型引用的贴图，其余贴图留在磁盘按需读取
 export async function loadTextures(): Promise<void> {
   const needed = new Set<string>();
   for (const def of models.values()) {

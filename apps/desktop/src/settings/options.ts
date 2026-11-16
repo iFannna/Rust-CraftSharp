@@ -11,7 +11,7 @@ import type {
   UIFont
 } from "@/config/appConfig";
 import { CONTAINER_STYLES } from "@/hud/inventory/styles";
-import { iconStyleOptions } from "@/hud/statusbar/iconStyles";
+import { iconStyleOptions } from "@/hud/statusbar/iconStyleOptions";
 import { LANGUAGES, type LanguageCode, type MessageKey, type TFunction } from "@/i18n";
 import type { Option } from "@/settings/components/controls";
 

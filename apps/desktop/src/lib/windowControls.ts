@@ -78,7 +78,23 @@ export async function setCrosshairVisible(visible: boolean) {
 
 export async function toggleEntityPreview() {
   const target = await windowOf("entity-preview");
-  if (!target) return;
+  if (!target) {
+    // 预览窗口按需创建，启动时不加载 three
+    new WebviewWindow(WINDOW_LABEL.entityPreview, {
+      url: "pages/entity-preview.html",
+      title: "CraftSharp 3D 预览",
+      width: 1000,
+      height: 680,
+      minWidth: 760,
+      minHeight: 480,
+      center: true,
+      decorations: false,
+      shadow: true,
+      resizable: true,
+      focus: true
+    });
+    return;
+  }
   const [visible, minimized] = await Promise.all([target.isVisible(), target.isMinimized()]);
   if (minimized) {
     await setVisible("entity-preview", true, true);

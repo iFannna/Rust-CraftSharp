@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import ReactDOM from "react-dom/client";
-import { CircleHelp, TriangleAlert } from "lucide-react";
+import { HelpIcon, WarningIcon } from "@/ui/icons";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -30,7 +30,7 @@ function ConfirmDialog() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const Icon = kind === "confirm" ? CircleHelp : TriangleAlert;
+  const Icon = kind === "confirm" ? HelpIcon : WarningIcon;
 
   return (
     <ThemeRoot>

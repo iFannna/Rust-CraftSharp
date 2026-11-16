@@ -12,6 +12,7 @@ mod win32;
 mod window;
 
 pub mod bossbar;
+pub mod cache;
 pub mod crosshair;
 pub mod inventory;
 mod inventory_draw;
