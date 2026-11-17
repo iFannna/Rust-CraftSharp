@@ -5,12 +5,9 @@ import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { bossBarNotchProgress, bossBarProgress } from "@/hud/bossbar/bossBarAssets";
-import {
-  bossBarColorOptions,
-  bossBarNotchOptions,
-  dataMappingOptions
-} from "@/settings/options";
+import { dataMappingOptions } from "@/settings/options";
 import { Button, NumberField, Select, TextField, Toggle } from "@/settings/components/controls";
+import { HudIconButton } from "@/settings/sections/hud/iconPickerButton";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
 import "@/ui/styles.css";
@@ -31,6 +28,29 @@ function newBossBar(name: string): BossBarConfig {
     customValueEnabled: true,
     currentValue: 100
   };
+}
+
+const PREVIEW_BOX = "flex h-8 w-full items-center overflow-hidden rounded-sm bg-secondary/60 px-2";
+
+function PreviewBar({ color, notch }: { color: string; notch?: string | null }) {
+  return (
+    <span className="relative block h-full w-full">
+      <img
+        src={bossBarProgress(color)}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+      />
+      {notch ? (
+        <img
+          src={bossBarNotchProgress(notch)}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+        />
+      ) : null}
+    </span>
+  );
 }
 
 function BossBarEditor() {
@@ -73,40 +93,30 @@ function BossBarEditor() {
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs text-muted-foreground">{t("bossBar.color")}</span>
-              <Select
+              <HudIconButton
+                element="boss_bar"
                 value={bar.color}
-                options={bossBarColorOptions(t)}
-                ariaLabel={t("aria.bossColor")}
-                onChange={(color) => patch({ color })}
-              />
+                topMost
+                className={PREVIEW_BOX}
+                onPicked={(color) => patch({ color: color as BossBarConfig["color"] })}
+              >
+                <PreviewBar color={bar.color} />
+              </HudIconButton>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs text-muted-foreground">{t("bossBar.notch")}</span>
-              <Select
+              <HudIconButton
+                element="boss_bar_notch"
                 value={bar.notch ?? ""}
-                options={bossBarNotchOptions(t)}
-                ariaLabel={t("aria.bossNotch")}
-                onChange={(notch) =>
+                topMost
+                className={PREVIEW_BOX}
+                onPicked={(notch) =>
                   patch({ notch: notch === "" ? null : (notch as BossBarConfig["notch"]) })
                 }
-              />
-              <div className="relative mt-1 h-[10px] w-full overflow-hidden">
-                <img
-                  src={bossBarProgress(bar.color)}
-                  alt=""
-                  draggable={false}
-                  className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
-                />
-                {bar.notch ? (
-                  <img
-                    src={bossBarNotchProgress(bar.notch)}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
-                  />
-                ) : null}
-              </div>
+              >
+                <PreviewBar color={bar.color} notch={bar.notch} />
+              </HudIconButton>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -143,6 +153,7 @@ function BossBarEditor() {
                   disabled={!bar.customValueEnabled}
                   onChange={(currentValue) => patch({ currentValue })}
                 />
+                <span className="text-xs text-muted-foreground">/100</span>
               </div>
             </div>
           </div>

@@ -167,7 +167,7 @@ export const DATA_MAPPING_TYPES: DataMappingType[] = ["battery", "memory", "cpu"
 const STORAGE_KEY = "craftsharp.config.v1";
 const LEGACY_INVENTORY_KEY = "craftsharp.inventory.v1";
 
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 function defaultHudElement(maxValue = 20): HudElementConfig {
   return {
@@ -177,7 +177,7 @@ function defaultHudElement(maxValue = 20): HudElementConfig {
     saturationValue: 0,
     dataMappingEnabled: false,
     dataMappingType: "battery",
-    customValueEnabled: false,
+    customValueEnabled: true,
     currentValue: maxValue,
     maxValue
   };
@@ -186,10 +186,10 @@ function defaultHudElement(maxValue = 20): HudElementConfig {
 const DEFAULT_ELEMENTS: Record<HudElementId, HudElementConfig> = {
   health: defaultHudElement(),
   food: defaultHudElement(),
-  air: defaultHudElement(),
-  armor: defaultHudElement(),
-  absorbing: defaultHudElement(),
-  expBar: { ...defaultHudElement(100), currentValue: 100 }
+  air: { ...defaultHudElement(), visible: false },
+  armor: { ...defaultHudElement(), visible: false },
+  absorbing: { ...defaultHudElement(), visible: false },
+  expBar: { ...defaultHudElement(100), currentValue: 0 }
 };
 
 const DEFAULTS: AppConfig = {
@@ -208,7 +208,7 @@ const DEFAULTS: AppConfig = {
     lastSection: "system"
   },
   appearance: { theme: "dark", font: "yahei", fontSize: 14, appIcon: "" },
-  statusBar: { visible: true, locked: false, rememberPosition: true, position: null },
+  statusBar: { visible: true, locked: false, rememberPosition: false, position: null },
   hotbar: {
     visible: true,
     leftOffhand: false,
@@ -238,14 +238,14 @@ const DEFAULTS: AppConfig = {
     fileNameColor: "#FCFCFC"
   },
   hudElements: {
-    crosshairVisible: true,
-    attackIndicatorVisible: true,
+    crosshairVisible: false,
+    attackIndicatorVisible: false,
     crosshairTopMost: false,
     attackIndicator: {
       dataMappingEnabled: false,
       dataMappingType: "battery",
       customValueEnabled: true,
-      currentValue: 100
+      currentValue: 99
     },
     elements: DEFAULT_ELEMENTS
   },
@@ -402,11 +402,51 @@ function normalizeConfig(config: AppConfig): AppConfig {
   return { ...config, appearance: { ...config.appearance, font: "system" } };
 }
 
+/** 版本 2：HUD 默认值对齐老项目，重置现有配置中受影响的字段 */
+function migrateHudDefaults(config: AppConfig): AppConfig {
+  const defaults = defaultConfig();
+  const elements = { ...config.hudElements.elements };
+  for (const id of Object.keys(elements) as HudElementId[]) {
+    const fallback = defaults.hudElements.elements[id];
+    elements[id] = {
+      ...elements[id],
+      visible: fallback.visible,
+      customValueEnabled: true,
+      currentValue: fallback.currentValue,
+      maxValue: fallback.maxValue,
+      saturationValue: 0
+    };
+  }
+  return {
+    ...config,
+    version: CONFIG_VERSION,
+    statusBar: { ...config.statusBar, rememberPosition: false },
+    hudElements: {
+      ...config.hudElements,
+      crosshairVisible: false,
+      attackIndicatorVisible: false,
+      attackIndicator: { ...config.hudElements.attackIndicator, currentValue: 99 },
+      elements
+    }
+  };
+}
+
 function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return migrateLegacyInventory(defaultConfig());
-    return normalizeConfig(mergeConfig(DEFAULTS, JSON.parse(raw) as Partial<AppConfig>));
+
+    const parsed = JSON.parse(raw) as Partial<AppConfig>;
+    let next = normalizeConfig(mergeConfig(DEFAULTS, parsed));
+    if ((parsed.version ?? 1) < CONFIG_VERSION) {
+      next = migrateHudDefaults(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // 存储不可用时只保留内存态
+      }
+    }
+    return next;
   } catch {
     return defaultConfig();
   }

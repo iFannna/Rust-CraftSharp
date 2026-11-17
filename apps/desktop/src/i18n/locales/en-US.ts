@@ -247,6 +247,7 @@ export const enUS: Messages = {
 
   "aria.elementDataMapping": "{label} data mapping",
   "aria.elementIconStyle": "{label} icon style",
+  "aria.changeElementIcon": "Change icon",
   "aria.elementCurrent": "{label} current value",
   "aria.elementMax": "{label} max value",
   "aria.theme": "Theme",

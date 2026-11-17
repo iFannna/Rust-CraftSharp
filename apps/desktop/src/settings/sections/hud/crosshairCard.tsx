@@ -1,10 +1,12 @@
 import { getConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
+import { ATTACK_INDICATOR_ICON, CROSSHAIR_ICON } from "@/hud/statusbar/crosshairAssets";
 import { tOf } from "@/i18n";
 import { openDialogWindow } from "@/lib/dialogWindow";
 import { setCrosshairVisible } from "@/lib/windowControls";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { NumberField, Row, Select, Toggle } from "@/settings/components/controls";
+import { HudIconButton } from "@/settings/sections/hud/iconPickerButton";
 import { dataMappingOptions } from "@/settings/options";
 
 export function CrosshairCardContent() {
@@ -36,6 +38,16 @@ export function CrosshairCardContent() {
 
   return (
     <>
+      <Row plain label={t("hud.elementIcon")} description={t("hud.elementIconDesc")}>
+        <HudIconButton element="crosshair" value="">
+          <img
+            src={CROSSHAIR_ICON}
+            alt=""
+            draggable={false}
+            className="h-6 w-6 object-contain [image-rendering:pixelated]"
+          />
+        </HudIconButton>
+      </Row>
       <Row plain label={t("hud.showCrosshair")} description={t("hud.showCrosshairDesc")}>
         <Toggle
           checked={hud.crosshairVisible}
@@ -69,6 +81,16 @@ export function AttackIndicatorCardContent() {
 
   return (
     <>
+      <Row plain label={t("hud.elementIcon")} description={t("hud.elementIconDesc")}>
+        <HudIconButton element="attackIndicator" value="">
+          <img
+            src={ATTACK_INDICATOR_ICON}
+            alt=""
+            draggable={false}
+            className="h-6 w-6 object-contain [image-rendering:pixelated]"
+          />
+        </HudIconButton>
+      </Row>
       <Row plain label={t("hud.showElement")} description={t("hud.showElementDesc")}>
         <Toggle
           checked={hud.attackIndicatorVisible}
@@ -106,13 +128,16 @@ export function AttackIndicatorCardContent() {
       </Row>
       {indicator.customValueEnabled ? (
         <Row plain label={t("hud.currentValue")} description={t("hud.currentDesc")}>
-          <NumberField
-            value={indicator.currentValue}
-            min={0}
-            max={100}
-            ariaLabel={t("aria.attackCurrent")}
-            onChange={(currentValue) => patch({ currentValue })}
-          />
+          <div className="flex items-center gap-2">
+            <NumberField
+              value={indicator.currentValue}
+              min={0}
+              max={100}
+              ariaLabel={t("aria.attackCurrent")}
+              onChange={(currentValue) => patch({ currentValue })}
+            />
+            <span className="text-xs text-muted-foreground">/100</span>
+          </div>
         </Row>
       ) : null}
     </>

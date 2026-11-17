@@ -60,6 +60,8 @@ interface DialogWindowOptions {
   height: number;
   /** dialog 只有关闭键且置顶；display 是可缩放的展示窗口 */
   mode?: "dialog" | "display";
+  /** 覆盖默认置顶行为，用于从置顶窗口再打开子窗口 */
+  alwaysOnTop?: boolean;
   minWidth?: number;
   minHeight?: number;
   /** 指定后居中于该窗口，否则居中于屏幕 */
@@ -75,6 +77,7 @@ export async function openDialogWindow<T>({
   width,
   height,
   mode = "dialog",
+  alwaysOnTop,
   minWidth,
   minHeight,
   anchor
@@ -117,7 +120,7 @@ export async function openDialogWindow<T>({
       transparent: true,
       decorations: false,
       shadow: true,
-      alwaysOnTop: !display,
+      alwaysOnTop: alwaysOnTop ?? !display,
       skipTaskbar: false,
       resizable: display,
       focus: true

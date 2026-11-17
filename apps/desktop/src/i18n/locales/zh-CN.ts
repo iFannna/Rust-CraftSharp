@@ -245,6 +245,7 @@ export const zhCN = {
 
   "aria.elementDataMapping": "{label}数据映射",
   "aria.elementIconStyle": "{label}图标样式",
+  "aria.changeElementIcon": "更改图标",
   "aria.elementCurrent": "{label}当前值",
   "aria.elementMax": "{label}最大值",
   "aria.theme": "主题",

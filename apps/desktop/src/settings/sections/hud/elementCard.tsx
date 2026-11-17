@@ -2,16 +2,25 @@ import { updateConfig, type HudElementId, type HudElementsConfig } from "@/confi
 import { elementIconUrls } from "@/hud/statusbar/iconStyles";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
-import { openDialogWindow } from "@/lib/dialogWindow";
-import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { NumberField, Row, Select, Toggle } from "@/settings/components/controls";
 import { dataMappingOptions } from "@/settings/options";
+import { HudIconButton } from "@/settings/sections/hud/iconPickerButton";
+
+/** 各元素最大值上限：生命、饥饿、空气、护甲最多 20 点，伤害吸收 1024 点 */
+const MAX_VALUE_LIMITS: Partial<Record<HudElementId, number>> = {
+  health: 20,
+  food: 20,
+  air: 20,
+  armor: 20,
+  absorbing: 1024
+};
 
 export function ElementCard({ id, label }: { id: HudElementId; label: string }) {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const element = config.hudElements.elements[id];
   const urls = elementIconUrls(id, element.iconStyle);
+  const maxLimit = MAX_VALUE_LIMITS[id] ?? 1024;
 
   const patch = (next: Partial<HudElementsConfig["elements"][HudElementId]>) => {
     const hud = config.hudElements;
@@ -23,31 +32,13 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
     });
   };
 
-  const openIconPicker = async () => {
-    const picked = await openDialogWindow<string>({
-      label: WINDOW_LABEL.hudIconPicker,
-      title: t("hudIconPicker.title"),
-      page: "hud-icon-picker",
-      params: { element: id, value: element.iconStyle },
-      width: 480,
-      height: 360,
-      minWidth: 300,
-      minHeight: 250,
-      mode: "display",
-      anchor: WINDOW_LABEL.settings
-    });
-    if (picked === null) return;
-    patch({ iconStyle: picked });
-  };
-
   return (
     <>
       <Row plain label={t("hud.elementIcon")} description={t("hud.elementIconDesc")}>
-        <button
-          type="button"
-          className="grid h-9 place-items-center rounded-sm px-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={t("aria.elementIconStyle", { label })}
-          onClick={() => void openIconPicker()}
+        <HudIconButton
+          element={id}
+          value={element.iconStyle}
+          onPicked={(iconStyle) => patch({ iconStyle })}
         >
           {id === "expBar" ? (
             <img
@@ -74,7 +65,7 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
               />
             </span>
           )}
-        </button>
+        </HudIconButton>
       </Row>
       <Row plain label={t("hud.showElement")} description={t("hud.showElementDesc")}>
         <Toggle
@@ -126,35 +117,54 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
       </Row>
       {element.customValueEnabled ? (
         <Row plain label={t("hud.currentValue")} description={t("hud.elementCurrentDesc")}>
-          <NumberField
-            value={element.currentValue}
-            min={0}
-            max={id === "expBar" ? 100 : element.maxValue}
-            ariaLabel={t("aria.elementCurrent", { label })}
-            onChange={(currentValue) => patch({ currentValue })}
-          />
+          <div className="flex items-center gap-2">
+            <NumberField
+              value={element.currentValue}
+              min={0}
+              max={id === "expBar" ? 100 : element.maxValue}
+              ariaLabel={t("aria.elementCurrent", { label })}
+              onChange={(currentValue) => patch({ currentValue })}
+            />
+            <span className="text-xs text-muted-foreground">
+              /{id === "expBar" ? 100 : element.maxValue}
+            </span>
+          </div>
         </Row>
       ) : null}
       {id === "expBar" ? null : (
         <Row plain label={t("hud.maxValue")} description={t("hud.maxValueDesc")}>
-          <NumberField
-            value={element.maxValue}
-            min={2}
-            max={1024}
-            ariaLabel={t("aria.elementMax", { label })}
-            onChange={(maxValue) => patch({ maxValue: Math.max(2, maxValue), currentValue: Math.min(element.currentValue, maxValue) })}
-          />
+          <div className="flex items-center gap-2">
+            <NumberField
+              value={element.maxValue}
+              min={2}
+              max={maxLimit}
+              ariaLabel={t("aria.elementMax", { label })}
+              onChange={(maxValue) => {
+                // 与老版一致：上限内取偶数，并把当前值和饱和度一并夹紧
+                const next = Math.floor(Math.min(maxLimit, Math.max(2, maxValue)) / 2) * 2;
+                patch({
+                  maxValue: next,
+                  currentValue: Math.min(element.currentValue, next),
+                  saturationValue: Math.min(element.saturationValue, next)
+                });
+              }}
+            />
+            <span className="text-xs text-muted-foreground">/{maxLimit}</span>
+          </div>
         </Row>
       )}
       {id === "food" ? (
         <Row plain label={t("hud.saturation")} description={t("hud.saturationDesc")}>
-          <NumberField
-            value={element.saturationValue}
-            min={0}
-            max={element.maxValue}
-            ariaLabel={t("hud.saturation")}
-            onChange={(saturationValue) => patch({ saturationValue })}
-          />
+          <div className="flex items-center gap-2">
+            <NumberField
+              value={element.saturationValue}
+              min={0}
+              max={element.maxValue}
+              ariaLabel={t("hud.saturation")}
+              onChange={(saturationValue) => patch({ saturationValue })}
+            />
+            <span className="text-xs text-muted-foreground">/{element.maxValue}</span>
+          </div>
         </Row>
       ) : null}
     </>
