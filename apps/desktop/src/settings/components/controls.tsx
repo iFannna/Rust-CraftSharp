@@ -191,20 +191,22 @@ export function Button({
   onClick,
   disabled = false,
   variant = "default",
-  primary = false
+  primary = false,
+  className
 }: {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
   variant?: "default" | "danger";
   primary?: boolean;
+  className?: string;
 }) {
   const danger = variant === "danger";
   return (
     <UIButton
       type="button"
       variant={primary ? (danger ? "destructive" : "default") : "outline"}
-      className={cn(!primary && danger && "text-destructive hover:text-destructive")}
+      className={cn(!primary && danger && "text-destructive hover:text-destructive", className)}
       disabled={disabled}
       onClick={onClick}
     >

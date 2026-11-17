@@ -163,13 +163,13 @@ function SettingsApp() {
   return (
     <ThemeRoot>
       <WindowFrame
-        title="Craft#"
+        title=""
         resizable
         onMaximizedChange={syncMaximized}
         onClose={close}
       >
         <div className="flex min-h-0 flex-1">
-          <nav className="flex w-56 flex-none flex-col border-r p-2" aria-label={t("window.sections")}>
+          <nav className="flex w-56 flex-none flex-col p-2" aria-label={t("window.sections")}>
             <div className="flex flex-col gap-1">
               {NAV_ITEMS.map(({ id, labelKey, Icon }) => (
                 <button
@@ -189,7 +189,7 @@ function SettingsApp() {
                 </button>
               ))}
             </div>
-            <div className="mt-auto px-3 py-3 text-xs text-muted-foreground">v0.1.0 Craft#</div>
+            <div className="mt-auto px-3 py-3 text-xs text-muted-foreground">v26.11.17 Craft#</div>
           </nav>
 
           {/* key 让切换分区时内容区回到顶部 */}

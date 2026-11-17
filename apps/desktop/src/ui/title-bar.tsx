@@ -29,12 +29,14 @@ export function TitleBar({
 }: TitleBarProps) {
   return (
     <header className="drag-region flex h-8 flex-none items-center" data-tauri-drag-region>
-      <span
-        className="flex h-full items-center px-4 text-sm font-semibold tracking-tight"
-        data-tauri-drag-region
-      >
-        {title}
-      </span>
+      {title ? (
+        <span
+          className="flex h-full items-center px-4 text-sm font-semibold tracking-tight"
+          data-tauri-drag-region
+        >
+          {title}
+        </span>
+      ) : null}
       <div className="ml-auto flex h-full">
         {onMinimize && onMaximize ? (
           <>

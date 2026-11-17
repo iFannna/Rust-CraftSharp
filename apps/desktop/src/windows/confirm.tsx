@@ -16,7 +16,10 @@ function ConfirmDialog() {
   const t = tOf(getConfig().system.language);
   const kind = params.get("kind") === "alert" ? "alert" : "confirm";
   const text = params.get("text") ?? "";
-  const title = t(kind === "confirm" ? "dialog.confirmTitle" : "dialog.alertTitle");
+  const title = params.get("title") ?? t(kind === "confirm" ? "dialog.confirmTitle" : "dialog.alertTitle");
+  const confirmLabel = params.get("confirmLabel") ?? t(kind === "confirm" ? "common.confirm" : "common.ok");
+  // alert 默认只有确定键，传入 cancelLabel 时显示自定义取消键
+  const cancelLabel = params.get("cancelLabel") ?? (kind === "confirm" ? t("common.cancel") : null);
   const finish = (value: boolean) => emitDialogResult(WINDOW_LABEL.confirm, value);
 
   useEffect(() => {
@@ -43,9 +46,9 @@ function ConfirmDialog() {
             </p>
           </div>
           <div className="flex flex-none justify-end gap-2">
-            {kind === "confirm" ? (
-              <Button autoFocus type="button" variant="outline" onClick={() => finish(false)}>
-                {t("common.cancel")}
+            {cancelLabel ? (
+              <Button autoFocus={kind === "confirm"} type="button" variant="outline" onClick={() => finish(false)}>
+                {cancelLabel}
               </Button>
             ) : null}
             <Button
@@ -54,7 +57,7 @@ function ConfirmDialog() {
               variant={kind === "confirm" ? "destructive" : "default"}
               onClick={() => finish(true)}
             >
-              {t(kind === "confirm" ? "common.confirm" : "common.ok")}
+              {confirmLabel}
             </Button>
           </div>
         </div>
