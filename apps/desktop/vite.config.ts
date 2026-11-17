@@ -67,6 +67,8 @@ export default defineConfig({
     target: "chrome105",
     minify: "esbuild",
     sourcemap: false,
+    // 桌面端从本地磁盘加载，3D chunk 含 three.js 超过默认 500 kB 阈值不代表性能问题
+    chunkSizeWarningLimit: 1024,
     rollupOptions: {
       input: Object.fromEntries(
         pages.map((page) => [page === "index" ? "main" : page, resolve(rootDir, `pages/${page}.html`)])
