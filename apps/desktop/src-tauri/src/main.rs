@@ -504,6 +504,32 @@ fn keep_hidden_webviews_active() {
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", merged);
 }
 
+/// 打包后关掉 WebView2 自带的右键菜单、开发者工具、浏览器快捷键与缩放
+#[cfg(all(windows, not(debug_assertions)))]
+fn harden_webviews(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+    use windows_core::Interface;
+
+    for window in app.webview_windows().values() {
+        let _ = window.with_webview(|webview| unsafe {
+            let controller = webview.controller();
+            let Ok(core) = controller.CoreWebView2() else {
+                return;
+            };
+            let Ok(settings) = core.Settings() else {
+                return;
+            };
+            let _ = settings.SetAreDefaultContextMenusEnabled(false);
+            let _ = settings.SetAreDevToolsEnabled(false);
+            let _ = settings.SetIsZoomControlEnabled(false);
+            if let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() {
+                let _ = settings3.SetAreBrowserAcceleratorKeysEnabled(false);
+            }
+        });
+    }
+}
+
 fn main() {
     #[cfg(windows)]
     keep_hidden_webviews_active();
@@ -535,6 +561,9 @@ fn main() {
             for config in app.config().app.windows.iter() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
+
+            #[cfg(all(windows, not(debug_assertions)))]
+            harden_webviews(app.handle());
 
             // tao 只采用落在显示器内的初始坐标，离屏窗口建好后移出屏幕再显示
             if let Some(view) = app.get_webview_window("entity-view") {
