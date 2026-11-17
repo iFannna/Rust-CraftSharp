@@ -95,7 +95,7 @@ export function SkinGrid({ sources, thumbs, selectedKey, emptyLabel, onSelect, o
                           src={thumbs[key]}
                           alt=""
                           draggable={false}
-                          className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+                          className="absolute inset-0 h-full w-full object-contain"
                         />
                       ) : null}
                     </span>

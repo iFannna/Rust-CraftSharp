@@ -215,7 +215,7 @@ export function UploadSkinDialog({ initialType, names, bake, onClose, onImported
               src={preview}
               alt=""
               draggable={false}
-              className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+              className="absolute inset-0 h-full w-full object-contain"
             />
           ) : null}
         </div>

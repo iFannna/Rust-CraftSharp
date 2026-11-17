@@ -68,6 +68,8 @@ const THUMB_ELEVATION = (35 * Math.PI) / 180;
 const THUMB_YAW = (40 * Math.PI) / 180;
 const THUMB_TARGET_Y = 16;
 const THUMB_DISTANCE = 70;
+// 卡片与上传预览最大约 220 CSS 像素，高清屏按两倍出图
+const THUMB_SIZE = 440;
 
 /** 卡片缩略图：同一皮肤背面与正面并排，一次渲染导出，卡片只放图片 */
 export class SkinThumbs {
@@ -79,16 +81,16 @@ export class SkinThumbs {
 
   constructor() {
     const canvas = document.createElement("canvas");
-    canvas.width = 300;
-    canvas.height = 300;
+    canvas.width = THUMB_SIZE;
+    canvas.height = THUMB_SIZE;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
-      antialias: false,
+      antialias: true,
       preserveDrawingBuffer: true
     });
     this.renderer.setPixelRatio(1);
-    this.renderer.setSize(300, 300, false);
+    this.renderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
     this.renderer.setClearColor(0x000000, 0);
     // 正面偏上 35° 斜看，头顶与侧身都保留可见
     const sin = Math.sin(THUMB_ELEVATION);
