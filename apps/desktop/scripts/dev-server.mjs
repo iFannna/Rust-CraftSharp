@@ -34,7 +34,7 @@ const MIME = {
 const RELOAD_SCRIPT = '<script>new EventSource("/__reload").onmessage=()=>location.reload();</script>';
 
 function pagesSignature() {
-  const pages = ["index", "settings", "hud", "entity-view"];
+  const pages = ["index", "settings", "hud", "entity-view", "entity-preview"];
   try {
     return pages.map((page) => readFileSync(join(outDir, "pages", `${page}.html`), "utf8")).join("");
   } catch {
