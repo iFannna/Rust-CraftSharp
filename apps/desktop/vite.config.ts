@@ -14,6 +14,9 @@ const pages = [
   "rename",
   "confirm",
   "icon-picker",
+  "hud-icon-picker",
+  "boss-bar-editor",
+  "style-preview",
   "settings",
   "entity-preview",
   "entity-view"

@@ -1,7 +1,9 @@
-import { updateConfig } from "@/config/appConfig";
+import { getConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
+import { openDialogWindow } from "@/lib/dialogWindow";
 import { setCrosshairVisible } from "@/lib/windowControls";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { NumberField, Row, Select, Toggle } from "@/settings/components/controls";
 import { dataMappingOptions } from "@/settings/options";
 
@@ -9,6 +11,28 @@ export function CrosshairCardContent() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const hud = config.hudElements;
+
+  const setTopMost = (crosshairTopMost: boolean) => {
+    const latest = getConfig().hudElements;
+    updateConfig({ hudElements: { ...latest, crosshairTopMost } });
+  };
+
+  const toggleTopMost = async (checked: boolean) => {
+    if (!checked) {
+      setTopMost(false);
+      return;
+    }
+    const confirmed = await openDialogWindow<boolean>({
+      label: WINDOW_LABEL.confirm,
+      title: t("hud.topMostConfirmTitle"),
+      page: "confirm",
+      params: { kind: "confirm", text: t("hud.topMostConfirmText") },
+      width: 460,
+      height: 320,
+      anchor: WINDOW_LABEL.settings
+    });
+    if (confirmed === true) setTopMost(true);
+  };
 
   return (
     <>
@@ -26,7 +50,7 @@ export function CrosshairCardContent() {
         <Toggle
           checked={hud.crosshairTopMost}
           label={t("hud.topMost")}
-          onChange={(crosshairTopMost) => updateConfig({ hudElements: { ...hud, crosshairTopMost } })}
+          onChange={(crosshairTopMost) => void toggleTopMost(crosshairTopMost)}
         />
       </Row>
     </>

@@ -58,11 +58,14 @@ fn sprite_or(name: &str, fallback: &str) -> Rc<Sprite> {
 
 fn health_row(style: &str) -> RowSprites {
     let prefix = if style.is_empty() { String::new() } else { format!("{style}_") };
-    let container = match style {
-        "hardcore" | "vehicle" => format!("hud/heart/container_{style}.png"),
-        _ => "hud/heart/container.png".to_string(),
+    let container = if style.contains("hardcore") {
+        "hud/heart/container_hardcore.png".to_string()
+    } else if style == "vehicle" {
+        "hud/heart/container_vehicle.png".to_string()
+    } else {
+        "hud/heart/container.png".to_string()
     };
-    let container_flash = if style == "hardcore" {
+    let container_flash = if style.contains("hardcore") {
         "hud/heart/container_hardcore_blinking.png"
     } else {
         "hud/heart/container_blinking.png"

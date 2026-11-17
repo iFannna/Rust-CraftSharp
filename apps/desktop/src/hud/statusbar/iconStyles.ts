@@ -16,6 +16,16 @@ const expFiles = import.meta.glob(
   { eager: true, query: "?url", import: "default" }
 ) as Record<string, string>;
 
+const armorFiles = import.meta.glob(
+  "../../../../../assets/minecraft/textures/gui/sprites/hud/armor/*.png",
+  { eager: true, query: "?url", import: "default" }
+) as Record<string, string>;
+
+const airFiles = import.meta.glob(
+  "../../../../../assets/minecraft/textures/gui/sprites/hud/air/*.png",
+  { eager: true, query: "?url", import: "default" }
+) as Record<string, string>;
+
 function find(files: Record<string, string>, name: string): string | undefined {
   return Object.entries(files).find(([path]) => path.endsWith(`/${name}`))?.[1];
 }
@@ -65,12 +75,17 @@ export function rowStyleUrls(id: "health" | "food" | "absorbing", style: string)
   }
 
   const prefix = style ? `${style}_` : "";
-  const container = style === "hardcore" || style === "vehicle" ? `container_${style}.png` : "container.png";
+  const hardcore = style.includes("hardcore");
+  const container = hardcore
+    ? "container_hardcore.png"
+    : style === "vehicle"
+      ? "container_vehicle.png"
+      : "container.png";
   return {
     background: heart(container, "container.png"),
     full: heart(`${prefix}full.png`, "full.png"),
     half: heart(`${prefix}half.png`, "half.png"),
-    backgroundFlash: heart(style === "hardcore" ? "container_hardcore_blinking.png" : "container_blinking.png", "container_blinking.png"),
+    backgroundFlash: heart(hardcore ? "container_hardcore_blinking.png" : "container_blinking.png", "container_blinking.png"),
     fullFlash: heart(`${prefix}full_blinking.png`, "full_blinking.png"),
     halfFlash: heart(`${prefix}half_blinking.png`, "half_blinking.png")
   };
@@ -85,11 +100,39 @@ export function expStyleUrls(style: string): { background: string; progress: str
   };
 }
 
+export interface ElementIconUrls {
+  /** 底图（心形、饥饿值的空槽），可选 */
+  background?: string;
+  icon: string;
+}
+
+/** 单个元素的完整图标：设置页预览和图标选择窗口共用 */
+export function elementIconUrls(id: HudElementId, style: string): ElementIconUrls {
+  if (id === "health") {
+    const urls = rowStyleUrls("health", style);
+    return { background: urls.background, icon: urls.full };
+  }
+  if (id === "food") {
+    const urls = rowStyleUrls("food", style);
+    return { background: urls.background, icon: urls.full };
+  }
+  if (id === "absorbing") {
+    const urls = rowStyleUrls("absorbing", style);
+    return { background: urls.background, icon: urls.full };
+  }
+  if (id === "expBar") {
+    return { icon: expStyleUrls(style).progress };
+  }
+  if (id === "armor") {
+    return { icon: find(armorFiles, "armor_full.png") ?? "" };
+  }
+  if (id === "air") {
+    return { icon: find(airFiles, "air.png") ?? "" };
+  }
+  return { icon: "" };
+}
+
 /** 设置面板里元素卡片的预览图标 */
 export function stylePreviewUrl(id: HudElementId, style: string): string {
-  if (id === "health") return rowStyleUrls("health", style).full;
-  if (id === "food") return rowStyleUrls("food", style).full;
-  if (id === "absorbing") return rowStyleUrls("absorbing", style).full;
-  if (id === "expBar") return expStyleUrls(style).progress;
-  return "";
+  return elementIconUrls(id, style).icon;
 }

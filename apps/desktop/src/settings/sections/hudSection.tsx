@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
+import { openDialogWindow } from "@/lib/dialogWindow";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { Accordion } from "@/settings/components/accordion";
 import { ActionBar, Button, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { BossBarCardContent } from "@/settings/sections/hud/bossBarCard";
@@ -24,6 +26,26 @@ export function HudSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
 
+  const restoreDefaults = async () => {
+    const confirmed = await openDialogWindow<boolean>({
+      label: WINDOW_LABEL.confirm,
+      title: t("hud.restoreConfirmTitle"),
+      page: "confirm",
+      params: { kind: "confirm", text: t("hud.restoreConfirmText") },
+      width: 460,
+      height: 260,
+      anchor: WINDOW_LABEL.settings
+    });
+    if (confirmed !== true) return;
+
+    const defaults = defaultConfig();
+    updateConfig({
+      hudElements: defaults.hudElements,
+      hotbar: defaults.hotbar,
+      statusBar: defaults.statusBar
+    });
+  };
+
   return (
     <>
       <SectionHead title={t("hud.title")} />
@@ -34,6 +56,9 @@ export function HudSection() {
       <HudCard id="HudElement_Hotbar" title={t("hud.hotbar")}>
         <HotbarCardContent />
       </HudCard>
+      <HudCard id="HudElement_ExpBar" title={t("hud.expBar")}>
+        <ElementCard id="expBar" label={t("hud.expBar")} />
+      </HudCard>
       <HudCard id="HudElement_Health" title={t("hud.health")}>
         <ElementCard id="health" label={t("hud.health")} />
       </HudCard>
@@ -43,14 +68,11 @@ export function HudSection() {
       <HudCard id="HudElement_Air" title={t("hud.air")}>
         <ElementCard id="air" label={t("hud.air")} />
       </HudCard>
-      <HudCard id="HudElement_Armor" title={t("hud.armor")}>
-        <ElementCard id="armor" label={t("hud.armor")} />
-      </HudCard>
       <HudCard id="HudElement_Absorbing" title={t("hud.absorbing")}>
         <ElementCard id="absorbing" label={t("hud.absorbing")} />
       </HudCard>
-      <HudCard id="HudElement_ExpBar" title={t("hud.expBar")}>
-        <ElementCard id="expBar" label={t("hud.expBar")} />
+      <HudCard id="HudElement_Armor" title={t("hud.armor")}>
+        <ElementCard id="armor" label={t("hud.armor")} />
       </HudCard>
 
       <SectionSubhead>{t("hud.crosshairSettings")}</SectionSubhead>
@@ -67,9 +89,7 @@ export function HudSection() {
       </HudCard>
 
       <ActionBar>
-        <Button onClick={() => updateConfig({ hudElements: defaultConfig().hudElements, hotbar: defaultConfig().hotbar })}>
-          {t("common.restoreDefaults")}
-        </Button>
+        <Button onClick={() => void restoreDefaults()}>{t("common.restoreDefaults")}</Button>
       </ActionBar>
     </>
   );

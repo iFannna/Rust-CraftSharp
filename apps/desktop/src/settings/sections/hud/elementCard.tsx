@@ -1,16 +1,17 @@
 import { updateConfig, type HudElementId, type HudElementsConfig } from "@/config/appConfig";
-import { stylePreviewUrl } from "@/hud/statusbar/iconStyles";
+import { elementIconUrls } from "@/hud/statusbar/iconStyles";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
+import { openDialogWindow } from "@/lib/dialogWindow";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { NumberField, Row, Select, Toggle } from "@/settings/components/controls";
-import { dataMappingOptions, elementIconStyleOptions } from "@/settings/options";
+import { dataMappingOptions } from "@/settings/options";
 
 export function ElementCard({ id, label }: { id: HudElementId; label: string }) {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const element = config.hudElements.elements[id];
-  const styleOptions = elementIconStyleOptions(id, t);
-  const preview = stylePreviewUrl(id, element.iconStyle);
+  const urls = elementIconUrls(id, element.iconStyle);
 
   const patch = (next: Partial<HudElementsConfig["elements"][HudElementId]>) => {
     const hud = config.hudElements;
@@ -22,21 +23,59 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
     });
   };
 
+  const openIconPicker = async () => {
+    const picked = await openDialogWindow<string>({
+      label: WINDOW_LABEL.hudIconPicker,
+      title: t("hudIconPicker.title"),
+      page: "hud-icon-picker",
+      params: { element: id, value: element.iconStyle },
+      width: 480,
+      height: 360,
+      minWidth: 300,
+      minHeight: 250,
+      mode: "display",
+      anchor: WINDOW_LABEL.settings
+    });
+    if (picked === null) return;
+    patch({ iconStyle: picked });
+  };
+
   return (
     <>
       <Row plain label={t("hud.elementIcon")} description={t("hud.elementIconDesc")}>
-        <img className="h-6 [image-rendering:pixelated]" src={preview} alt="" draggable={false} />
+        <button
+          type="button"
+          className="grid h-9 place-items-center rounded-sm px-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={t("aria.elementIconStyle", { label })}
+          onClick={() => void openIconPicker()}
+        >
+          {id === "expBar" ? (
+            <img
+              src={urls.icon}
+              alt=""
+              draggable={false}
+              className="h-6 w-auto max-w-[240px] object-contain [image-rendering:pixelated]"
+            />
+          ) : (
+            <span className="relative grid h-7 w-7 place-items-center">
+              {urls.background ? (
+                <img
+                  src={urls.background}
+                  alt=""
+                  draggable={false}
+                  className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+                />
+              ) : null}
+              <img
+                src={urls.icon}
+                alt=""
+                draggable={false}
+                className="relative h-full w-full object-contain [image-rendering:pixelated]"
+              />
+            </span>
+          )}
+        </button>
       </Row>
-      {styleOptions ? (
-        <Row plain label={t("hud.iconStyle")} description={t("hud.iconStyleDesc")}>
-          <Select
-            value={element.iconStyle}
-            options={styleOptions}
-            ariaLabel={t("aria.elementIconStyle", { label })}
-            onChange={(iconStyle) => patch({ iconStyle })}
-          />
-        </Row>
-      ) : null}
       <Row plain label={t("hud.showElement")} description={t("hud.showElementDesc")}>
         <Toggle
           checked={element.visible}
@@ -54,17 +93,6 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
             checked={element.regenAnimation}
             label={t("hud.animation")}
             onChange={(regenAnimation) => patch({ regenAnimation })}
-          />
-        </Row>
-      ) : null}
-      {id === "food" ? (
-        <Row plain label={t("hud.saturation")} description={t("hud.saturationDesc")}>
-          <NumberField
-            value={element.saturationValue}
-            min={0}
-            max={element.maxValue}
-            ariaLabel={t("hud.saturation")}
-            onChange={(saturationValue) => patch({ saturationValue })}
           />
         </Row>
       ) : null}
@@ -118,6 +146,17 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
           />
         </Row>
       )}
+      {id === "food" ? (
+        <Row plain label={t("hud.saturation")} description={t("hud.saturationDesc")}>
+          <NumberField
+            value={element.saturationValue}
+            min={0}
+            max={element.maxValue}
+            ariaLabel={t("hud.saturation")}
+            onChange={(saturationValue) => patch({ saturationValue })}
+          />
+        </Row>
+      ) : null}
     </>
   );
 }

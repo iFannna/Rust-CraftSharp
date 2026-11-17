@@ -2,6 +2,9 @@
 export const WINDOW_LABEL = {
   settings: "settings",
   iconPicker: "app-icon-picker",
+  hudIconPicker: "hud-icon-picker",
+  bossBarEditor: "boss-bar-editor",
+  stylePreview: "style-preview",
   confirm: "confirm-dialog",
   rename: "rename-dialog",
   entityPreview: "entity-preview"

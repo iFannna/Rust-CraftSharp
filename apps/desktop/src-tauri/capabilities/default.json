@@ -9,6 +9,9 @@
     "rename-dialog",
     "confirm-dialog",
     "app-icon-picker",
+    "hud-icon-picker",
+    "boss-bar-editor",
+    "style-preview",
     "entity-preview",
     "entity-view",
     "settings"
