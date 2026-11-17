@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Input } from "@/ui/components/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { Card } from "@/settings/components/controls";
 import { displayName, sourceKey, type SkinSource, type SkinType } from "@/settings/skin/skinLibrary";
 import { cn } from "@/ui/lib/utils";
@@ -71,37 +72,40 @@ export function SkinGrid({ sources, thumbs, selectedKey, emptyLabel, onSelect, o
             const key = sourceKey(source);
             const selected = key === selectedKey;
             return (
-              <button
-                key={key}
-                type="button"
-                className="group flex min-w-0 flex-col rounded-lg p-1.5 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                aria-pressed={selected}
-                title={displayName(source)}
-                onClick={() => onSelect(source)}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  onMenu(source, event.clientX, event.clientY);
-                }}
-              >
-                <span
-                  className={cn(
-                    "relative block aspect-square overflow-hidden rounded-md border-2 bg-muted/30 transition-colors",
-                    selected ? "border-primary" : "border-transparent group-hover:border-border"
-                  )}
-                >
-                  {thumbs[key] ? (
-                    <img
-                      src={thumbs[key]}
-                      alt=""
-                      draggable={false}
-                      className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
-                    />
-                  ) : null}
-                </span>
-                <span className="block truncate px-1 pt-1.5 text-center text-xs text-muted-foreground">
-                  {displayName(source)}
-                </span>
-              </button>
+              <Tooltip key={key}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex min-w-0 flex-col rounded-lg p-1.5 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-pressed={selected}
+                    onClick={() => onSelect(source)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      onMenu(source, event.clientX, event.clientY);
+                    }}
+                  >
+                    <span
+                      className={cn(
+                        "relative block aspect-square overflow-hidden rounded-md border-2 bg-muted/30 transition-colors",
+                        selected ? "border-primary" : "border-transparent group-hover:border-border"
+                      )}
+                    >
+                      {thumbs[key] ? (
+                        <img
+                          src={thumbs[key]}
+                          alt=""
+                          draggable={false}
+                          className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="block truncate px-1 pt-1.5 text-center text-xs text-muted-foreground">
+                      {displayName(source)}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{displayName(source)}</TooltipContent>
+              </Tooltip>
             );
           })}
         </div>

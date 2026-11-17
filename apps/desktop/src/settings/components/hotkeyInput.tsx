@@ -4,6 +4,7 @@ import { useI18n } from "@/i18n/useI18n";
 import { captureHotkey, isModifierCode } from "@/settings/hotkey";
 import { Button } from "@/ui/components/button";
 import { Input } from "@/ui/components/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { cn } from "@/ui/lib/utils";
 
 /** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空，可配置是否必须带修饰键 */
@@ -98,18 +99,22 @@ export function HotkeyInput({
           onBlur={stopRecording}
           onKeyDown={handleKeyDown}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9"
-          aria-label={t("hotkeys.clear")}
-          title={t("hotkeys.clear")}
-          disabled={!value}
-          onClick={clear}
-        >
-          <XIcon className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              aria-label={t("hotkeys.clear")}
+              disabled={!value}
+              onClick={clear}
+            >
+              <XIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("hotkeys.clear")}</TooltipContent>
+        </Tooltip>
       </div>
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
     </div>

@@ -5,6 +5,7 @@ import { useResolvedTheme } from "@/settings/theme";
 import { sourceUrl, type SkinSource } from "@/settings/skin/skinLibrary";
 import type { SkinPreview as SkinPreviewStage } from "@/settings/skin/skinScene";
 import { Button } from "@/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { ActionIcon, ChevronDownIcon, PauseIcon, PlayIcon, RotateIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 
@@ -132,42 +133,54 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
       <div className="flex h-11 flex-none items-center justify-between gap-3 border-b px-4">
         <span className="text-sm font-medium">{t("skin.previewTitle")}</span>
         <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            disabled={!actions.length}
-            title={`${t("skin.actionSwitch")} · ${action}`}
-            aria-label={`${t("skin.actionSwitch")} · ${action}`}
-            onClick={cycleAction}
-          >
-            <ActionIcon />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title={playing ? t("skin.actionPause") : t("skin.actionPlay")}
-            aria-label={playing ? t("skin.actionPause") : t("skin.actionPlay")}
-            aria-pressed={!playing}
-            onClick={() => setPlaying(!playing)}
-          >
-            {playing ? <PauseIcon /> : <PlayIcon />}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", spinning && "bg-accent text-accent-foreground")}
-            title={t("skin.actionRotate")}
-            aria-label={t("skin.actionRotate")}
-            aria-pressed={spinning}
-            onClick={() => setSpinning(!spinning)}
-          >
-            <RotateIcon />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={!actions.length}
+                aria-label={`${t("skin.actionSwitch")} · ${action}`}
+                onClick={cycleAction}
+              >
+                <ActionIcon />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{`${t("skin.actionSwitch")} · ${action}`}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={playing ? t("skin.actionPause") : t("skin.actionPlay")}
+                aria-pressed={!playing}
+                onClick={() => setPlaying(!playing)}
+              >
+                {playing ? <PauseIcon /> : <PlayIcon />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{playing ? t("skin.actionPause") : t("skin.actionPlay")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", spinning && "bg-accent text-accent-foreground")}
+                aria-label={t("skin.actionRotate")}
+                aria-pressed={spinning}
+                onClick={() => setSpinning(!spinning)}
+              >
+                <RotateIcon />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("skin.actionRotate")}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -216,50 +229,65 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
       <div className="flex h-12 flex-none items-center justify-between gap-3 border-t px-4">
         <div className="flex items-center gap-2">
           {BACKGROUND_OPTIONS.map((option) => (
-            <Button
-              key={option.id}
-              type="button"
-              variant="outline"
-              size="icon"
-              className={cn(
-                "size-6 rounded-full border-border p-0 hover:bg-transparent",
-                BACKGROUNDS[option.id].className,
-                background === option.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
-              )}
-              style={BACKGROUNDS[option.id].style}
-              title={t(option.label)}
-              aria-label={t(option.label)}
-              aria-pressed={background === option.id}
-              onClick={() => {
-                pickedBackground.current = true;
-                setBackground(option.id);
-              }}
-            />
+            <Tooltip key={option.id}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "size-6 rounded-full border-border p-0 hover:bg-transparent",
+                    BACKGROUNDS[option.id].className,
+                    background === option.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                  )}
+                  style={BACKGROUNDS[option.id].style}
+                  aria-label={t(option.label)}
+                  aria-pressed={background === option.id}
+                  onClick={() => {
+                    pickedBackground.current = true;
+                    setBackground(option.id);
+                  }}
+                />
+              </TooltipTrigger>
+              <TooltipContent>{t(option.label)}</TooltipContent>
+            </Tooltip>
           ))}
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            disabled
-            title={t("skin.backgroundPrevScene")}
-            aria-label={t("skin.backgroundPrevScene")}
-          >
-            <ChevronDownIcon className="rotate-90" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            disabled
-            title={t("skin.backgroundNextScene")}
-            aria-label={t("skin.backgroundNextScene")}
-          >
-            <ChevronDownIcon className="-rotate-90" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled
+                  aria-label={t("skin.backgroundPrevScene")}
+                >
+                  <ChevronDownIcon className="rotate-90" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t("skin.backgroundPrevScene")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled
+                  aria-label={t("skin.backgroundNextScene")}
+                >
+                  <ChevronDownIcon className="-rotate-90" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t("skin.backgroundNextScene")}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>

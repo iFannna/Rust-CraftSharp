@@ -8,6 +8,7 @@ import { appIconUrl, DEFAULT_APP_ICON, DEFAULT_APP_ICON_URL } from "@/settings/a
 import { APP_ICON_GROUPS } from "@/settings/appIconCatalog";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { cn } from "@/ui/lib/utils";
 import "@/ui/styles.css";
 
@@ -73,44 +74,51 @@ function IconPicker() {
           </nav>
 
           <div className="ui-scroll grid flex-1 content-start justify-start gap-1 overflow-y-auto p-3 [grid-template-columns:repeat(auto-fill,44px)]">
-            <button
-              type="button"
-              className={cn(
-                "grid h-11 w-11 place-items-center rounded-md border border-transparent transition-colors hover:bg-accent",
-                value === DEFAULT_APP_ICON && "border-ring bg-accent"
-              )}
-              title={t("iconPicker.defaultIcon")}
-              aria-label={t("iconPicker.defaultIcon")}
-              onClick={() => finish(DEFAULT_APP_ICON)}
-            >
-              <img
-                src={DEFAULT_APP_ICON_URL}
-                alt=""
-                draggable={false}
-                className="h-8 w-8 object-cover object-top [image-rendering:pixelated]"
-              />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "grid h-11 w-11 place-items-center rounded-md border border-transparent transition-colors hover:bg-accent",
+                    value === DEFAULT_APP_ICON && "border-ring bg-accent"
+                  )}
+                  aria-label={t("iconPicker.defaultIcon")}
+                  onClick={() => finish(DEFAULT_APP_ICON)}
+                >
+                  <img
+                    src={DEFAULT_APP_ICON_URL}
+                    alt=""
+                    draggable={false}
+                    className="h-8 w-8 object-cover object-top [image-rendering:pixelated]"
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t("iconPicker.defaultIcon")}</TooltipContent>
+            </Tooltip>
             {category.entries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={cn(
-                  "grid h-11 w-11 place-items-center rounded-md border border-transparent transition-colors hover:bg-accent",
-                  entry.id === value && "border-ring bg-accent"
-                )}
-                title={entry.file}
-                aria-label={entry.file}
-                onClick={() => finish(entry.id)}
-              >
-                <img
-                  src={appIconUrl(entry.id)}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  draggable={false}
-                  className="h-8 w-8 object-cover object-top [image-rendering:pixelated]"
-                />
-              </button>
+              <Tooltip key={entry.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "grid h-11 w-11 place-items-center rounded-md border border-transparent transition-colors hover:bg-accent",
+                      entry.id === value && "border-ring bg-accent"
+                    )}
+                    aria-label={entry.file}
+                    onClick={() => finish(entry.id)}
+                  >
+                    <img
+                      src={appIconUrl(entry.id)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      className="h-8 w-8 object-cover object-top [image-rendering:pixelated]"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{entry.file}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
         </div>

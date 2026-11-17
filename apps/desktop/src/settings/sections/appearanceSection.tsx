@@ -7,6 +7,7 @@ import { tOf } from "@/i18n";
 import { ActionBar, Button, Note, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
 import { fontOptions, themeOptions } from "@/settings/options";
 import { applyAppIcon, appIconUrl } from "@/settings/appIcons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 
 const SIZE_OPTIONS: Option<string>[] = ["10", "12", "14", "16", "18", "20"].map((size) => ({
   value: size,
@@ -51,20 +52,24 @@ export function AppearanceSection() {
     <>
       <SectionHead title={t("appearance.title")} />
       <Row label={t("appearance.iconLabel")} description={t("appearance.iconDesc")}>
-        <button
-          type="button"
-          className="grid h-14 w-14 place-items-center rounded-lg border p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={t("appearance.iconTooltip")}
-          aria-label={t("aria.appIcon")}
-          onClick={() => void openIconPicker()}
-        >
-          <img
-            src={appIconUrl(config.appearance.appIcon)}
-            alt=""
-            draggable={false}
-            className="h-full w-full object-cover object-top [image-rendering:pixelated]"
-          />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="grid h-14 w-14 place-items-center rounded-lg border p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={t("aria.appIcon")}
+              onClick={() => void openIconPicker()}
+            >
+              <img
+                src={appIconUrl(config.appearance.appIcon)}
+                alt=""
+                draggable={false}
+                className="h-full w-full object-cover object-top [image-rendering:pixelated]"
+              />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{t("appearance.iconTooltip")}</TooltipContent>
+        </Tooltip>
       </Row>
       {iconError ? <Note tone="warning">{iconError}</Note> : null}
       <Row label={t("appearance.themeLabel")} description={t("appearance.themeDesc")}>
