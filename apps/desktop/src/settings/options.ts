@@ -6,7 +6,6 @@ import type {
   ClickMode,
   DataMappingType,
   HudElementId,
-  SkinType,
   ThemeMode,
   UIFont
 } from "@/config/appConfig";
@@ -32,11 +31,6 @@ const FONTS: { value: UIFont; key: MessageKey }[] = [
   { value: "songti", key: "appearance.fontSongti" },
   { value: "kaiti", key: "appearance.fontKaiti" },
   { value: "heiti", key: "appearance.fontHeiti" }
-];
-
-const SKIN_TYPES: { value: SkinType; key: MessageKey }[] = [
-  { value: "wide", key: "debug.skinTypeWide" },
-  { value: "slim", key: "debug.skinTypeSlim" }
 ];
 
 const CLICK_MODES: { value: ClickMode; key: MessageKey }[] = [
@@ -75,7 +69,6 @@ export function languageOptions(): Option<LanguageCode>[] {
 
 export const themeOptions = (t: TFunction) => build(THEMES, t);
 export const fontOptions = (t: TFunction) => build(FONTS, t);
-export const skinTypeOptions = (t: TFunction) => build(SKIN_TYPES, t);
 export const clickModeOptions = (t: TFunction) => build(CLICK_MODES, t);
 export const dataMappingOptions = (t: TFunction) => build(DATA_MAPPINGS, t);
 export const bossBarColorOptions = (t: TFunction) => build(BOSS_COLORS, t);

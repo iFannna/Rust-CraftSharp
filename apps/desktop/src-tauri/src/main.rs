@@ -9,6 +9,7 @@ mod icons;
 mod metrics;
 mod platform;
 mod singleinstance;
+mod skins;
 mod slots;
 mod windowdrag;
 
@@ -327,7 +328,7 @@ async fn set_app_icon(app: tauri::AppHandle, png: Option<String>) -> Result<(), 
         .map_err(|error| error.to_string())?
 }
 
-fn base64(data: &[u8]) -> String {
+pub(crate) fn base64(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
     for chunk in data.chunks(3) {
@@ -437,13 +438,12 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let status_bar = MenuItem::with_id(app, "statusBar", "显示/隐藏状态栏", true, None::<&str>)?;
     let inventory = MenuItem::with_id(app, "inventory", "显示/隐藏物品栏", true, None::<&str>)?;
     let crosshair = MenuItem::with_id(app, "crosshair", "显示/隐藏准星", true, None::<&str>)?;
-    let preview3d = MenuItem::with_id(app, "preview3d", "3D 预览", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "退出 CraftSharp", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
-        &[&settings, &status_bar, &inventory, &crosshair, &preview3d, &separator, &quit],
+        &[&settings, &status_bar, &inventory, &crosshair, &separator, &quit],
     )?;
 
     let mut builder = TrayIconBuilder::with_id("main")
@@ -581,6 +581,10 @@ fn main() {
             slots_clear_by_path,
             slots_replace_path,
             read_skin_data_url,
+            skins::list_skins,
+            skins::import_skin,
+            skins::rename_skin,
+            skins::remove_skin,
             entity_host_frame,
             set_app_icon,
             set_autostart,

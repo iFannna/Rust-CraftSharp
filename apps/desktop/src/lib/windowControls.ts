@@ -107,7 +107,7 @@ export async function toggleCrosshair() {
   await setCrosshairVisible(!getConfig().hudElements.crosshairVisible);
 }
 
-export type WindowAction = "settings" | "statusBar" | "inventory" | "crosshair" | "preview3d";
+export type WindowAction = "settings" | "statusBar" | "inventory" | "crosshair";
 
 /** 托盘与热键共用的动作分发 */
 export async function applyWindowAction(action: WindowAction) {
@@ -123,9 +123,6 @@ export async function applyWindowAction(action: WindowAction) {
       break;
     case "crosshair":
       await toggleCrosshair();
-      break;
-    case "preview3d":
-      await toggleEntityPreview();
       break;
     default:
       break;

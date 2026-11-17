@@ -12,7 +12,7 @@ import { tOf, type MessageKey } from "@/i18n";
 import { setSettingsVisible } from "@/lib/windowControls";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
-import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, PackageIcon, PaletteIcon, SettingsIcon, type IconProps } from "@/ui/icons";
+import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, PackageIcon, PaletteIcon, SettingsIcon, UserIcon, type IconProps } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 import { AboutSection } from "@/settings/sections/aboutSection";
 import { AppearanceSection } from "@/settings/sections/appearanceSection";
@@ -20,10 +20,11 @@ import { DebugSection } from "@/settings/sections/debugSection";
 import { HotkeysSection } from "@/settings/sections/hotkeysSection";
 import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
+import { SkinSection } from "@/settings/sections/skinSection";
 import { SystemSection } from "@/settings/sections/systemSection";
 import "@/ui/styles.css";
 
-type SectionId = "system" | "appearance" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
+type SectionId = "system" | "appearance" | "skin" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
 
 ensureSettingsFonts();
 installLocalHotkeys();
@@ -38,6 +39,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "system", labelKey: "nav.system", Icon: SettingsIcon, Section: SystemSection },
   { id: "appearance", labelKey: "nav.appearance", Icon: PaletteIcon, Section: AppearanceSection },
+  { id: "skin", labelKey: "nav.skin", Icon: UserIcon, Section: SkinSection },
   { id: "hud", labelKey: "nav.hud", Icon: DashboardIcon, Section: HudSection },
   { id: "inventory", labelKey: "nav.inventory", Icon: PackageIcon, Section: InventorySection },
   { id: "hotkeys", labelKey: "nav.hotkeys", Icon: KeyboardIcon, Section: HotkeysSection },
@@ -192,7 +194,12 @@ function SettingsApp() {
 
           {/* key 让切换分区时内容区回到顶部 */}
           <main className="ui-scroll-auto settings-main min-w-0 flex-1 overflow-y-auto" key={active}>
-            <div className="settings-content mx-auto max-w-[1120px] pb-10">
+            <div
+              className={cn(
+                "settings-content mx-auto max-w-[1120px] pb-10",
+                active === "skin" && "flex h-full min-h-0 flex-col pb-6"
+              )}
+            >
               <ActiveSection />
             </div>
           </main>
