@@ -2,6 +2,7 @@
 
 export const zhCN = {
   "common.restoreDefaults": "恢复默认设置",
+  "common.restoreConfirmText": "此操作将恢复当前页面的所有设置为默认值，是否继续？",
   "common.cancel": "取消",
   "common.confirm": "确认",
   "common.ok": "确定",
@@ -238,8 +239,6 @@ export const zhCN = {
   "hud.elementIconDesc": "此HUD元素的显示图标",
   "hud.iconStyle": "图标样式",
   "hud.iconStyleDesc": "切换元素使用的原版贴图",
-  "hud.restoreConfirmTitle": "确认恢复默认设置",
-  "hud.restoreConfirmText": "此操作将恢复当前页面的所有设置为默认值，是否继续？",
   "hud.topMostConfirmTitle": "窗口置顶确认",
   "hud.topMostConfirmText": "提示：独占全屏模式下此功能会失效\n解决方案：开启无边框窗口化或窗口化全屏模式\n\n风险警告：绝大多数在线多人游戏（如 CS2、Valorant、PUBG、Apex 等）的反作弊系统（VAC、EAC、BattlEye）会将此类第三方准星软件视为作弊工具，请谨慎使用",
 
@@ -326,8 +325,6 @@ export const zhCN = {
   "inventory.card": "物品栏",
   "inventory.styleLabel": "物品栏样式",
   "inventory.stylePreviewTitle": "选择物品栏样式",
-  "inventory.restoreConfirmTitle": "确认恢复默认设置",
-  "inventory.restoreConfirmText": "此操作将恢复当前页面的所有设置为默认值，是否继续？",
   "inventory.styleDesc": "点击选择物品栏的显示样式",
   "inventory.show": "显示物品栏",
   "inventory.showDesc": "在桌面显示物品栏窗口",
@@ -407,7 +404,6 @@ export const zhCN = {
   "iconStyle.airNormal": "普通",
   "hudIconPicker.title": "选择元素图标",
   "rename.title": "重命名",
-  "dialog.confirmTitle": "确认",
   "dialog.alertTitle": "提示",
   "files.missing": "文件不存在：\n{path}\n\n是否清除所有使用这个路径的格子？",
   "files.exists": "文件 \"{name}\" 已存在，请使用其他名称。",

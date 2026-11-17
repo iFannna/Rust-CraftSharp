@@ -5,13 +5,15 @@ import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { languageOptions } from "@/settings/options";
 import { ActionBar, Button, Note, Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
+import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 
 export function SystemSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const [autoStartFailed, setAutoStartFailed] = useState(false);
 
-  const resetSystem = () => {
+  const resetSystem = async () => {
+    if (!(await confirmRestoreDefaults(t))) return;
     const defaults = defaultConfig().system;
     updateConfig({ system: defaults });
   };

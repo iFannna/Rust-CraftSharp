@@ -34,11 +34,11 @@ async function showConfirm(text: string): Promise<boolean> {
   const t = tOf(getConfig().system.language);
   const result = await openDialogWindow<boolean>({
     label: WINDOW_LABEL.confirm,
-    title: t("dialog.confirmTitle"),
+    title: t("dialog.alertTitle"),
     page: "confirm",
     params: { kind: "confirm", text },
-    width: 460,
-    height: 260
+    width: 400,
+    height: 200
   });
   return result === true;
 }
@@ -54,8 +54,8 @@ async function showAlert(text: string): Promise<void> {
     title: t("dialog.alertTitle"),
     page: "confirm",
     params: { kind: "alert", text },
-    width: 460,
-    height: 260
+    width: 400,
+    height: 200
   });
 }
 

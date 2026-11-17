@@ -7,6 +7,7 @@ import { openDialogWindow } from "@/lib/dialogWindow";
 import { setInventoryVisible } from "@/lib/windowControls";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { Accordion } from "@/settings/components/accordion";
+import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import {
   ActionBar,
   Button,
@@ -196,16 +197,7 @@ export function InventorySection() {
   const empty = <Note>{t("inventory.emptyCard")}</Note>;
 
   const restoreDefaults = async () => {
-    const confirmed = await openDialogWindow<boolean>({
-      label: WINDOW_LABEL.confirm,
-      title: t("inventory.restoreConfirmTitle"),
-      page: "confirm",
-      params: { kind: "confirm", text: t("inventory.restoreConfirmText") },
-      width: 460,
-      height: 260,
-      anchor: WINDOW_LABEL.settings
-    });
-    if (confirmed !== true) return;
+    if (!(await confirmRestoreDefaults(t))) return;
     updateConfig({ inventory: defaultConfig().inventory });
   };
 

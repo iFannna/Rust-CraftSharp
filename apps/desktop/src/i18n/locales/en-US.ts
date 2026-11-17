@@ -4,6 +4,7 @@ import type { Messages } from "./zh-CN";
 
 export const enUS: Messages = {
   "common.restoreDefaults": "Restore Default Settings",
+  "common.restoreConfirmText": "This will reset all settings on this page to their default values. Continue?",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
   "common.ok": "OK",
@@ -240,8 +241,6 @@ export const enUS: Messages = {
   "hud.elementIconDesc": "The display icon for this HUD element",
   "hud.iconStyle": "Icon Style",
   "hud.iconStyleDesc": "Switch the vanilla texture used by this element",
-  "hud.restoreConfirmTitle": "Confirm Restore Defaults",
-  "hud.restoreConfirmText": "This will reset all settings on this page to their default values. Continue?",
   "hud.topMostConfirmTitle": "Window Top Most Confirmation",
   "hud.topMostConfirmText": "Note: This feature does not work in exclusive fullscreen mode\nSolution: Enable borderless windowed or windowed fullscreen mode\n\nRisk warning: Anti-cheat systems (VAC, EAC, BattlEye) in most online multiplayer games (CS2, Valorant, PUBG, Apex, etc.) may consider third-party crosshair software as cheating tools. Use with caution",
 
@@ -328,8 +327,6 @@ export const enUS: Messages = {
   "inventory.card": "Inventory",
   "inventory.styleLabel": "Inventory Style",
   "inventory.stylePreviewTitle": "Select Inventory Style",
-  "inventory.restoreConfirmTitle": "Confirm Restore Defaults",
-  "inventory.restoreConfirmText": "This will reset all settings on this page to their default values. Continue?",
   "inventory.styleDesc": "Click to select inventory display style",
   "inventory.show": "Show Inventory",
   "inventory.showDesc": "Display inventory window on desktop",
@@ -409,7 +406,6 @@ export const enUS: Messages = {
   "iconStyle.airNormal": "Normal",
   "hudIconPicker.title": "Choose Element Icon",
   "rename.title": "Rename",
-  "dialog.confirmTitle": "Confirm",
   "dialog.alertTitle": "Notice",
   "files.missing": "File not found:\n{path}\n\nClear every slot that uses this path?",
   "files.exists": "The file \"{name}\" already exists. Choose another name.",

@@ -4,6 +4,7 @@ import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
 import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
+import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import { HotkeyInput } from "@/settings/components/hotkeyInput";
 
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons" | "dropItem" | "openInventory";
@@ -58,7 +59,8 @@ export function HotkeysSection() {
     updateConfig({ hotkeys: patch });
   };
 
-  const resetHotkeys = () => {
+  const resetHotkeys = async () => {
+    if (!(await confirmRestoreDefaults(t))) return;
     const defaults = defaultConfig().hotkeys;
     updateConfig({
       hotkeys: {

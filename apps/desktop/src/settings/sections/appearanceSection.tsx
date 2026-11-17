@@ -5,6 +5,7 @@ import { openDialogWindow } from "@/lib/dialogWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
 import { ActionBar, Button, Note, Row, SectionHead, Select, type Option } from "@/settings/components/controls";
+import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import { fontOptions, themeOptions } from "@/settings/options";
 import { applyAppIcon, appIconUrl } from "@/settings/appIcons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
@@ -23,7 +24,8 @@ export function AppearanceSection() {
     setIconError(error === "canceled" ? t("appearance.iconCanceled") : error);
   };
 
-  const reset = () => {
+  const reset = async () => {
+    if (!(await confirmRestoreDefaults(t))) return;
     const defaults = defaultConfig().appearance;
     updateConfig({ appearance: defaults });
     void applyAppIcon(defaults.appIcon).then(reportIconError);

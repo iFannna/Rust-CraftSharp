@@ -103,8 +103,8 @@ export function AboutSection() {
       title: t("about.checkUpdate"),
       page: "confirm",
       params: { kind: "alert", title: t("about.checkUpdate"), text: t("about.latest") },
-      width: 460,
-      height: 240,
+      width: 400,
+      height: 180,
       anchor: WINDOW_LABEL.settings
     });
   };

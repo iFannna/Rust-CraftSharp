@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
-import { openDialogWindow } from "@/lib/dialogWindow";
-import { WINDOW_LABEL } from "@/lib/windowLabels";
+import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import { Accordion } from "@/settings/components/accordion";
 import { ActionBar, Button, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { BossBarCardContent } from "@/settings/sections/hud/bossBarCard";
@@ -27,16 +26,7 @@ export function HudSection() {
   const t = tOf(config.system.language);
 
   const restoreDefaults = async () => {
-    const confirmed = await openDialogWindow<boolean>({
-      label: WINDOW_LABEL.confirm,
-      title: t("hud.restoreConfirmTitle"),
-      page: "confirm",
-      params: { kind: "confirm", text: t("hud.restoreConfirmText") },
-      width: 460,
-      height: 260,
-      anchor: WINDOW_LABEL.settings
-    });
-    if (confirmed !== true) return;
+    if (!(await confirmRestoreDefaults(t))) return;
 
     const defaults = defaultConfig();
     updateConfig({

@@ -31,7 +31,7 @@ export function TitleBar({
     <header className="drag-region flex h-8 flex-none items-center" data-tauri-drag-region>
       {title ? (
         <span
-          className="flex h-full items-center px-4 text-sm font-semibold tracking-tight"
+          className="flex h-full translate-y-[2px] items-center pl-5 text-sm font-semibold tracking-tight"
           data-tauri-drag-region
         >
           {title}
