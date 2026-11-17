@@ -36,10 +36,10 @@ export function AppearanceSection() {
       title: t("iconPicker.title"),
       page: "icon-picker",
       params: { value: config.appearance.appIcon },
-      width: 900,
-      height: 680,
-      minWidth: 640,
-      minHeight: 480,
+      width: 700,
+      height: 500,
+      minWidth: 500,
+      minHeight: 400,
       mode: "display",
       anchor: WINDOW_LABEL.settings
     });
