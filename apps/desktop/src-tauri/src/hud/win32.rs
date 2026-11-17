@@ -154,6 +154,11 @@ extern "system" {
         thread_id: u32,
     ) -> isize;
     pub fn CallNextHookEx(hook: isize, code: i32, wparam: usize, lparam: isize) -> isize;
+    pub fn GetForegroundWindow() -> Hwnd;
+    pub fn GetWindowThreadProcessId(hwnd: Hwnd, process: *mut u32) -> u32;
+    pub fn AttachThreadInput(attach: u32, to: u32, enabled: i32) -> i32;
+    pub fn SetFocus(hwnd: Hwnd) -> Hwnd;
+    pub fn SwitchToThisWindow(hwnd: Hwnd, alt_tab: i32);
 }
 
 #[link(name = "gdi32")]
@@ -169,6 +174,7 @@ extern "system" {
 extern "system" {
     pub fn GetModuleHandleW(name: *const u16) -> isize;
     pub fn GetTickCount64() -> u64;
+    pub fn GetCurrentThreadId() -> u32;
 }
 
 #[link(name = "winmm")]
@@ -203,7 +209,6 @@ pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
 
-pub const WM_ACTIVATE: u32 = 0x0006;
 pub const WM_PAINT: u32 = 0x000F;
 pub const WM_KEYDOWN: u32 = 0x0100;
 pub const WM_KEYUP: u32 = 0x0101;
@@ -424,6 +429,32 @@ pub fn set_overlay_style(hwnd: Hwnd) {
         let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
         let style = ex_style | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
         SetWindowLongW(hwnd, GWL_EXSTYLE, style as i32);
+    }
+}
+
+/// 前台锁生效时先附着前台线程再激活，外部拖放结束收回键盘焦点用。
+pub fn focus_window(hwnd: Hwnd) {
+    // SAFETY: 只调整输入队列与前台窗口
+    unsafe {
+        let foreground = GetForegroundWindow();
+        let mut pid = 0;
+        let foreground_thread = if foreground != 0 {
+            GetWindowThreadProcessId(foreground, &mut pid)
+        } else {
+            0
+        };
+        let current = GetCurrentThreadId();
+        let attached = foreground_thread != 0
+            && foreground_thread != current
+            && AttachThreadInput(current, foreground_thread, 1) != 0;
+        SetForegroundWindow(hwnd);
+        SetFocus(hwnd);
+        if GetForegroundWindow() != hwnd {
+            SwitchToThisWindow(hwnd, 1);
+        }
+        if attached {
+            AttachThreadInput(current, foreground_thread, 0);
+        }
     }
 }
 

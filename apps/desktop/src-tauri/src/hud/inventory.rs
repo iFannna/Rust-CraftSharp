@@ -25,8 +25,8 @@ const TIMER_LOOK: usize = 2;
 const LOOK_INTERVAL_MS: u64 = 16;
 /// 扫格期间由采样线程投递的光标位置消息
 const WM_SHIFT_SAMPLE: u32 = w::WM_APP + 1;
-/// 激活完成后再把预览覆盖层提回物品栏之上
-const WM_ENTITY_RAISE: u32 = w::WM_APP + 2;
+/// 外部拖放结束后收回前台焦点
+const WM_DROP_FOCUS: u32 = w::WM_APP + 3;
 /// 采样间隔：鼠标消息会被系统合并，直接轮询光标才能跟上快速扫格
 const SHIFT_SAMPLE_MS: u64 = 1;
 const LONG_PRESS_MS: u64 = 150;
@@ -406,7 +406,7 @@ fn rebuild_layout(state: &mut State, reposition: bool) {
         }
         state.rect = Some((x, y, width, height));
     }
-    place_entity(state, true);
+    place_entity(state);
     sync_look_timer(state);
     push_drop_zones(state);
 }
@@ -574,13 +574,12 @@ pub fn entity_ready() {
         }
         state.entity_meta = None;
         sync_entity_setup(state);
-        place_entity(state, true);
+        place_entity(state);
     });
 }
 
 /// 3D 覆盖层贴住玩家区域；不可见或当前容器没有玩家区域时移出屏幕。
-/// `raise` 只在显隐、布局变化时提起层级，拖动窗口时保持原层级避免闪烁。
-fn place_entity(state: &mut State, raise: bool) {
+fn place_entity(state: &mut State) {
     if state.entity_hwnd == 0 {
         return;
     }
@@ -611,15 +610,28 @@ fn place_entity(state: &mut State, raise: bool) {
         }
         return;
     };
-    // SAFETY: 需要时提到置顶带最前盖住物品栏，移动时只改位置
+    // SAFETY: 提到置顶带最前，保证盖在物品栏之上，且不抢焦点
     unsafe {
-        let after = if raise { w::HWND_TOPMOST } else { 0 };
-        let mut flags = w::SWP_NOACTIVATE;
-        if !raise {
-            flags |= w::SWP_NOZORDER;
-        }
-        w::SetWindowPos(state.entity_hwnd, after, left, top, width, height, flags);
+        w::SetWindowPos(
+            state.entity_hwnd,
+            w::HWND_TOPMOST,
+            left,
+            top,
+            width,
+            height,
+            w::SWP_NOACTIVATE,
+        );
     }
+}
+
+/// 外部拖放结束后由 dragdrop 调用，延迟把键盘焦点收回物品栏。
+pub fn focus_after_drop(hwnd: w::Hwnd) {
+    w::post_message(hwnd, WM_DROP_FOCUS, 0, 0);
+}
+
+/// 拖放回调内立即尝试收回焦点，此时进程通常仍有前台权限。
+pub fn focus_now(hwnd: w::Hwnd) {
+    w::focus_window(hwnd);
 }
 
 /// 玩家预览尺寸或皮肤变化时下发一次重建
@@ -867,7 +879,7 @@ pub fn set_visible_inner(state: &mut State) {
         }
         dragicon::hide("inventory");
     }
-    place_entity(state, true);
+    place_entity(state);
     sync_look_timer(state);
 }
 
@@ -1464,7 +1476,7 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
             } else {
                 render(state);
             }
-            place_entity(state, false);
+            place_entity(state);
         }
         // 窗口移动后客户区坐标整体变化，后续不能按旧位置插值
         state.last_move = None;
@@ -1692,15 +1704,10 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
             });
             return 0;
         }
-        w::WM_ACTIVATE => {
-            // 激活会把物品栏提到置顶带最前，等这一轮消息处理完再放回覆盖层
-            if (wparam & 0xffff) != 0 {
-                w::post_message(hwnd, WM_ENTITY_RAISE, 0, 0);
-            }
-            return w::DefWindowProcW(hwnd, message, wparam, lparam);
-        }
-        WM_ENTITY_RAISE => {
-            with_state(|state| place_entity(state, true));
+        WM_DROP_FOCUS => {
+            // OLE 拖放结束后前台仍在资源管理器，这里收回键盘焦点
+            with_state(|state| place_entity(state));
+            w::focus_window(hwnd);
             return 0;
         }
         _ => {}

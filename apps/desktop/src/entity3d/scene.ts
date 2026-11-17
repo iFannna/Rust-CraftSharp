@@ -13,7 +13,8 @@ export interface SceneKit {
 
 export function createScene(canvas: HTMLCanvasElement, kind: "ortho" | "persp"): SceneKit {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
-  renderer.setClearColor(0x000000, 0);
+  // 物品栏覆盖层自带黑底，盖住物品栏上的透明洞；其余场景保持透明
+  renderer.setClearColor(0x000000, kind === "ortho" ? 1 : 0);
   const scene = new THREE.Scene();
   const camera =
     kind === "ortho"

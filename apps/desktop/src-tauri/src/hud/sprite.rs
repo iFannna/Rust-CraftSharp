@@ -301,6 +301,21 @@ impl Frame {
         }
     }
 
+    /// 把矩形清成完全透明，用于给覆盖层留洞。
+    pub fn clear_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        let left = x.round().max(0.0) as u32;
+        let top = y.round().max(0.0) as u32;
+        let right = ((x + width).round().max(0.0) as u32).min(self.width);
+        let bottom = ((y + height).round().max(0.0) as u32).min(self.height);
+        if right <= left || bottom <= top {
+            return;
+        }
+        for dy in top..bottom {
+            let start = (dy * self.width + left) as usize;
+            self.pixels[start..start + (right - left) as usize].fill(0);
+        }
+    }
+
     /// 从源图指定区域取样，缩放绘制到目标区域，九宫格边角用。
     pub fn draw_source(
         &mut self,

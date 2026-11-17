@@ -573,6 +573,11 @@ unsafe extern "system" fn target_drop(this: *mut c_void, data: *mut c_void, _key
             }
         }
     }
+    if target.label == "inventory" {
+        // 资源管理器拖入后前台仍停在源窗口，立刻与消息循环各尝试一次收回键盘
+        crate::hud::inventory::focus_now(target.window);
+        crate::hud::inventory::focus_after_drop(target.window);
+    }
     S_OK
 }
 
