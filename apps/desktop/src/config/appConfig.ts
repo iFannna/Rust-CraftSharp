@@ -141,6 +141,54 @@ export interface HotkeysConfig {
   openInventory: string;
 }
 
+/** 托盘动作与全局热键动作集保持一致；退出只作为菜单固定项 */
+export type TrayAction =
+  | "none"
+  | "menu"
+  | "settings"
+  | "statusBar"
+  | "inventory"
+  | "crosshair"
+  | "desktopIcons";
+
+export const TRAY_ACTIONS: TrayAction[] = [
+  "none",
+  "menu",
+  "settings",
+  "statusBar",
+  "inventory",
+  "crosshair",
+  "desktopIcons"
+];
+
+export type TrayMenuItemId = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons";
+
+export const TRAY_MENU_ITEM_IDS: TrayMenuItemId[] = [
+  "settings",
+  "statusBar",
+  "inventory",
+  "crosshair",
+  "desktopIcons"
+];
+
+export interface TrayMenuItemConfig {
+  id: TrayMenuItemId;
+  visible: boolean;
+}
+
+export interface TrayClicksConfig {
+  single: TrayAction;
+  double: TrayAction;
+  middle: TrayAction;
+  right: TrayAction;
+}
+
+export interface TrayConfig {
+  clicks: TrayClicksConfig;
+  /** 保存全部条目的顺序与显隐，渲染时只取可见项 */
+  menu: TrayMenuItemConfig[];
+}
+
 export interface PlayerConfig {
   skinPath: string;
   skinType: SkinType;
@@ -157,6 +205,7 @@ export interface AppConfig {
   hudElements: HudElementsConfig;
   bossBars: BossBarConfig[];
   hotkeys: HotkeysConfig;
+  tray: TrayConfig;
   player: PlayerConfig;
 }
 
@@ -259,6 +308,16 @@ const DEFAULTS: AppConfig = {
     dropItem: "Q",
     openInventory: "E"
   },
+  tray: {
+    clicks: { single: "settings", double: "none", middle: "none", right: "menu" },
+    menu: [
+      { id: "settings", visible: true },
+      { id: "statusBar", visible: true },
+      { id: "inventory", visible: true },
+      { id: "crosshair", visible: false },
+      { id: "desktopIcons", visible: false }
+    ]
+  },
   player: { skinPath: "", skinType: "wide", skinName: "steve" }
 };
 
@@ -346,6 +405,48 @@ function appearanceIconValue(raw: Partial<AppearanceConfig> | undefined): string
   return typeof legacy === "string" ? legacy : undefined;
 }
 
+function normalizeTrayAction(value: unknown, fallback: TrayAction): TrayAction {
+  return TRAY_ACTIONS.includes(value as TrayAction) ? (value as TrayAction) : fallback;
+}
+
+/** 菜单数组做去重、未知项过滤和缺项补全，旧配置直接沿用默认显隐 */
+function normalizeTrayMenu(value: unknown, base: TrayMenuItemConfig[]): TrayMenuItemConfig[] {
+  const seen = new Set<TrayMenuItemId>();
+  const menu: TrayMenuItemConfig[] = [];
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (!entry || typeof entry !== "object") continue;
+      const raw = entry as { id?: unknown; visible?: unknown };
+      const id = raw.id as TrayMenuItemId;
+      if (!TRAY_MENU_ITEM_IDS.includes(id) || seen.has(id)) continue;
+      seen.add(id);
+      menu.push({ id, visible: raw.visible !== false });
+    }
+  }
+
+  for (const id of TRAY_MENU_ITEM_IDS) {
+    if (seen.has(id)) continue;
+    const fallback = base.find((item) => item.id === id);
+    menu.push({ id, visible: fallback?.visible ?? false });
+  }
+
+  return menu;
+}
+
+function mergeTray(base: TrayConfig, raw?: Partial<TrayConfig>): TrayConfig {
+  const clicks = raw?.clicks as Partial<TrayClicksConfig> | undefined;
+  return {
+    clicks: {
+      single: normalizeTrayAction(clicks?.single, base.clicks.single),
+      double: normalizeTrayAction(clicks?.double, base.clicks.double),
+      middle: normalizeTrayAction(clicks?.middle, base.clicks.middle),
+      right: normalizeTrayAction(clicks?.right, base.clicks.right)
+    },
+    menu: normalizeTrayMenu(raw?.menu, base.menu)
+  };
+}
+
 function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
   const language = raw.system?.language;
   return {
@@ -367,6 +468,7 @@ function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
     hudElements: mergeHudElements(base.hudElements, raw.hudElements),
     bossBars: Array.isArray(raw.bossBars) ? normalizeBossBars(raw.bossBars) : base.bossBars,
     hotkeys: { ...base.hotkeys, ...raw.hotkeys },
+    tray: mergeTray(base.tray, raw.tray),
     player: { ...base.player, ...raw.player }
   };
 }

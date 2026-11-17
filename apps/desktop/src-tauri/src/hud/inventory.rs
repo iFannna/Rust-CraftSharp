@@ -883,6 +883,11 @@ pub fn set_visible_inner(state: &mut State) {
     sync_look_timer(state);
 }
 
+/// 物品栏当前是否可见，供托盘菜单生成动态文案。
+pub fn is_visible() -> bool {
+    with_state(|state| state.visible).unwrap_or(false)
+}
+
 pub fn set_visible(visible: bool) {
     with_state(|state| {
         if state.config.visible == visible {

@@ -474,6 +474,11 @@ fn update_drag_icon(state: &State) {
     }
 }
 
+/// 状态栏当前是否可见，供托盘菜单生成动态文案。
+pub fn is_visible() -> bool {
+    with_state(|state| state.visible).unwrap_or(false)
+}
+
 /// 状态栏整体显隐，设置面板与物品栏遮罩期间都走这里。
 pub fn set_visible(value: bool) {
     with_state(|state| {

@@ -8,6 +8,7 @@ import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { GripIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 import { Button, Note } from "@/settings/components/controls";
+import { readDragRows, reorderAtPointer } from "@/settings/components/reorder";
 
 const LINK = "flex-none rounded-sm px-1 text-xs text-muted-foreground transition-colors hover:text-foreground";
 
@@ -21,10 +22,16 @@ export function BossBarCardContent() {
   const orderRef = useRef(order);
   const dragIdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const listenersRef = useRef<{
+    move: (event: PointerEvent) => void;
+    up: () => void;
+    cancel: () => void;
+  } | null>(null);
 
   useEffect(() => {
+    if (draggingId) return;
     setOrder(bars);
-  }, [bars]);
+  }, [bars, draggingId]);
 
   useEffect(() => {
     orderRef.current = order;
@@ -52,9 +59,20 @@ export function BossBarCardContent() {
     });
   };
 
+  const detachDrag = () => {
+    const listeners = listenersRef.current;
+    if (!listeners) return;
+    window.removeEventListener("pointermove", listeners.move);
+    window.removeEventListener("pointerup", listeners.up);
+    window.removeEventListener("pointercancel", listeners.cancel);
+    listenersRef.current = null;
+  };
+
   const cancelDrag = () => {
+    detachDrag();
     dragIdRef.current = null;
     setDraggingId(null);
+    orderRef.current = getConfig().bossBars;
     setOrder(getConfig().bossBars);
   };
 
@@ -69,62 +87,77 @@ export function BossBarCardContent() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [draggingId]);
 
-  const startDrag = (id: string) => (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    dragIdRef.current = id;
-    setDraggingId(id);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
+  useEffect(() => () => detachDrag(), []);
 
-  const moveDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const moveDragTo = (clientY: number) => {
     const id = dragIdRef.current;
-    if (!id || !listRef.current) return;
-
-    const rows = [...listRef.current.querySelectorAll<HTMLElement>("[data-bar-id]")];
-    const targetIndex = rows.findIndex((row) => event.clientY < row.getBoundingClientRect().bottom);
-    const to = targetIndex === -1 ? rows.length - 1 : targetIndex;
-
-    setOrder((current) => {
-      const from = current.findIndex((bar) => bar.id === id);
-      if (from === -1 || from === to) return current;
-      const next = [...current];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
+    if (!id) return;
+    const rows = readDragRows(listRef.current, "[data-bar-id]", "data-bar-id");
+    const next = reorderAtPointer(orderRef.current, id, clientY, rows);
+    if (next === orderRef.current) return;
+    orderRef.current = next;
+    setOrder(next);
   };
 
   const endDrag = () => {
+    detachDrag();
     if (!dragIdRef.current) return;
     dragIdRef.current = null;
     setDraggingId(null);
     updateConfig({ bossBars: orderRef.current });
   };
 
+  const startDrag = (id: string, element: HTMLElement, pointerId: number) => {
+    if (dragIdRef.current) return;
+    dragIdRef.current = id;
+    setDraggingId(id);
+    try {
+      element.setPointerCapture(pointerId);
+    } catch {
+      // 捕获失败时仍靠 window 监听完成拖拽
+    }
+    const listeners = {
+      move: (event: PointerEvent) => moveDragTo(event.clientY),
+      up: () => endDrag(),
+      cancel: () => cancelDrag()
+    };
+    listenersRef.current = listeners;
+    window.addEventListener("pointermove", listeners.move);
+    window.addEventListener("pointerup", listeners.up);
+    window.addEventListener("pointercancel", listeners.cancel);
+  };
+
   return (
     <>
       {bars.length === 0 ? <Note>{t("bossBar.empty")}</Note> : null}
 
-      <div ref={listRef} className="mb-3 flex flex-col gap-2">
+      <div ref={listRef} className={cn("mb-3 flex flex-col gap-2", draggingId && "select-none")}>
         {order.map((bar) => (
           <div
             key={bar.id}
             data-bar-id={bar.id}
             className={cn(
               "flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5",
-              draggingId === bar.id && "opacity-60"
+              draggingId === bar.id && "relative z-10 bg-accent/60 opacity-80"
             )}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              const target = event.target as HTMLElement;
+              if (target.closest("button, input, [role='switch'], a")) return;
+              event.preventDefault();
+              startDrag(bar.id, event.currentTarget, event.pointerId);
+            }}
           >
             <button
               type="button"
-              className="grid h-8 w-8 flex-none cursor-grab place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent active:cursor-grabbing"
+              className="grid h-8 w-8 flex-none touch-none cursor-grab place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent active:cursor-grabbing"
               aria-label={t("aria.dragHandle")}
-              onPointerDown={startDrag(bar.id)}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={cancelDrag}
-              onLostPointerCapture={endDrag}
+              title={t("aria.dragHandle")}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                startDrag(bar.id, event.currentTarget, event.pointerId);
+              }}
             >
               <GripIcon size={16} />
             </button>

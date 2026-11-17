@@ -7,11 +7,14 @@ import type {
   DataMappingType,
   HudElementId,
   ThemeMode,
+  TrayAction,
   UIFont
 } from "@/config/appConfig";
+import { TRAY_ACTIONS } from "@/config/appConfig";
 import { CONTAINER_STYLES } from "@/hud/inventory/styles";
 import { iconStyleOptions } from "@/hud/statusbar/iconStyleOptions";
 import { LANGUAGES, type LanguageCode, type MessageKey, type TFunction } from "@/i18n";
+import { trayActionLabel } from "@/lib/trayLabels";
 import type { Option } from "@/settings/components/controls";
 
 function build<T extends string>(entries: { value: T; key: MessageKey }[], t: TFunction): Option<T>[] {
@@ -73,6 +76,10 @@ export const clickModeOptions = (t: TFunction) => build(CLICK_MODES, t);
 export const dataMappingOptions = (t: TFunction) => build(DATA_MAPPINGS, t);
 export const bossBarColorOptions = (t: TFunction) => build(BOSS_COLORS, t);
 export const bossBarNotchOptions = (t: TFunction) => build(BOSS_NOTCHES, t);
+
+export function trayActionOptions(t: TFunction): Option<TrayAction>[] {
+  return TRAY_ACTIONS.map((value) => ({ value, label: trayActionLabel(t, value) }));
+}
 
 export function inventoryStyleOptions(t: TFunction): Option[] {
   return CONTAINER_STYLES.map((style) => ({ value: style.file, label: t(style.nameKey) }));

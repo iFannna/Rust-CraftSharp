@@ -393,6 +393,54 @@ fn slots_replace_path(from: String, to: String, style: String, shared: bool) {
     slots::replace_path(&slots::Scope::new(style, shared), &from, &to);
 }
 
+/// 托盘鼠标抬起事件，坐标是屏幕物理像素，供前端在光标处弹菜单。
+#[derive(Clone, serde::Serialize)]
+struct TrayPointer {
+    button: &'static str,
+    x: f64,
+    y: f64,
+}
+
+/// 菜单动态文案需要的实时状态。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrayState {
+    status_bar: bool,
+    inventory: bool,
+    desktop_icons: bool,
+    double_click_ms: u32,
+}
+
+#[tauri::command]
+fn tray_state() -> TrayState {
+    TrayState {
+        status_bar: hud::is_visible(),
+        inventory: hud::inventory::is_visible(),
+        desktop_icons: desktop::is_visible(),
+        double_click_ms: double_click_ms(),
+    }
+}
+
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[cfg(windows)]
+fn double_click_ms() -> u32 {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetDoubleClickTime() -> u32;
+    }
+    // SAFETY: 只读取系统双击间隔
+    unsafe { GetDoubleClickTime() }
+}
+
+#[cfg(not(windows))]
+fn double_click_ms() -> u32 {
+    500
+}
+
 fn show_settings(app: &tauri::AppHandle) {
     use tauri::Manager;
 
@@ -407,66 +455,35 @@ fn show_settings(app: &tauri::AppHandle) {
     let _ = window.set_focus();
 }
 
-/// 托盘左键切换：收起时直接隐藏，任务栏按钮立即移除；隐藏或最小化时恢复并聚焦。
-fn toggle_settings(app: &tauri::AppHandle) {
-    use tauri::Manager;
-
-    let Some(window) = app.get_webview_window("settings") else {
-        return;
-    };
-    let visible = window.is_visible().unwrap_or(false);
-    let minimized = window.is_minimized().unwrap_or(false);
-    if !visible || minimized {
-        show_settings(app);
-        return;
-    }
-
-    let _ = window.set_skip_taskbar(true);
-    let _ = window.hide();
-}
-
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     use tauri::Emitter;
 
-    let settings = MenuItem::with_id(app, "settings", "打开设置", true, None::<&str>)?;
-    let status_bar = MenuItem::with_id(app, "statusBar", "显示/隐藏状态栏", true, None::<&str>)?;
-    let inventory = MenuItem::with_id(app, "inventory", "显示/隐藏物品栏", true, None::<&str>)?;
-    let crosshair = MenuItem::with_id(app, "crosshair", "显示/隐藏准星", true, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 CraftSharp", true, None::<&str>)?;
-
-    let menu = Menu::with_items(
-        app,
-        &[&settings, &status_bar, &inventory, &crosshair, &separator, &quit],
-    )?;
-
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("CraftSharp")
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| {
-            let id = event.id.as_ref().to_string();
-            if id == "quit" {
-                app.exit(0);
-                return;
-            }
-            if id == "settings" {
-                show_settings(app);
-                return;
-            }
-            let _ = app.emit("tray-action", id);
-        })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
+            let TrayIconEvent::Click {
+                button,
                 button_state: MouseButtonState::Up,
+                position,
                 ..
             } = event
-            {
-                toggle_settings(tray.app_handle());
-            }
+            else {
+                return;
+            };
+            let button = match button {
+                MouseButton::Left => "left",
+                MouseButton::Right => "right",
+                MouseButton::Middle => "middle",
+            };
+            let _ = tray.app_handle().emit(
+                "tray-pointer",
+                TrayPointer {
+                    button,
+                    x: position.x,
+                    y: position.y,
+                },
+            );
         });
 
     if let Some(icon) = appicon::tray_icon(app).or_else(|| app.default_window_icon().cloned()) {
@@ -620,6 +637,8 @@ fn main() {
             set_app_icon,
             sync_window_icon,
             set_autostart,
+            tray_state,
+            exit_app,
             install_caption_hook
         ])
         .run(tauri::generate_context!())

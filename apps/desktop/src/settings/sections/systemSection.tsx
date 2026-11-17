@@ -4,7 +4,8 @@ import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { languageOptions } from "@/settings/options";
-import { ActionBar, Button, Note, Row, SectionHead, Select, Toggle } from "@/settings/components/controls";
+import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead, Select, Toggle } from "@/settings/components/controls";
+import { TrayControls } from "@/settings/sections/system/trayControls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 
 export function SystemSection() {
@@ -14,13 +15,14 @@ export function SystemSection() {
 
   const resetSystem = async () => {
     if (!(await confirmRestoreDefaults(t))) return;
-    const defaults = defaultConfig().system;
-    updateConfig({ system: defaults });
+    const defaults = defaultConfig();
+    updateConfig({ system: defaults.system, tray: defaults.tray });
   };
 
   return (
     <>
       <SectionHead title={t("system.title")} />
+      <SectionSubhead>{t("system.basicSettings")}</SectionSubhead>
       <Row label={t("system.languageLabel")} description={t("system.languageDesc")}>
         <Select
           value={config.system.language}
@@ -83,6 +85,8 @@ export function SystemSection() {
           onChange={(rememberNavSelection) => updateConfig({ system: { rememberNavSelection } })}
         />
       </Row>
+      <SectionSubhead>{t("system.traySettings")}</SectionSubhead>
+      <TrayControls />
       <ActionBar>
         <Button onClick={resetSystem}>{t("common.restoreDefaults")}</Button>
       </ActionBar>

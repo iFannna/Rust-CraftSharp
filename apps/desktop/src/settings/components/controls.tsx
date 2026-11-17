@@ -93,13 +93,16 @@ export function Select<T extends string>({
   options,
   onChange,
   disabled = false,
-  ariaLabel
+  ariaLabel,
+  wide = false
 }: {
   value: T;
   options: Option<T>[];
   onChange: (next: T) => void;
   disabled?: boolean;
   ariaLabel: string;
+  /** 长文案（如托盘动作）用更宽的触发器，避免下拉项换行 */
+  wide?: boolean;
 }) {
   return (
     <UISelect
@@ -109,7 +112,10 @@ export function Select<T extends string>({
     >
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-9 w-auto min-w-[140px] max-w-[280px] [&>span]:truncate"
+        className={cn(
+          "h-9 w-auto min-w-[140px] max-w-[280px] [&>span]:truncate",
+          wide && "min-w-[240px] max-w-[360px]"
+        )}
       >
         <SelectValue />
       </SelectTrigger>

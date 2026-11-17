@@ -9,20 +9,46 @@ export interface MenuItemSpec {
   separator?: boolean;
 }
 
-const MENU_WIDTH = 208;
-const ITEM_HEIGHT = 32;
-const SEPARATOR_HEIGHT = 9;
-/** 上下内边距合计 p-1，另加 1px 边框 */
-const PADDING = 8;
-const BORDER = 2;
-const MENU_LABEL = "slot-menu";
+type MenuKind = "slot" | "tray";
 
-export function menuHeight(items: MenuItemSpec[]): number {
+interface MenuMetrics {
+  width: number;
+  itemHeight: number;
+  separatorHeight: number;
+  /** 容器上下内边距与边框合计 */
+  chrome: number;
+  label: string;
+  event: string;
+}
+
+const MENU_METRICS: Record<MenuKind, MenuMetrics> = {
+  slot: {
+    width: 208,
+    itemHeight: 32,
+    separatorHeight: 9,
+    /** p-1 上下合计 8，加 1px 边框 */
+    chrome: 10,
+    label: "slot-menu",
+    event: "menu:select"
+  },
+  tray: {
+    width: 184,
+    itemHeight: 40,
+    separatorHeight: 9,
+    /** p-1.5 上下合计 12，加 1px 边框 */
+    chrome: 14,
+    label: "tray-menu",
+    event: "tray-menu:select"
+  }
+};
+
+export function menuHeight(items: MenuItemSpec[], kind: MenuKind = "slot"): number {
+  const metrics = MENU_METRICS[kind];
   const itemsHeight = items.reduce(
-    (total, item) => total + (item.separator ? SEPARATOR_HEIGHT : ITEM_HEIGHT),
+    (total, item) => total + (item.separator ? metrics.separatorHeight : metrics.itemHeight),
     0
   );
-  return itemsHeight + PADDING + BORDER;
+  return itemsHeight + metrics.chrome;
 }
 
 /**
@@ -46,13 +72,34 @@ export async function showSlotMenuAt(
   physicalXIn: number,
   physicalYIn: number
 ): Promise<string | null> {
-  const existing = await WebviewWindow.getByLabel(MENU_LABEL);
+  return showMenuAt(items, physicalXIn, physicalYIn, "slot");
+}
+
+/** 托盘右键菜单，尺寸和事件通道与格子菜单分开；宽度由调用方按文案和字号估算。 */
+export async function showTrayMenuAt(
+  items: MenuItemSpec[],
+  physicalXIn: number,
+  physicalYIn: number,
+  width?: number
+): Promise<string | null> {
+  return showMenuAt(items, physicalXIn, physicalYIn, "tray", width);
+}
+
+async function showMenuAt(
+  items: MenuItemSpec[],
+  physicalXIn: number,
+  physicalYIn: number,
+  kind: MenuKind,
+  widthOverride?: number
+): Promise<string | null> {
+  const metrics = MENU_METRICS[kind];
+  const existing = await WebviewWindow.getByLabel(metrics.label);
   if (existing) await existing.close().catch(() => undefined);
 
   const current = getCurrentWindow();
   const scale = await current.scaleFactor();
-  const width = MENU_WIDTH;
-  const height = menuHeight(items);
+  const width = widthOverride ?? metrics.width;
+  const height = menuHeight(items, kind);
   const physicalWidth = width * scale;
   const physicalHeight = height * scale;
 
@@ -83,8 +130,8 @@ export async function showSlotMenuAt(
       resolve(value);
     };
 
-    const menu = new WebviewWindow(MENU_LABEL, {
-      url: `pages/menu.html?items=${encodeURIComponent(JSON.stringify(items))}`,
+    const menu = new WebviewWindow(metrics.label, {
+      url: `pages/menu.html?variant=${kind}&items=${encodeURIComponent(JSON.stringify(items))}`,
       x: physicalX / scale,
       y: physicalY / scale,
       width,
@@ -108,7 +155,7 @@ export async function showSlotMenuAt(
     menu.once("tauri://error", () => finish(null));
     void menu.once("tauri://destroyed", () => finish(selectedId));
 
-    void listen<string>("menu:select", (event) => {
+    void listen<string>(metrics.event, (event) => {
       selectedId = event.payload;
       finish(event.payload);
       void menu.close().catch(() => undefined);

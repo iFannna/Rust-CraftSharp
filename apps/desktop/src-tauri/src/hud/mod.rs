@@ -21,5 +21,6 @@ pub mod tooltip;
 
 pub use config::HudConfig;
 pub use window::{
-    apply, hidden_by_inventory, init, set_drop_hover, set_hidden_by_inventory, set_visible,
+    apply, hidden_by_inventory, init, is_visible, set_drop_hover, set_hidden_by_inventory,
+    set_visible,
 };

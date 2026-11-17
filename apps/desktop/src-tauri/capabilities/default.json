@@ -6,6 +6,7 @@
     "main",
     "hud",
     "slot-menu",
+    "tray-menu",
     "rename-dialog",
     "confirm-dialog",
     "app-icon-picker",

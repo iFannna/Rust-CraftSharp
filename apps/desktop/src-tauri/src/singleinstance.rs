@@ -4,7 +4,7 @@
 mod imp {
     use std::thread;
 
-    use tauri::{AppHandle, Emitter};
+    use tauri::AppHandle;
 
     // 与旧版 WPF 程序区分身份，两者可同时运行且不会互相唤醒
     const MUTEX_NAME: &str = "Local\\CraftSharp.Next.SingleInstance";
@@ -51,7 +51,7 @@ mod imp {
         true
     }
 
-    /// 首个实例启动后调用，收到第二实例信号时转发打开设置的托盘动作。
+    /// 首个实例启动后调用，收到第二实例信号时直接显示并聚焦设置面板。
     pub fn watch(app: AppHandle) {
         let name = wide(EVENT_NAME);
         // SAFETY: 自动复位事件，仅首实例创建
@@ -65,7 +65,8 @@ mod imp {
             if unsafe { WaitForSingleObject(event, u32::MAX) } != WAIT_OBJECT_0 {
                 continue;
             }
-            let _ = app.emit("tray-action", "settings".to_string());
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || crate::show_settings(&handle));
         });
     }
 }
