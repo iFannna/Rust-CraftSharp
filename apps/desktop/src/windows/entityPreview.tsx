@@ -52,6 +52,12 @@ const BACKGROUND_OPTIONS: { value: "dark" | "checker"; label: string }[] = [
   { value: "checker", label: "棋盘格" }
 ];
 
+// 默认视角与皮肤设置页一致：相机在正面偏上 35°，向模型左侧偏 40°
+const DEFAULT_THETA = (40 * Math.PI) / 180;
+const DEFAULT_PHI = (55 * Math.PI) / 180;
+// 逆时针，约 6 秒一圈
+const SPIN_SPEED = (Math.PI * 2) / 6;
+
 interface Orbit {
   theta: number;
   phi: number;
@@ -139,8 +145,8 @@ function EntityPreview() {
 
   const viewRef = useRef<EntityView | null>(null);
   const orbitRef = useRef<Orbit>({
-    theta: -0.66,
-    phi: 1.21,
+    theta: DEFAULT_THETA,
+    phi: DEFAULT_PHI,
     radius: 60,
     target: new THREE.Vector3(0, 16, 0)
   });
@@ -179,9 +185,9 @@ function EntityPreview() {
     const size = bounds.getSize(new THREE.Vector3());
     const orbit = orbitRef.current;
     orbit.target.copy(center);
-    orbit.radius = Math.max(size.x, size.y, size.z) * 1.1 + 10;
-    orbit.theta = -0.66;
-    orbit.phi = 1.21;
+    orbit.radius = Math.max(size.x, size.y, size.z) * 1.6 + 10;
+    orbit.theta = DEFAULT_THETA;
+    orbit.phi = DEFAULT_PHI;
   }
 
   function applyWireframe() {
@@ -297,7 +303,7 @@ function EntityPreview() {
       if (disposed) return;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      if (autoRotateRef.current && !draggingRef.current) orbitRef.current.theta += dt * 0.4;
+      if (autoRotateRef.current && !draggingRef.current) orbitRef.current.theta -= dt * SPIN_SPEED;
       applyCamera();
       view.render(dt);
       fpsAccum += dt;

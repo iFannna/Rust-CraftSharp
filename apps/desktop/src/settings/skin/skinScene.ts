@@ -142,7 +142,8 @@ const MAX_ZOOM = 56;
 const DEFAULT_ZOOM = 30;
 const DEFAULT_YAW = THUMB_YAW;
 const DEFAULT_PITCH = THUMB_ELEVATION;
-const SPIN_SPEED = 0.4;
+// 逆时针，约 6 秒一圈
+const SPIN_SPEED = (Math.PI * 2) / 6;
 const TARGET = new THREE.Vector3(0, 16, 0);
 const DISTANCE = 90;
 
@@ -269,7 +270,7 @@ export class SkinPreview {
       this.player.apply(this.model);
     }
     if (this.spinning) {
-      this.yaw += dt * SPIN_SPEED;
+      this.yaw -= dt * SPIN_SPEED;
       this.applyCamera();
     }
     this.render();
