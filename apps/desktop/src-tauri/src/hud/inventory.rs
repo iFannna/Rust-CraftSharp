@@ -19,8 +19,14 @@ use crate::hud::win32::Dib;
 use crate::slots::{self, Scope, SlotItem};
 
 pub const TIMER_HOVER: usize = 1;
+/// 屏幕范围的光标跟踪定时器
+const TIMER_LOOK: usize = 2;
+/// 跟随刷新率的采样间隔，拖动与移动都平滑
+const LOOK_INTERVAL_MS: u64 = 16;
 /// 扫格期间由采样线程投递的光标位置消息
 const WM_SHIFT_SAMPLE: u32 = w::WM_APP + 1;
+/// 激活完成后再把预览覆盖层提回物品栏之上
+const WM_ENTITY_RAISE: u32 = w::WM_APP + 2;
 /// 采样间隔：鼠标消息会被系统合并，直接轮询光标才能跟上快速扫格
 const SHIFT_SAMPLE_MS: u64 = 1;
 const LONG_PRESS_MS: u64 = 150;
@@ -228,11 +234,14 @@ pub struct State {
     last_click_slot: Option<usize>,
     last_click_at: u64,
     tooltip_slot: Option<usize>,
-    /// 3D 玩家预览帧，离屏窗口经 entity_host_frame 推入
-    entity: Option<Rc<sprite::Sprite>>,
-    /// 已下发的预览尺寸与皮肤指纹，避免重复重建
+    /// 预览尺寸与皮肤指纹，变化时通知离屏窗口重建模型
     entity_meta: Option<String>,
-    look_at: u64,
+    /// 3D 预览覆盖层窗口，就绪后由玩家区域跟随物品栏移动
+    entity_hwnd: w::Hwnd,
+    /// 上一次已下发的（光标位置 + 窗口位置），空闲时不重复发送
+    look_cursor: Option<(i32, i32, i32, i32)>,
+    /// 屏幕跟踪定时器是否在运行
+    look_timer: bool,
     tracked: bool,
     frame: Option<Frame>,
     dib: Option<Dib>,
@@ -296,9 +305,10 @@ pub fn init(app: &AppHandle) {
         last_click_slot: None,
         last_click_at: 0,
         tooltip_slot: None,
-        entity: None,
         entity_meta: None,
-        look_at: 0,
+        entity_hwnd: 0,
+        look_cursor: None,
+        look_timer: false,
         tracked: false,
         frame: None,
         dib: None,
@@ -396,6 +406,8 @@ fn rebuild_layout(state: &mut State, reposition: bool) {
         }
         state.rect = Some((x, y, width, height));
     }
+    place_entity(state, true);
+    sync_look_timer(state);
     push_drop_zones(state);
 }
 
@@ -546,61 +558,99 @@ fn install_icon(app: &AppHandle, key: &str, decoded: Option<std::sync::Arc<crate
     });
 }
 
-/// 离屏窗口就绪后补发一次预览参数，避免启动期事件早于监听
-pub fn request_entity_setup() {
+/// 离屏窗口就绪：登记句柄、设为穿透覆盖层，并补发当前预览参数
+pub fn entity_ready() {
     with_state(|state| {
+        use tauri::Manager;
+
+        state.entity_hwnd = state
+            .app
+            .get_webview_window("entity-view")
+            .and_then(|window| window.hwnd().ok())
+            .map(|hwnd| hwnd.0 as isize)
+            .unwrap_or(0);
+        if state.entity_hwnd != 0 {
+            w::set_overlay_style(state.entity_hwnd);
+        }
         state.entity_meta = None;
         sync_entity_setup(state);
+        place_entity(state, true);
     });
 }
 
-/// 离屏窗口推来的 3D 帧，按玩家区域合成进物品栏帧
-pub fn entity_frame(width: u32, height: u32, rgba: &[u8]) {
-    with_state(|state| {
-        state.entity = Some(Rc::new(sprite::from_rgba(width, height, rgba)));
-        if state.visible {
-            render(state);
+/// 3D 覆盖层贴住玩家区域；不可见或当前容器没有玩家区域时移出屏幕。
+/// `raise` 只在显隐、布局变化时提起层级，拖动窗口时保持原层级避免闪烁。
+fn place_entity(state: &mut State, raise: bool) {
+    if state.entity_hwnd == 0 {
+        return;
+    }
+    let target = if state.visible {
+        state.rect.zip(state.layout.player.as_ref()).map(|((x, y, _, _), player)| {
+            (
+                x + player.left.round() as i32,
+                y + player.top.round() as i32,
+                player.width.round().max(1.0) as i32,
+                player.height.round().max(1.0) as i32,
+            )
+        })
+    } else {
+        None
+    };
+    let Some((left, top, width, height)) = target else {
+        // SAFETY: 只移动自身窗口
+        unsafe {
+            w::SetWindowPos(
+                state.entity_hwnd,
+                0,
+                -32000,
+                -32000,
+                0,
+                0,
+                w::SWP_NOSIZE | w::SWP_NOZORDER | w::SWP_NOACTIVATE,
+            );
         }
-    });
+        return;
+    };
+    // SAFETY: 需要时提到置顶带最前盖住物品栏，移动时只改位置
+    unsafe {
+        let after = if raise { w::HWND_TOPMOST } else { 0 };
+        let mut flags = w::SWP_NOACTIVATE;
+        if !raise {
+            flags |= w::SWP_NOZORDER;
+        }
+        w::SetWindowPos(state.entity_hwnd, after, left, top, width, height, flags);
+    }
 }
 
 /// 玩家预览尺寸或皮肤变化时下发一次重建
 fn sync_entity_setup(state: &mut State) {
-    let Some(player) = &state.layout.player else { return };
+    if state.layout.player.is_none() {
+        // 当前容器没有玩家区域，覆盖层留在屏幕外并停止渲染
+        state.entity_meta = None;
+        let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": false }));
+        return;
+    }
     let cfg = &state.config.player;
-    let key = format!(
-        "{}x{}|{}|{}|{}",
-        player.width.round() as u32,
-        player.height.round() as u32,
-        cfg.skin_name,
-        cfg.skin_type,
-        cfg.skin_path
-    );
+    let key = format!("{}|{}|{}", cfg.skin_name, cfg.skin_type, cfg.skin_path);
     if state.entity_meta.as_deref() == Some(key.as_str()) {
         return;
     }
     state.entity_meta = Some(key);
     let payload = serde_json::json!({
-        "width": player.width.max(1.0).round() as u32,
-        "height": player.height.max(1.0).round() as u32,
         "skin": if cfg.skin_name.is_empty() { "steve" } else { cfg.skin_name.as_str() },
         "skinType": if cfg.skin_type.is_empty() { "wide" } else { cfg.skin_type.as_str() },
         "skinPath": cfg.skin_path,
     });
     let _ = state.app.emit_to("entity-view", "entity-setup", payload);
-    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": state.visible }));
+    let visible = state.visible && state.layout.player.is_some();
+    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": visible }));
 }
 
-/// 光标在窗口内时按 WPF 契约换算头身跟随角度，节流到 30ms
+/// 按 WPF 契约换算头身跟随角度
 fn sync_entity_look(state: &mut State, x: f32, y: f32) {
     if !state.visible {
         return;
     }
-    let now = w::ticks();
-    if now.saturating_sub(state.look_at) < 30 {
-        return;
-    }
-    state.look_at = now;
     let Some(player) = &state.layout.player else { return };
     let Some((rx, ry, _, _)) = state.rect else { return };
     let unit = state.unit.max(0.001);
@@ -622,6 +672,39 @@ fn sync_entity_look(state: &mut State, x: f32, y: f32) {
         "headPitch": ratio_y * 10.0,
     });
     let _ = state.app.emit_to("entity-view", "entity-look", payload);
+}
+
+/// 读取全局光标位置并更新跟随角度，覆盖物品栏以外的屏幕区域。
+fn track_cursor(state: &mut State) {
+    let cursor = w::cursor_pos();
+    let anchor = state.rect.map(|(x, y, _, _)| (cursor.x, cursor.y, x, y));
+    if state.look_cursor == anchor {
+        return;
+    }
+    let point = w::to_client(state.hwnd, cursor);
+    sync_entity_look(state, point.x as f32, point.y as f32);
+    state.look_cursor = anchor;
+}
+
+/// 物品栏可见且当前容器有玩家区域时，按刷新率轮询光标。
+fn sync_look_timer(state: &mut State) {
+    let wanted = state.visible && state.layout.player.is_some();
+    if wanted == state.look_timer {
+        return;
+    }
+    state.look_timer = wanted;
+    // SAFETY: 定时器只绑定自身窗口
+    unsafe {
+        if wanted {
+            w::SetTimer(state.hwnd, TIMER_LOOK, LOOK_INTERVAL_MS as u32, 0);
+        } else {
+            w::KillTimer(state.hwnd, TIMER_LOOK);
+        }
+    }
+    if wanted {
+        state.look_cursor = None;
+        track_cursor(state);
+    }
 }
 
 /// 数据变化后刷新图标与画面。
@@ -685,13 +768,10 @@ fn render(state: &mut State) {
             .map(|index| hover_green(state, index))
             .unwrap_or(false);
 
-    let Some(frame) = &mut state.frame else { return };
-
     let model = inventory_draw::Model {
         layout: &state.layout,
         background: &state.background,
         icons: &state.icons,
-        entity: state.entity.as_deref(),
         hover,
         hover_green,
         drag_source: if state.distribute.is_some() {
@@ -701,8 +781,13 @@ fn render(state: &mut State) {
         },
         dimmed,
     };
-    inventory_draw::draw(frame, &model);
 
+    let Some(frame) = &mut state.frame else { return };
+    inventory_draw::draw(frame, &model);
+    present(state);
+}
+
+fn present(state: &mut State) {
     if let (Some(drag), Some(origin)) = (&state.drag, state.rect) {
         if let Some(Some(icon)) = state.icons.get(drag.source) {
             dragicon::show(
@@ -737,7 +822,8 @@ fn hover_green(state: &State, index: usize) -> bool {
 pub fn set_visible_inner(state: &mut State) {
     let visible = state.config.visible;
     state.visible = visible;
-    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": visible }));
+    let active = visible && state.layout.player.is_some();
+    let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": active }));
 
     crate::hud::overlay::set_visible(visible && state.config.gray_overlay, state.config.gray_overlay_opacity);
 
@@ -781,6 +867,8 @@ pub fn set_visible_inner(state: &mut State) {
         }
         dragicon::hide("inventory");
     }
+    place_entity(state, true);
+    sync_look_timer(state);
 }
 
 pub fn set_visible(visible: bool) {
@@ -1331,7 +1419,9 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
             }
         }
         w::WM_TIMER => {
-            if wparam == TIMER_HOVER {
+            if wparam == TIMER_LOOK {
+                track_cursor(state);
+            } else if wparam == TIMER_HOVER {
                 // SAFETY: 只停自身定时器
                 unsafe {
                     w::KillTimer(state.hwnd, TIMER_HOVER);
@@ -1352,21 +1442,29 @@ fn on_move(state: &mut State, lparam: isize) -> bool {
         state.tracked = true;
         w::track_leave(state.hwnd);
     }
-    sync_entity_look(state, x, y);
+    if let Some((rx, ry, _, _)) = state.rect {
+        let anchor = (rx + x.round() as i32, ry + y.round() as i32, rx, ry);
+        if state.look_cursor != Some(anchor) {
+            sync_entity_look(state, x, y);
+            state.look_cursor = Some(anchor);
+        }
+    }
 
     if state.moving.is_some() {
         if let Some(moving) = &state.moving {
             let cursor = w::cursor_pos();
             let nx = moving.origin.0 + cursor.x - moving.cursor.x;
             let ny = moving.origin.1 + cursor.y - moving.cursor.y;
-            // SAFETY: 只移动自身窗口
-            unsafe {
-                w::SetWindowPos(state.hwnd, w::HWND_TOPMOST, nx, ny, 0, 0, w::SWP_NOSIZE | w::SWP_NOACTIVATE);
-            }
             if let Some((_, _, width, height)) = state.rect {
                 state.rect = Some((nx, ny, width, height));
             }
-            render(state);
+            // 内容未变，只把分层表面移到新位置；不重排层级，避免模型闪烁
+            if let Some(dib) = &state.dib {
+                w::update_layered(state.hwnd, dib, nx, ny);
+            } else {
+                render(state);
+            }
+            place_entity(state, false);
         }
         // 窗口移动后客户区坐标整体变化，后续不能按旧位置插值
         state.last_move = None;
@@ -1592,6 +1690,17 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
                 refresh_icons(state);
                 render(state);
             });
+            return 0;
+        }
+        w::WM_ACTIVATE => {
+            // 激活会把物品栏提到置顶带最前，等这一轮消息处理完再放回覆盖层
+            if (wparam & 0xffff) != 0 {
+                w::post_message(hwnd, WM_ENTITY_RAISE, 0, 0);
+            }
+            return w::DefWindowProcW(hwnd, message, wparam, lparam);
+        }
+        WM_ENTITY_RAISE => {
+            with_state(|state| place_entity(state, true));
             return 0;
         }
         _ => {}

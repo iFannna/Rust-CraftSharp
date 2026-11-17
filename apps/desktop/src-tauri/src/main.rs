@@ -382,26 +382,10 @@ pub(crate) fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// 离屏窗口完成贴图加载并注册监听后调用，补发当前玩家预览参数
+/// 离屏窗口完成贴图加载并注册监听后调用，登记预览覆盖层并补发参数
 #[tauri::command]
 fn entity_view_ready() {
-    hud::inventory::request_entity_setup();
-}
-
-/// 离屏窗口推来的 3D 玩家帧，解码后交给物品栏合成
-#[tauri::command]
-fn entity_host_frame(data_url: String) {
-    let Some(data) = data_url.strip_prefix("data:image/png;base64,") else {
-        return;
-    };
-    let Ok(bytes) = base64_decode(data) else {
-        return;
-    };
-    let Ok(image) = image::load_from_memory(&bytes) else {
-        return;
-    };
-    let rgba = image.to_rgba8();
-    hud::inventory::entity_frame(rgba.width(), rgba.height(), rgba.as_raw());
+    hud::inventory::entity_ready();
 }
 
 #[tauri::command]
@@ -633,7 +617,6 @@ fn main() {
             skins::rename_skin,
             skins::remove_skin,
             entity_view_ready,
-            entity_host_frame,
             set_app_icon,
             sync_window_icon,
             set_autostart,

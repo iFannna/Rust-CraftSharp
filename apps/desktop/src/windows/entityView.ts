@@ -1,11 +1,9 @@
-// 离屏实体渲染窗口：物品栏玩家预览出帧，PNG 回读交给原生合成
+// 物品栏玩家预览：透明覆盖层直接渲染，像素不再回读到原生层
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { EntityView, loadTextures } from "@/entity3d";
 
 interface EntitySetup {
-  width: number;
-  height: number;
   skin: string;
   skinType: string;
   skinPath: string;
@@ -22,14 +20,22 @@ const view = new EntityView(canvas, "ortho");
 const inTauri = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 let active = false;
 let ready = false;
-let lastSent = 0;
+let last = 0;
 let look: EntityLook = { bodyYaw: 0, bodyPitch: 0, headPitch: 0 };
+
+// 画布跟随窗口视口，物理像素出图、CSS 铺满，DPI 变化由 resize 自动纠正
+function fit() {
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.round(window.innerWidth * scale));
+  const height = Math.max(1, Math.round(window.innerHeight * scale));
+  view.resize(width, height);
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+}
 
 async function setup(payload: EntitySetup) {
   ready = false;
-  canvas.width = Math.max(1, Math.round(payload.width));
-  canvas.height = Math.max(1, Math.round(payload.height));
-  view.resize(canvas.width, canvas.height);
+  fit();
   const skinUrl = payload.skinPath
     ? await invoke<string>("read_skin_data_url", { path: payload.skinPath }).catch(() => undefined)
     : undefined;
@@ -55,13 +61,14 @@ async function boot() {
         active = payload.visible;
       })
     ]);
-    // 通知原生侧补发当前预览参数，启动期错过的事件不再丢失
+    // 通知原生侧补发当前预览参数并登记覆盖层窗口
     void invoke("entity_view_ready").catch(() => undefined);
   } else {
     // 浏览器预览：按物品栏默认玩家区域比例出图，便于校验
-    await setup({ width: 343, height: 490, skin: "steve", skinType: "wide", skinPath: "" });
+    await setup({ skin: "steve", skinType: "wide", skinPath: "" });
     active = true;
   }
+  window.addEventListener("resize", fit);
   requestAnimationFrame(frame);
   document.body.dataset.ready = "true";
 }
@@ -69,15 +76,10 @@ async function boot() {
 function frame(now: number) {
   requestAnimationFrame(frame);
   if (!active || !ready) return;
-  // 20fps 上限，回读与合成都是每帧成本
-  if (now - lastSent < 50) return;
-  const dt = lastSent === 0 ? 0.05 : Math.min(0.1, (now - lastSent) / 1000);
-  lastSent = now;
+  const dt = last === 0 ? 1 / 60 : Math.min(0.1, (now - last) / 1000);
+  last = now;
   view.setLook(look.bodyYaw, look.bodyPitch, look.headPitch);
   view.render(dt);
-  if (!inTauri) return;
-  const dataUrl = canvas.toDataURL("image/png");
-  void invoke("entity_host_frame", { dataUrl }).catch(() => undefined);
 }
 
 // 校验探针：headless 测试用

@@ -144,19 +144,16 @@ pub struct Model<'a> {
     pub layout: &'a Layout,
     pub background: &'a Sprite,
     pub icons: &'a [Option<SlotIcon>],
-    pub entity: Option<&'a Sprite>,
     pub hover: Option<usize>,
     pub hover_green: bool,
     pub drag_source: Option<usize>,
     pub dimmed: Option<usize>,
 }
 
+/// 容器背景、格子图标与悬停蒙版；3D 玩家由透明覆盖层直接显示。
 pub fn draw(frame: &mut Frame, model: &Model) {
     frame.clear();
     frame.draw(model.background, 0.0, 0.0, model.layout.width, model.layout.height);
-    if let (Some(player), Some(entity)) = (&model.layout.player, model.entity) {
-        frame.draw(entity, player.left, player.top, player.width, player.height);
-    }
 
     for (index, slot) in model.layout.slots.iter().enumerate() {
         let Some(Some(icon)) = model.icons.get(index) else { continue };

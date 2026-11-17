@@ -192,6 +192,7 @@ pub const GWL_EXSTYLE: i32 = -20;
 pub const GWL_HWNDPARENT: i32 = -8;
 pub const SWP_NOSIZE: u32 = 0x0001;
 pub const SWP_NOMOVE: u32 = 0x0002;
+pub const SWP_NOZORDER: u32 = 0x0004;
 pub const SWP_NOACTIVATE: u32 = 0x0010;
 pub const WH_KEYBOARD_LL: i32 = 13;
 pub const WH_MOUSE_LL: i32 = 14;
@@ -202,6 +203,7 @@ pub const ULW_ALPHA: u32 = 2;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 pub const TME_LEAVE: u32 = 0x0000_0002;
 
+pub const WM_ACTIVATE: u32 = 0x0006;
 pub const WM_PAINT: u32 = 0x000F;
 pub const WM_KEYDOWN: u32 = 0x0100;
 pub const WM_KEYUP: u32 = 0x0101;
@@ -412,6 +414,16 @@ pub fn set_desktop_style(hwnd: Hwnd) {
     unsafe {
         let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
         SetWindowLongW(hwnd, GWL_EXSTYLE, ((ex_style & !WS_EX_TOPMOST) | WS_EX_NOACTIVATE) as i32);
+    }
+}
+
+/// 覆盖层样式：鼠标穿透到下层窗口，显示与移动都不抢焦点。
+pub fn set_overlay_style(hwnd: Hwnd) {
+    // SAFETY: 只调整扩展样式
+    unsafe {
+        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        let style = ex_style | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+        SetWindowLongW(hwnd, GWL_EXSTYLE, style as i32);
     }
 }
 

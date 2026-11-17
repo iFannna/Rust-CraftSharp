@@ -15,16 +15,23 @@ thread_local! {
     static CACHE: RefCell<HashMap<String, Rc<Sprite>>> = RefCell::new(HashMap::new());
 }
 
-fn premultiply(rgba: &[u8]) -> Vec<u32> {
-    let mut out = Vec::with_capacity(rgba.len() / 4);
-    for pixel in rgba.chunks_exact(4) {
-        let a = pixel[3] as u32;
-        let r = pixel[0] as u32 * a / 255;
-        let g = pixel[1] as u32 * a / 255;
-        let b = pixel[2] as u32 * a / 255;
-        out.push((a << 24) | (r << 16) | (g << 8) | b);
+fn premultiplied(pixel: &[u8]) -> u32 {
+    let a = pixel[3] as u32;
+    // 贴图基本只有全透明与不透明两种，边缘才需要真的乘
+    if a == 255 {
+        return 0xff00_0000 | (pixel[0] as u32) << 16 | (pixel[1] as u32) << 8 | pixel[2] as u32;
     }
-    out
+    if a == 0 {
+        return 0;
+    }
+    let r = pixel[0] as u32 * a / 255;
+    let g = pixel[1] as u32 * a / 255;
+    let b = pixel[2] as u32 * a / 255;
+    (a << 24) | (r << 16) | (g << 8) | b
+}
+
+fn premultiply(rgba: &[u8]) -> Vec<u32> {
+    rgba.chunks_exact(4).map(premultiplied).collect()
 }
 
 /// 按名字取贴图，名字见 `embedded::bytes`。
@@ -109,6 +116,30 @@ impl Frame {
         let draw_width = (right - left).max(1);
         let draw_height = (bottom - top).max(1);
         if sprite.width == 0 || sprite.height == 0 {
+            return;
+        }
+
+        // 同尺寸时省掉逐像素的缩放换算，图标按原尺寸绘制时走这条路径
+        if sprite.width == draw_width as u32 && sprite.height == draw_height as u32 {
+            let x0 = left.max(0);
+            let x1 = right.min(self.width as i32);
+            let y0 = top.max(0);
+            let y1 = bottom.min(self.height as i32);
+            if x1 <= x0 || y1 <= y0 {
+                return;
+            }
+            let stride = self.width as usize;
+            let sprite_stride = sprite.width as usize;
+            for dy in y0..y1 {
+                let src_row = (dy - top) as usize * sprite_stride;
+                let dst_row = dy as usize * stride;
+                for dx in x0..x1 {
+                    let color = sprite.pixels[src_row + (dx - left) as usize];
+                    if color != 0 {
+                        blend(&mut self.pixels[dst_row + dx as usize], color);
+                    }
+                }
+            }
             return;
         }
 
