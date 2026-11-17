@@ -376,6 +376,12 @@ pub(crate) fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// 离屏窗口完成贴图加载并注册监听后调用，补发当前玩家预览参数
+#[tauri::command]
+fn entity_view_ready() {
+    hud::inventory::request_entity_setup();
+}
+
 /// 离屏窗口推来的 3D 玩家帧，解码后交给物品栏合成
 #[tauri::command]
 fn entity_host_frame(data_url: String) {
@@ -530,6 +536,12 @@ fn main() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
 
+            // tao 只采用落在显示器内的初始坐标，离屏窗口建好后移出屏幕再显示
+            if let Some(view) = app.get_webview_window("entity-view") {
+                let _ = view.set_position(tauri::LogicalPosition::new(-32000.0, -32000.0));
+                let _ = view.show();
+            }
+
             appicon::startup(app.handle());
             install_drag_hover(app.handle());
             // HUD、快捷栏、宿主窗口直接显隐；其余窗口保留系统过渡动画
@@ -585,6 +597,7 @@ fn main() {
             skins::import_skin,
             skins::rename_skin,
             skins::remove_skin,
+            entity_view_ready,
             entity_host_frame,
             set_app_icon,
             set_autostart,

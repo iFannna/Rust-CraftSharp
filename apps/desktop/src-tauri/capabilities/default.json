@@ -10,6 +10,7 @@
     "confirm-dialog",
     "app-icon-picker",
     "entity-preview",
+    "entity-view",
     "settings"
   ],
   "permissions": [

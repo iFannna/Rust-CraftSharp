@@ -42,14 +42,28 @@ async function setup(payload: EntitySetup) {
   ready = true;
 }
 
-if (inTauri) {
-  void listen<EntitySetup>("entity-setup", ({ payload }) => void setup(payload));
-  void listen<EntityLook>("entity-look", ({ payload }) => {
-    look = payload;
-  });
-  void listen<{ visible: boolean }>("entity-active", ({ payload }) => {
-    active = payload.visible;
-  });
+async function boot() {
+  // 贴图就绪后再注册监听，避免首批事件落在加载过程中
+  await loadTextures();
+  if (inTauri) {
+    await Promise.all([
+      listen<EntitySetup>("entity-setup", ({ payload }) => void setup(payload)),
+      listen<EntityLook>("entity-look", ({ payload }) => {
+        look = payload;
+      }),
+      listen<{ visible: boolean }>("entity-active", ({ payload }) => {
+        active = payload.visible;
+      })
+    ]);
+    // 通知原生侧补发当前预览参数，启动期错过的事件不再丢失
+    void invoke("entity_view_ready").catch(() => undefined);
+  } else {
+    // 浏览器预览：按物品栏默认玩家区域比例出图，便于校验
+    await setup({ width: 343, height: 490, skin: "steve", skinType: "wide", skinPath: "" });
+    active = true;
+  }
+  requestAnimationFrame(frame);
+  document.body.dataset.ready = "true";
 }
 
 function frame(now: number) {
@@ -66,19 +80,6 @@ function frame(now: number) {
   void invoke("entity_host_frame", { dataUrl }).catch(() => undefined);
 }
 
-async function boot() {
-  await loadTextures();
-  if (!inTauri) {
-    // 浏览器预览：按物品栏默认玩家区域比例出图，便于校验
-    await setup({ width: 343, height: 490, skin: "steve", skinType: "wide", skinPath: "" });
-    active = true;
-  }
-  requestAnimationFrame(frame);
-  document.body.dataset.ready = "true";
-}
-
-void boot();
-
 // 校验探针：headless 测试用
 (window as unknown as Record<string, unknown>).__entityView = {
   view,
@@ -90,3 +91,5 @@ void boot();
     look = next;
   }
 };
+
+void boot();

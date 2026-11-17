@@ -71,7 +71,7 @@
         "skipTaskbar": true,
         "resizable": false,
         "focus": false,
-        "visible": true,
+        "visible": false,
         "shadow": false,
         "create": false
       }

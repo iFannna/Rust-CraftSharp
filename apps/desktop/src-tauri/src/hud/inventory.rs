@@ -546,6 +546,14 @@ fn install_icon(app: &AppHandle, key: &str, decoded: Option<std::sync::Arc<crate
     });
 }
 
+/// 离屏窗口就绪后补发一次预览参数，避免启动期事件早于监听
+pub fn request_entity_setup() {
+    with_state(|state| {
+        state.entity_meta = None;
+        sync_entity_setup(state);
+    });
+}
+
 /// 离屏窗口推来的 3D 帧，按玩家区域合成进物品栏帧
 pub fn entity_frame(width: u32, height: u32, rgba: &[u8]) {
     with_state(|state| {
