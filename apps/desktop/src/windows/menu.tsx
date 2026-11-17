@@ -4,6 +4,7 @@ import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { MenuItemSpec } from "@/hud/slots/menu";
 import { isTauri } from "@/lib/runtime";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { ThemeRoot } from "@/ui/theme-root";
 import { cn } from "@/ui/lib/utils";
 import "@/ui/styles.css";
@@ -17,6 +18,7 @@ function close() {
 }
 
 function SlotMenu() {
+  useRevealWindow();
   useEffect(() => {
     const currentWindow = isTauri() ? getCurrentWindow() : null;
     void currentWindow?.setFocus().catch(() => undefined);

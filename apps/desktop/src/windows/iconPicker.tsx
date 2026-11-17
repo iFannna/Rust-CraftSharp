@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
@@ -25,6 +26,7 @@ function displayName(file: string): string {
 }
 
 function IconPicker() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const value = params.get("value") ?? "";
   const [active, setActive] = useState(

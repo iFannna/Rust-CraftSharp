@@ -15,6 +15,7 @@ import {
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { isTauri } from "@/lib/runtime";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { ensureSettingsFonts } from "@/settings/fonts";
 import { Button } from "@/ui/components/button";
@@ -129,6 +130,7 @@ function CheckField({
 }
 
 function EntityPreview() {
+  useRevealWindow();
   const [entity, setEntity] = useState<EntityId>("player");
   const [skin, setSkin] = useState("steve");
   const [slim, setSlim] = useState(false);

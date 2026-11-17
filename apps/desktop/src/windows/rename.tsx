@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { isTauri } from "@/lib/runtime";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -16,6 +17,7 @@ import "@/ui/styles.css";
 const params = new URLSearchParams(location.search);
 
 function RenameDialog() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const [value, setValue] = useState(() => params.get("name") ?? "");
   const inputRef = useRef<HTMLInputElement>(null);

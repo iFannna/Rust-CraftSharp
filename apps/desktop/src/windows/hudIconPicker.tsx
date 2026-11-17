@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { tOf, type TFunction } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { bossBarNotchProgress, bossBarProgress } from "@/hud/bossbar/bossBarAssets";
@@ -69,6 +70,7 @@ function buildOptions(element: PickerElement, t: TFunction): PickerOption[] {
 }
 
 function HudIconPicker() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const element = (params.get("element") ?? "health") as PickerElement;
   const value = params.get("value") ?? "";

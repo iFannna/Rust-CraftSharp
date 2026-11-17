@@ -117,6 +117,8 @@ export async function openDialogWindow<T>({
       height,
       minWidth,
       minHeight,
+      // 页面挂载后由 useRevealWindow 显示，避免空白帧
+      visible: false,
       transparent: true,
       decorations: false,
       shadow: true,
@@ -125,6 +127,11 @@ export async function openDialogWindow<T>({
       resizable: display,
       focus: true
     });
+
+    // 页面异常时兜底显示，避免窗口一直隐藏
+    window.setTimeout(() => {
+      void dialog.show().catch(() => undefined);
+    }, 2000);
 
     dialog.once("tauri://error", () => finish(null));
     dialog.once("tauri://destroyed", () => finish(null));

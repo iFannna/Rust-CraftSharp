@@ -82,7 +82,7 @@ export async function toggleEntityPreview() {
   if (!target) {
     // 预览窗口按需创建，启动时不加载 three
     const t = tOf(getConfig().system.language);
-    new WebviewWindow(WINDOW_LABEL.entityPreview, {
+    const preview = new WebviewWindow(WINDOW_LABEL.entityPreview, {
       url: "pages/entity-preview.html",
       title: t("entityPreview.title"),
       width: 1000,
@@ -90,11 +90,17 @@ export async function toggleEntityPreview() {
       minWidth: 760,
       minHeight: 480,
       center: true,
+      // 页面挂载后由 useRevealWindow 显示，避免空白帧
+      visible: false,
       decorations: false,
       shadow: true,
       resizable: true,
       focus: true
     });
+    // 页面异常时兜底显示，避免预览窗口一直隐藏
+    window.setTimeout(() => {
+      void preview.show().catch(() => undefined);
+    }, 2000);
     return;
   }
   const [visible, minimized] = await Promise.all([target.isVisible(), target.isMinimized()]);

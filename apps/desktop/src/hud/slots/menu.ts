@@ -89,6 +89,8 @@ export async function showSlotMenuAt(
       y: physicalY / scale,
       width,
       height,
+      // 页面挂载后由 useRevealWindow 显示，避免空白帧
+      visible: false,
       transparent: true,
       decorations: false,
       shadow: false,
@@ -97,6 +99,11 @@ export async function showSlotMenuAt(
       resizable: false,
       focus: true
     });
+
+    // 页面异常时兜底显示，避免菜单一直隐藏
+    window.setTimeout(() => {
+      void menu.show().catch(() => undefined);
+    }, 2000);
 
     menu.once("tauri://error", () => finish(null));
     void menu.once("tauri://destroyed", () => finish(selectedId));

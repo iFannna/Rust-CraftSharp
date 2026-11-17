@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig, type BossBarConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { bossBarNotchProgress, bossBarProgress } from "@/hud/bossbar/bossBarAssets";
@@ -55,6 +56,7 @@ function PreviewBar({ color, notch }: { color: string; notch?: string | null }) 
 }
 
 function BossBarEditor() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const [bar, setBar] = useState<BossBarConfig>(() => {
     const id = params.get("id");

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { tOf } from "@/i18n";
@@ -13,6 +14,7 @@ import "@/ui/styles.css";
 const params = new URLSearchParams(location.search);
 
 function ConfirmDialog() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const kind = params.get("kind") === "alert" ? "alert" : "confirm";
   const text = params.get("text") ?? "";

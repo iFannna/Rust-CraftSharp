@@ -5,6 +5,7 @@ import { containerStyleUrl } from "@/hud/inventory/stylePreviewAssets";
 import { CONTAINER_STYLES } from "@/hud/inventory/styles";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { Button } from "@/settings/components/controls";
@@ -16,6 +17,7 @@ import "@/ui/styles.css";
 const params = new URLSearchParams(location.search);
 
 function StylePreview() {
+  useRevealWindow();
   const t = tOf(getConfig().system.language);
   const initial = Math.max(
     0,
