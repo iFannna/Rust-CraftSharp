@@ -583,6 +583,12 @@ export function resetConfig() {
   notify();
 }
 
+/** 外部存储被清空后重新读取，不主动落盘 */
+export function reloadConfig() {
+  config = loadConfig();
+  notify();
+}
+
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));

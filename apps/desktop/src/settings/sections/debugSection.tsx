@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
+import { reloadConfig } from "@/config/appConfig";
 import { openDialogWindow } from "@/lib/dialogWindow";
 import { isTauri } from "@/lib/runtime";
 import { toggleEntityPreview } from "@/lib/windowControls";
@@ -55,9 +56,6 @@ export function DebugSection() {
         warning = String(reason);
       }
 
-      localStorage.clear();
-      sessionStorage.clear();
-
       if (warning) {
         await openDialogWindow<boolean>({
           label: WINDOW_LABEL.confirm,
@@ -73,7 +71,10 @@ export function DebugSection() {
         });
       }
 
-      await invoke("restart_app");
+      localStorage.clear();
+      sessionStorage.clear();
+      reloadConfig();
+      await invoke("reload_app_windows");
     } catch (reason) {
       setClearError(String(reason));
     } finally {

@@ -435,13 +435,17 @@ async fn clear_app_data(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?
 }
 
-/// 释放单实例互斥体后再拉起新进程，避免重启被旧实例挡住
+/// 清除数据后重新加载配置驱动的窗口，设置面板本身就地刷新
 #[tauri::command]
-fn restart_app(app: tauri::AppHandle) {
+fn reload_app_windows(app: tauri::AppHandle) {
     use tauri::Manager;
 
-    singleinstance::release();
-    tauri::process::restart(&app.env());
+    slots::reset();
+    for label in ["main", "hud", "entity-view", "entity-preview"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.reload();
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -658,7 +662,7 @@ fn main() {
             tray_state,
             exit_app,
             clear_app_data,
-            restart_app,
+            reload_app_windows,
             install_caption_hook
         ])
         .run(tauri::generate_context!())

@@ -2,7 +2,6 @@
 
 #[cfg(windows)]
 mod imp {
-    use std::sync::atomic::{AtomicIsize, Ordering};
     use std::thread;
 
     use tauri::AppHandle;
@@ -13,9 +12,6 @@ mod imp {
     const ERROR_ALREADY_EXISTS: u32 = 183;
     const EVENT_MODIFY_STATE: u32 = 0x0002;
     const WAIT_OBJECT_0: u32 = 0;
-
-    /// 首实例持有的互斥体，重启前显式关闭，让新进程能重新获取
-    static MUTEX: AtomicIsize = AtomicIsize::new(0);
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -54,17 +50,9 @@ mod imp {
             return false;
         }
 
-        MUTEX.store(mutex, Ordering::SeqCst);
+        // 互斥体句柄不显式关闭，随进程结束由系统回收
+        let _ = mutex;
         true
-    }
-
-    /// 重启前释放互斥体；进程结束时系统也会回收，这里只是让新进程立即拿得到。
-    pub fn release() {
-        let handle = MUTEX.swap(0, Ordering::SeqCst);
-        if handle != 0 {
-            // SAFETY: 只关闭自己创建的互斥体句柄
-            unsafe { CloseHandle(handle) };
-        }
     }
 
     /// 首个实例启动后调用，收到第二实例信号时直接显示并聚焦设置面板。
@@ -93,9 +81,7 @@ mod imp {
         true
     }
 
-    pub fn release() {}
-
     pub fn watch(_app: tauri::AppHandle) {}
 }
 
-pub use imp::{acquire, release, watch};
+pub use imp::{acquire, watch};

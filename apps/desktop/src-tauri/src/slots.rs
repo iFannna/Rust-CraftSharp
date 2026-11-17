@@ -142,6 +142,31 @@ pub fn snapshot() -> Snapshot {
     with_store(|store| snapshot_of(&store.data))
 }
 
+/// 清除数据后清空内存格子并移除数据文件；不重新落盘，等下次写入再生成。
+pub fn reset() {
+    let (payload, app) = {
+        let mut guard = store().lock().unwrap_or_else(|error| error.into_inner());
+        let rev = guard.data.rev.saturating_add(1);
+        guard.data = Data {
+            rev,
+            ..Data::default()
+        };
+        guard.import_allowed = false;
+        if let Some(path) = &guard.path {
+            let _ = fs::remove_file(path);
+        }
+        (snapshot_of(&guard.data), guard.app.clone())
+    };
+
+    if let Some(app) = &app {
+        let _ = app.emit("slots-changed", payload);
+    }
+    let hooks = refresh_hooks().lock().unwrap_or_else(|error| error.into_inner()).clone();
+    for hook in hooks {
+        hook();
+    }
+}
+
 /// 修改数据；返回 true 时落盘并在锁外广播。
 fn commit<T>(mutate: impl FnOnce(&mut Data) -> (T, bool)) -> T {
     let (result, payload, app) = {
