@@ -56,7 +56,7 @@ export function AppearanceSection() {
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="grid h-14 w-14 place-items-center rounded-lg border p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="grid h-9 w-9 place-items-center overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t("aria.appIcon")}
               onClick={() => void openIconPicker()}
             >
@@ -64,7 +64,7 @@ export function AppearanceSection() {
                 src={appIconUrl(config.appearance.appIcon)}
                 alt=""
                 draggable={false}
-                className="h-full w-full object-cover object-top [image-rendering:pixelated]"
+                className="h-8 w-8 object-cover object-top [image-rendering:pixelated]"
               />
             </button>
           </TooltipTrigger>
