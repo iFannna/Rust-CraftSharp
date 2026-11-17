@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { tOf, type MessageKey } from "@/i18n";
 import { useAppConfig } from "@/config/useAppConfig";
+import { useResolvedTheme } from "@/settings/theme";
 import { sourceUrl, type SkinSource } from "@/settings/skin/skinLibrary";
 import type { SkinPreview as SkinPreviewStage } from "@/settings/skin/skinScene";
 import { Button } from "@/ui/components/button";
@@ -39,7 +40,14 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
   const [action, setAction] = useState("idle");
   const [playing, setPlaying] = useState(true);
   const [spinning, setSpinning] = useState(false);
-  const [background, setBackground] = useState<PreviewBackground>("black");
+  const theme = useResolvedTheme(config.appearance.theme);
+  const [background, setBackground] = useState<PreviewBackground>(theme === "dark" ? "black" : "white");
+  const pickedBackground = useRef(false);
+
+  // 未手动选过背景时，默认值跟随主题深浅
+  useEffect(() => {
+    if (!pickedBackground.current) setBackground(theme === "dark" ? "black" : "white");
+  }, [theme]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -222,7 +230,10 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
               title={t(option.label)}
               aria-label={t(option.label)}
               aria-pressed={background === option.id}
-              onClick={() => setBackground(option.id)}
+              onClick={() => {
+                pickedBackground.current = true;
+                setBackground(option.id);
+              }}
             />
           ))}
         </div>
