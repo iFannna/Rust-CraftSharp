@@ -404,6 +404,7 @@ export const zhCN = {
   "iconStyle.airNormal": "普通",
   "hudIconPicker.title": "选择元素图标",
   "rename.title": "重命名",
+  "entityPreview.title": "CraftSharp 3D 预览",
   "dialog.alertTitle": "提示",
   "files.missing": "文件不存在：\n{path}\n\n是否清除所有使用这个路径的格子？",
   "files.exists": "文件 \"{name}\" 已存在，请使用其他名称。",

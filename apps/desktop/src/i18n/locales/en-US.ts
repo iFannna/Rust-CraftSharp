@@ -406,6 +406,7 @@ export const enUS: Messages = {
   "iconStyle.airNormal": "Normal",
   "hudIconPicker.title": "Choose Element Icon",
   "rename.title": "Rename",
+  "entityPreview.title": "CraftSharp 3D Preview",
   "dialog.alertTitle": "Notice",
   "files.missing": "File not found:\n{path}\n\nClear every slot that uses this path?",
   "files.exists": "The file \"{name}\" already exists. Choose another name.",

@@ -5,6 +5,7 @@ import { containerStyleUrl } from "@/hud/inventory/stylePreviewAssets";
 import { CONTAINER_STYLES } from "@/hud/inventory/styles";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { Button } from "@/settings/components/controls";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/ui/icons";
@@ -26,7 +27,7 @@ function StylePreview() {
   const finish = (file: string | null) => emitDialogResult(WINDOW_LABEL.stylePreview, file);
 
   useEffect(() => {
-    document.title = t("inventory.stylePreviewTitle");
+    applyWindowTitle(t("inventory.stylePreviewTitle"));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { tOf } from "@/i18n";
 import { Button } from "@/ui/components/button";
 import { ThemeRoot } from "@/ui/theme-root";
@@ -22,7 +23,7 @@ function ConfirmDialog() {
   const finish = (value: boolean) => emitDialogResult(WINDOW_LABEL.confirm, value);
 
   useEffect(() => {
-    document.title = title;
+    applyWindowTitle(title);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();

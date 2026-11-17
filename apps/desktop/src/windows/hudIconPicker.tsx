@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { tOf, type TFunction } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { bossBarNotchProgress, bossBarProgress } from "@/hud/bossbar/bossBarAssets";
 import { ATTACK_INDICATOR_ICON, CROSSHAIR_ICON } from "@/hud/statusbar/crosshairAssets";
@@ -77,7 +78,7 @@ function HudIconPicker() {
   const finish = (style: string | null) => emitDialogResult(WINDOW_LABEL.hudIconPicker, style);
 
   useEffect(() => {
-    document.title = t("hudIconPicker.title");
+    applyWindowTitle(t("hudIconPicker.title"));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();

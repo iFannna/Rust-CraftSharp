@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
 import { appIconUrl, DEFAULT_APP_ICON } from "@/settings/appIcons";
@@ -36,7 +37,7 @@ function IconPicker() {
   const finish = (icon: string | null) => emitDialogResult(WINDOW_LABEL.iconPicker, icon);
 
   useEffect(() => {
-    document.title = t("iconPicker.title");
+    applyWindowTitle(t("iconPicker.title"));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();

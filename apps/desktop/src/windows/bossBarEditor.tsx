@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig, type BossBarConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { bossBarNotchProgress, bossBarProgress } from "@/hud/bossbar/bossBarAssets";
 import { dataMappingOptions } from "@/settings/options";
@@ -64,7 +65,7 @@ function BossBarEditor() {
   const finish = (value: BossBarConfig | null) => emitDialogResult(WINDOW_LABEL.bossBarEditor, value);
 
   useEffect(() => {
-    document.title = t("bossBar.editorTitle");
+    applyWindowTitle(t("bossBar.editorTitle"));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();

@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
+import { tOf } from "@/i18n";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 
 export type WindowLabel = "main" | "settings" | "entity-preview";
@@ -80,9 +81,10 @@ export async function toggleEntityPreview() {
   const target = await windowOf("entity-preview");
   if (!target) {
     // 预览窗口按需创建，启动时不加载 three
+    const t = tOf(getConfig().system.language);
     new WebviewWindow(WINDOW_LABEL.entityPreview, {
       url: "pages/entity-preview.html",
-      title: "CraftSharp 3D 预览",
+      title: t("entityPreview.title"),
       width: 1000,
       height: 680,
       minWidth: 760,

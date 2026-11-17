@@ -1,5 +1,7 @@
-import { useLayoutEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useAppConfig } from "@/config/useAppConfig";
+import { isTauri } from "@/lib/runtime";
 import { fontStackOf } from "@/settings/fonts";
 import { useResolvedTheme } from "@/settings/theme";
 import { TooltipProvider } from "@/ui/components/tooltip";
@@ -9,6 +11,12 @@ import "@/ui/scrollbars";
 export function ThemeRoot({ children }: { children: ReactNode }) {
   const config = useAppConfig();
   const theme = useResolvedTheme(config.appearance.theme);
+
+  // 运行期新建的窗口默认带打包图标，挂载时同步一次当前选择的应用图标
+  useEffect(() => {
+    if (!isTauri()) return;
+    void invoke("sync_window_icon").catch(() => undefined);
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;

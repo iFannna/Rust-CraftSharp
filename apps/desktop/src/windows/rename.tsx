@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
 import { isTauri } from "@/lib/runtime";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { tOf } from "@/i18n";
 import { Button } from "@/ui/components/button";
@@ -23,7 +24,7 @@ function RenameDialog() {
   const cancel = () => emitDialogResult(WINDOW_LABEL.rename, null);
 
   useEffect(() => {
-    document.title = t("rename.title");
+    applyWindowTitle(t("rename.title"));
     inputRef.current?.focus();
     inputRef.current?.select();
 

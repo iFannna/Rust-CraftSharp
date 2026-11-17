@@ -13,7 +13,9 @@ import {
   type EntityId
 } from "@/entity3d";
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
+import { tOf } from "@/i18n";
 import { isTauri } from "@/lib/runtime";
+import { applyWindowTitle } from "@/lib/windowTitle";
 import { ensureSettingsFonts } from "@/settings/fonts";
 import { Button } from "@/ui/components/button";
 import { Checkbox } from "@/ui/components/checkbox";
@@ -239,7 +241,7 @@ function EntityPreview() {
   }
 
   useEffect(() => {
-    document.title = "CraftSharp 3D 预览";
+    applyWindowTitle(tOf(getConfig().system.language)("entityPreview.title"));
   }, []);
 
   useEffect(() => {

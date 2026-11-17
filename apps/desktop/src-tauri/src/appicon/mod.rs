@@ -76,6 +76,22 @@ fn apply_windows(app: &AppHandle, rgba: &[u8]) {
     }
 }
 
+fn current_icon(app: &AppHandle) -> Result<Vec<u8>, String> {
+    let square = match load_source(app) {
+        Some(bytes) => ico::square_source(&bytes)?,
+        None => default_source()?,
+    };
+    Ok(ico::resize(&square, WINDOW_ICON_SIZE).into_raw())
+}
+
+/// 运行期新建的窗口默认带打包图标，创建后同步一次当前选择
+pub fn apply_to_window(app: &AppHandle, window: &tauri::WebviewWindow) -> Result<(), String> {
+    let rgba = current_icon(app)?;
+    window
+        .set_icon(Image::new_owned(rgba, WINDOW_ICON_SIZE, WINDOW_ICON_SIZE))
+        .map_err(|error| error.to_string())
+}
+
 /// 选择或重置应用图标；png 为源图 base64，空表示默认图标
 pub fn apply(app: &AppHandle, png: Option<String>) -> Result<(), String> {
     let _guard = APPLY.lock().unwrap_or_else(|poison| poison.into_inner());

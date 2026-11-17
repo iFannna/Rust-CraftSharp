@@ -328,6 +328,12 @@ async fn set_app_icon(app: tauri::AppHandle, png: Option<String>) -> Result<(), 
         .map_err(|error| error.to_string())?
 }
 
+/// 窗口页面挂载后同步当前应用图标，覆盖运行期新建的弹窗与预览窗口
+#[tauri::command]
+async fn sync_window_icon(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    appicon::apply_to_window(&app, &window)
+}
+
 pub(crate) fn base64(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -629,6 +635,7 @@ fn main() {
             entity_view_ready,
             entity_host_frame,
             set_app_icon,
+            sync_window_icon,
             set_autostart,
             install_caption_hook
         ])
