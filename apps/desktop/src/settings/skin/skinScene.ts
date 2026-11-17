@@ -53,11 +53,16 @@ function build(type: SkinType, texture: THREE.Texture): BuiltModel {
   return buildModel(def, new Map([[def.texture, texture]]));
 }
 
-/** 卡片缩略图：同一皮肤正面与背面并排，一次渲染导出，卡片只放图片 */
+const THUMB_ELEVATION = (35 * Math.PI) / 180;
+const THUMB_YAW = (40 * Math.PI) / 180;
+const THUMB_TARGET_Y = 16;
+const THUMB_DISTANCE = 70;
+
+/** 卡片缩略图：同一皮肤背面与正面并排，一次渲染导出，卡片只放图片 */
 export class SkinThumbs {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.OrthographicCamera(-22.5, 22.5, 22.5, -22.5, 0.1, 500);
+  private readonly camera = new THREE.OrthographicCamera(-21, 21, 21, -21, 0.1, 500);
   private queue: Promise<unknown> = Promise.resolve();
   private disposed = false;
 
@@ -74,9 +79,11 @@ export class SkinThumbs {
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(300, 300, false);
     this.renderer.setClearColor(0x000000, 0);
-    // 与老项目卡片一致：正交、略微俯视，两个模型分列左右
-    this.camera.position.set(0, 30, 35);
-    this.camera.lookAt(0, 12, 0);
+    // 正面偏上 35° 斜看，头顶与侧身都保留可见
+    const sin = Math.sin(THUMB_ELEVATION);
+    const cos = Math.cos(THUMB_ELEVATION);
+    this.camera.position.set(0, THUMB_TARGET_Y + sin * THUMB_DISTANCE, cos * THUMB_DISTANCE);
+    this.camera.lookAt(0, THUMB_TARGET_Y, 0);
   }
 
   bake(type: SkinType, url: string): Promise<string> {
@@ -89,27 +96,27 @@ export class SkinThumbs {
     const texture = await loadTexture(url);
     if (this.disposed) throw new Error("disposed");
 
-    const front = build(type, texture);
     const back = build(type, texture);
-    // 姿态会重置模型根节点的变换，左右位置与朝向放在外层
-    const frontSlot = new THREE.Group();
+    const front = build(type, texture);
+    // 缩略图保持模型默认站姿，不叠加待机动画
     const backSlot = new THREE.Group();
-    frontSlot.position.x = -9;
-    frontSlot.rotation.y = Math.PI / 4;
-    backSlot.position.x = 9;
-    backSlot.rotation.y = (-3 * Math.PI) / 4;
-    frontSlot.add(front.group);
+    const frontSlot = new THREE.Group();
+    // 左背面、右正面，各偏转 40° 让相机同时看到正面、头顶和侧面
+    backSlot.position.x = -9;
+    backSlot.rotation.y = Math.PI - THUMB_YAW;
+    frontSlot.position.x = 9;
+    frontSlot.rotation.y = -THUMB_YAW;
     backSlot.add(back.group);
-    this.scene.add(frontSlot, backSlot);
-    pose([front, back]);
+    frontSlot.add(front.group);
+    this.scene.add(backSlot, frontSlot);
 
     try {
       this.renderer.render(this.scene, this.camera);
       return this.renderer.domElement.toDataURL("image/png");
     } finally {
-      this.scene.remove(frontSlot, backSlot);
-      front.dispose();
+      this.scene.remove(backSlot, frontSlot);
       back.dispose();
+      front.dispose();
     }
   }
 
