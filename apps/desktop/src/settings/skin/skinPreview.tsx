@@ -1,11 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import { tOf } from "@/i18n";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { tOf, type MessageKey } from "@/i18n";
 import { useAppConfig } from "@/config/useAppConfig";
 import { sourceUrl, type SkinSource } from "@/settings/skin/skinLibrary";
 import type { SkinPreview as SkinPreviewStage } from "@/settings/skin/skinScene";
+import { Button } from "@/ui/components/button";
+import { ActionIcon, ChevronDownIcon, PauseIcon, PlayIcon, RotateIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 
-/** 右侧预览：正交相机，静态待机姿态，按需重绘 */
+type PreviewBackground = "white" | "black" | "gray" | "grid";
+
+/** 白、黑、灰取主题调色板的中性色；网格复用 3D 预览窗口的棋盘格 */
+const BACKGROUNDS: Record<PreviewBackground, { style?: CSSProperties; className?: string }> = {
+  white: { style: { backgroundColor: "#ffffff" } },
+  black: { style: { backgroundColor: "#0a0a0a" } },
+  gray: { style: { backgroundColor: "#262626" } },
+  grid: { className: "preview-checker" }
+};
+
+const BACKGROUND_OPTIONS: { id: PreviewBackground; label: MessageKey }[] = [
+  { id: "black", label: "skin.backgroundBlack" },
+  { id: "white", label: "skin.backgroundWhite" },
+  { id: "gray", label: "skin.backgroundGray" },
+  { id: "grid", label: "skin.backgroundGrid" }
+];
+
+/** 右侧预览：标题栏切换动作、暂停与自动旋转，底部切换背景 */
 export function SkinPreviewPanel({ source }: { source: SkinSource }) {
   const config = useAppConfig();
   const t = tOf(config.system.language);
@@ -16,6 +35,11 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
   const [ready, setReady] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [actions, setActions] = useState<string[]>([]);
+  const [action, setAction] = useState("idle");
+  const [playing, setPlaying] = useState(true);
+  const [spinning, setSpinning] = useState(false);
+  const [background, setBackground] = useState<PreviewBackground>("black");
 
   useEffect(() => {
     const host = hostRef.current;
@@ -31,6 +55,7 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
         if (disposed) return;
         const stage = new SkinPreview(canvas);
         stageRef.current = stage;
+        setActions(stage.animations());
         const fit = () => stage.resize(host.clientWidth, host.clientHeight);
         observer = new ResizeObserver(fit);
         observer.observe(host);
@@ -71,38 +96,161 @@ export function SkinPreviewPanel({ source }: { source: SkinSource }) {
     };
   }, [source, ready]);
 
+  useEffect(() => {
+    stageRef.current?.setAnimation(action);
+  }, [action, ready]);
+
+  useEffect(() => {
+    stageRef.current?.setPlaying(playing);
+  }, [playing, ready]);
+
+  useEffect(() => {
+    stageRef.current?.setSpinning(spinning);
+  }, [spinning, ready]);
+
+  const cycleAction = () => {
+    if (!actions.length) return;
+    const index = actions.indexOf(action);
+    setAction(actions[(index + 1) % actions.length]);
+  };
+
+  // 拖拽时临时停下自动旋转，松手恢复
+  const suspendSpin = (suspend: boolean) => {
+    if (spinning) stageRef.current?.setSpinning(!suspend);
+  };
+
   return (
-    <div ref={hostRef} className="relative h-full w-full bg-muted/20">
-      <canvas
-        ref={canvasRef}
-        className={cn("absolute inset-0 h-full w-full touch-none", dragging ? "cursor-grabbing" : "cursor-grab")}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          dragRef.current = { x: event.clientX, y: event.clientY };
-          setDragging(true);
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={(event) => {
-          const last = dragRef.current;
-          if (!last) return;
-          stageRef.current?.rotate(event.clientX - last.x, event.clientY - last.y);
-          dragRef.current = { x: event.clientX, y: event.clientY };
-        }}
-        onPointerUp={() => {
-          dragRef.current = null;
-          setDragging(false);
-        }}
-        onPointerCancel={() => {
-          dragRef.current = null;
-          setDragging(false);
-        }}
-        onDoubleClick={() => stageRef.current?.reset()}
-      />
-      {failed ? (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted-foreground">
-          {t("skin.previewFailed")}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-11 flex-none items-center justify-between gap-3 border-b px-4">
+        <span className="text-sm font-medium">{t("skin.previewTitle")}</span>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={!actions.length}
+            title={`${t("skin.actionSwitch")} · ${action}`}
+            aria-label={`${t("skin.actionSwitch")} · ${action}`}
+            onClick={cycleAction}
+          >
+            <ActionIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={playing ? t("skin.actionPause") : t("skin.actionPlay")}
+            aria-label={playing ? t("skin.actionPause") : t("skin.actionPlay")}
+            aria-pressed={!playing}
+            onClick={() => setPlaying(!playing)}
+          >
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", spinning && "bg-accent text-accent-foreground")}
+            title={t("skin.actionRotate")}
+            aria-label={t("skin.actionRotate")}
+            aria-pressed={spinning}
+            onClick={() => setSpinning(!spinning)}
+          >
+            <RotateIcon />
+          </Button>
         </div>
-      ) : null}
+      </div>
+
+      <div
+        ref={hostRef}
+        className={cn("relative min-h-0 flex-1", BACKGROUNDS[background].className)}
+        style={BACKGROUNDS[background].style}
+      >
+        <canvas
+          ref={canvasRef}
+          className={cn("absolute inset-0 h-full w-full touch-none", dragging ? "cursor-grabbing" : "cursor-grab")}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            dragRef.current = { x: event.clientX, y: event.clientY };
+            setDragging(true);
+            suspendSpin(true);
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const last = dragRef.current;
+            if (!last) return;
+            stageRef.current?.rotate(event.clientX - last.x, event.clientY - last.y);
+            dragRef.current = { x: event.clientX, y: event.clientY };
+          }}
+          onPointerUp={() => {
+            dragRef.current = null;
+            setDragging(false);
+            suspendSpin(false);
+          }}
+          onPointerCancel={() => {
+            dragRef.current = null;
+            setDragging(false);
+            suspendSpin(false);
+          }}
+          onDoubleClick={() => stageRef.current?.reset()}
+        />
+        {failed ? (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <span className="rounded-md bg-background/85 px-3 py-1.5 text-sm text-foreground">
+              {t("skin.previewFailed")}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex h-12 flex-none items-center justify-between gap-3 border-t px-4">
+        <div className="flex items-center gap-2">
+          {BACKGROUND_OPTIONS.map((option) => (
+            <Button
+              key={option.id}
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(
+                "size-6 rounded-full border-border p-0 hover:bg-transparent",
+                BACKGROUNDS[option.id].className,
+                background === option.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+              )}
+              style={BACKGROUNDS[option.id].style}
+              title={t(option.label)}
+              aria-label={t(option.label)}
+              aria-pressed={background === option.id}
+              onClick={() => setBackground(option.id)}
+            />
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            disabled
+            title={t("skin.backgroundPrevScene")}
+            aria-label={t("skin.backgroundPrevScene")}
+          >
+            <ChevronDownIcon className="rotate-90" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            disabled
+            title={t("skin.backgroundNextScene")}
+            aria-label={t("skin.backgroundNextScene")}
+          >
+            <ChevronDownIcon className="-rotate-90" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

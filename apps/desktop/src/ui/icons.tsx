@@ -191,3 +191,42 @@ export function WarningIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function ActionIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="13" cy="4" r="1" />
+      <path d="M7 21l3-4" />
+      <path d="M16 21l-2-4-3-3 1-6" />
+      <path d="M6 12l2-3 4-1 3 3 3 1" />
+    </Icon>
+  );
+}
+
+export function PauseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="14" y="3" width="5" height="18" rx="1" />
+      <rect x="5" y="3" width="5" height="18" rx="1" />
+    </Icon>
+  );
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+    </Icon>
+  );
+}
+
+export function RotateIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M3 21v-5h5" />
+    </Icon>
+  );
+}

@@ -1,11 +1,10 @@
 // 皮肤页的 3D 能力：卡片缩略图一次性烘图，右侧预览按需渲染。
-// 只加载玩家模型与 idle 动画，不经过全量实体注册表。
+// 只加载玩家模型与动作，不经过全量实体注册表。
 import * as THREE from "three";
 import { AnimationPlayer, type AnimationClip } from "@/entity3d/animation";
 import { buildModel, type BuiltModel, type ModelDef } from "@/entity3d/model";
 import wideDef from "@assets/models/entity/player_wide.json";
 import slimDef from "@assets/models/entity/player_slim.json";
-import idleClip from "@assets/animations/player_wide/idle.json";
 
 export type SkinType = "wide" | "slim";
 
@@ -13,7 +12,25 @@ const DEFS: Record<SkinType, ModelDef> = {
   wide: wideDef as ModelDef,
   slim: slimDef as ModelDef
 };
-const IDLE = idleClip as AnimationClip;
+
+const animModules = import.meta.glob("@assets/animations/player_*/*.json", { eager: true }) as Record<
+  string,
+  { default: AnimationClip }
+>;
+const ANIMATIONS: Record<SkinType, Map<string, AnimationClip>> = { wide: new Map(), slim: new Map() };
+for (const [key, mod] of Object.entries(animModules)) {
+  const parts = key.split("/");
+  const name = parts[parts.length - 1].slice(0, -5);
+  const type: SkinType = parts[parts.length - 2] === "player_slim" ? "slim" : "wide";
+  ANIMATIONS[type].set(name, mod.default);
+}
+
+/** 动作名列表，待机排第一，与 3D 预览窗口一致 */
+function animationNames(): string[] {
+  const names = [...ANIMATIONS.wide.keys()];
+  names.sort((a, b) => (a === "idle" ? -1 : b === "idle" ? 1 : a.localeCompare(b)));
+  return names;
+}
 
 const loader = new THREE.TextureLoader();
 const textureCache = new Map<string, Promise<THREE.Texture>>();
@@ -40,12 +57,6 @@ export function forgetTexture(url: string) {
   if (!pending) return;
   textureCache.delete(url);
   void pending.then((texture) => texture.dispose()).catch(() => undefined);
-}
-
-function pose(models: BuiltModel[]) {
-  const player = new AnimationPlayer();
-  player.play(IDLE);
-  for (const model of models) player.apply(model);
 }
 
 function build(type: SkinType, texture: THREE.Texture): BuiltModel {
@@ -129,19 +140,29 @@ export class SkinThumbs {
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 56;
 const DEFAULT_ZOOM = 30;
-const TARGET = new THREE.Vector3(0, 10, 0);
+const DEFAULT_YAW = THUMB_YAW;
+const DEFAULT_PITCH = THUMB_ELEVATION;
+const SPIN_SPEED = 0.4;
+const TARGET = new THREE.Vector3(0, 16, 0);
 const DISTANCE = 90;
 
-/** 右侧预览：正交相机，静态待机姿态，只在皮肤、尺寸与操作变化时重绘 */
+/** 右侧预览：正交相机，初始视角与卡片缩略图的正面一致，可播放动作、暂停与自动旋转 */
 export class SkinPreview {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera(-15, 15, 15, -15, 0.1, 500);
+  private readonly player = new AnimationPlayer();
   private model: BuiltModel | null = null;
+  private type: SkinType = "wide";
+  private clip = "idle";
+  private playing = true;
+  private spinning = false;
+  private frame = 0;
+  private last = 0;
   private disposed = false;
   private seq = 0;
-  private yaw = 0;
-  private pitch = 0.245;
+  private yaw = DEFAULT_YAW;
+  private pitch = DEFAULT_PITCH;
   private zoom = DEFAULT_ZOOM;
   private width = 1;
   private height = 1;
@@ -153,6 +174,10 @@ export class SkinPreview {
     this.applyCamera();
   }
 
+  animations() {
+    return animationNames();
+  }
+
   async load(type: SkinType, url: string) {
     const seq = ++this.seq;
     const texture = await loadTexture(url);
@@ -161,10 +186,35 @@ export class SkinPreview {
       this.scene.remove(this.model.group);
       this.model.dispose();
     }
+    this.type = type;
     this.model = build(type, texture);
-    pose([this.model]);
     this.scene.add(this.model.group);
+    this.player.play(ANIMATIONS[type].get(this.clip) ?? null);
+    this.player.snap();
+    this.player.playing = this.playing;
+    this.player.apply(this.model);
     this.render();
+    this.start();
+  }
+
+  setAnimation(name: string) {
+    if (name === this.clip) return;
+    this.clip = name;
+    this.player.play(ANIMATIONS[this.type].get(name) ?? null);
+    this.applyPose();
+    this.start();
+  }
+
+  setPlaying(playing: boolean) {
+    this.playing = playing;
+    this.player.playing = playing;
+    this.applyPose();
+    this.start();
+  }
+
+  setSpinning(spinning: boolean) {
+    this.spinning = spinning;
+    this.start();
   }
 
   resize(width: number, height: number) {
@@ -190,13 +240,41 @@ export class SkinPreview {
   }
 
   reset() {
-    this.yaw = 0;
-    this.pitch = 0.245;
+    this.yaw = DEFAULT_YAW;
+    this.pitch = DEFAULT_PITCH;
     this.zoom = DEFAULT_ZOOM;
     this.applyFrustum();
     this.applyCamera();
     this.render();
   }
+
+  private applyPose() {
+    if (this.model) this.player.apply(this.model);
+    this.render();
+  }
+
+  private start() {
+    if (this.disposed || this.frame || !this.model) return;
+    if (!this.playing && !this.spinning) return;
+    this.last = performance.now();
+    this.frame = requestAnimationFrame(this.tick);
+  }
+
+  private tick = (now: number) => {
+    this.frame = 0;
+    const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.last = now;
+    if (this.model) {
+      this.player.update(dt);
+      this.player.apply(this.model);
+    }
+    if (this.spinning) {
+      this.yaw += dt * SPIN_SPEED;
+      this.applyCamera();
+    }
+    this.render();
+    this.start();
+  };
 
   private applyFrustum() {
     const aspect = this.width / this.height;
@@ -227,6 +305,7 @@ export class SkinPreview {
 
   dispose() {
     this.disposed = true;
+    cancelAnimationFrame(this.frame);
     this.model?.dispose();
     this.model = null;
     this.scene.clear();
