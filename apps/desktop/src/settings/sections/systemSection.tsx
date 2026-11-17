@@ -17,6 +17,12 @@ export function SystemSection() {
     if (!(await confirmRestoreDefaults(t))) return;
     const defaults = defaultConfig();
     updateConfig({ system: defaults.system, tray: defaults.tray });
+    // 配置里关闭自启还不够，注册表项也要一起移除
+    if ("__TAURI_INTERNALS__" in window) {
+      void invoke("set_autostart", { enabled: false })
+        .then(() => setAutoStartFailed(false))
+        .catch(() => setAutoStartFailed(true));
+    }
   };
 
   return (

@@ -156,6 +156,12 @@ export const enUS: Messages = {
   "debug.previewLabel": "3D Preview",
   "debug.previewDesc": "Open the entity rendering check window",
   "debug.openPreview": "Open 3D Preview",
+  "debug.clearDataLabel": "Clear Data",
+  "debug.clearDataDesc": "Remove all files and settings for this app",
+  "debug.clearDataAction": "Clear Data",
+  "debug.clearDataConfirmText": "This removes all files, settings, accounts, and databases for this app. It cannot be undone. Continue?",
+  "debug.clearDataPartial": "Some items could not be removed:\n{list}",
+  "debug.clearDataFailed": "Failed to clear data: {reason}",
 
   "about.title": "About",
   "about.version": "Version {version}",

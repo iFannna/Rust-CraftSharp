@@ -1,6 +1,6 @@
 [package]
 name = "craftsharp-desktop"
-version = "26.11.17"
+version = "26.11.18"
 description = "CraftSharp desktop shell"
 edition = "2021"
 rust-version = "1.77"

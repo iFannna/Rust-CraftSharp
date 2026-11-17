@@ -32,7 +32,8 @@ export function HudSection() {
     updateConfig({
       hudElements: defaults.hudElements,
       hotbar: defaults.hotbar,
-      statusBar: defaults.statusBar
+      statusBar: defaults.statusBar,
+      bossBars: defaults.bossBars
     });
   };
 

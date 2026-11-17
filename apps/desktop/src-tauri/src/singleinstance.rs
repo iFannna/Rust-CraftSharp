@@ -2,6 +2,7 @@
 
 #[cfg(windows)]
 mod imp {
+    use std::sync::atomic::{AtomicIsize, Ordering};
     use std::thread;
 
     use tauri::AppHandle;
@@ -13,6 +14,9 @@ mod imp {
     const EVENT_MODIFY_STATE: u32 = 0x0002;
     const WAIT_OBJECT_0: u32 = 0;
 
+    /// 首实例持有的互斥体，重启前显式关闭，让新进程能重新获取
+    static MUTEX: AtomicIsize = AtomicIsize::new(0);
+
     #[link(name = "kernel32")]
     extern "system" {
         fn CreateMutexW(attributes: *const u8, owner: i32, name: *const u16) -> isize;
@@ -21,6 +25,7 @@ mod imp {
         fn SetEvent(event: isize) -> i32;
         fn WaitForSingleObject(handle: isize, milliseconds: u32) -> u32;
         fn GetLastError() -> u32;
+        fn CloseHandle(handle: isize) -> i32;
     }
 
     fn wide(text: &str) -> Vec<u16> {
@@ -37,18 +42,29 @@ mod imp {
         }
 
         if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+            // SAFETY: 已存在实例时关闭本次打开的句柄
+            unsafe { CloseHandle(mutex) };
             let event = wide(EVENT_NAME);
             // SAFETY: 打开已有实例创建的事件并置位
             let handle = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, event.as_ptr()) };
             if handle != 0 {
                 unsafe { SetEvent(handle) };
+                unsafe { CloseHandle(handle) };
             }
             return false;
         }
 
-        // 互斥体句柄不显式关闭，随进程结束由系统回收
-        let _ = mutex;
+        MUTEX.store(mutex, Ordering::SeqCst);
         true
+    }
+
+    /// 重启前释放互斥体；进程结束时系统也会回收，这里只是让新进程立即拿得到。
+    pub fn release() {
+        let handle = MUTEX.swap(0, Ordering::SeqCst);
+        if handle != 0 {
+            // SAFETY: 只关闭自己创建的互斥体句柄
+            unsafe { CloseHandle(handle) };
+        }
     }
 
     /// 首个实例启动后调用，收到第二实例信号时直接显示并聚焦设置面板。
@@ -77,7 +93,9 @@ mod imp {
         true
     }
 
+    pub fn release() {}
+
     pub fn watch(_app: tauri::AppHandle) {}
 }
 
-pub use imp::{acquire, watch};
+pub use imp::{acquire, release, watch};

@@ -154,6 +154,12 @@ export const zhCN = {
   "debug.previewLabel": "3D 预览",
   "debug.previewDesc": "打开实体渲染校验窗口",
   "debug.openPreview": "打开 3D 预览",
+  "debug.clearDataLabel": "清除数据",
+  "debug.clearDataDesc": "清除此应用的所有文件、设置等",
+  "debug.clearDataAction": "清除数据",
+  "debug.clearDataConfirmText": "清除后，此应用的所有文件、设置、账户、数据库等都将被删除，无法恢复，是否继续？",
+  "debug.clearDataPartial": "以下内容未能完整清除：\n{list}",
+  "debug.clearDataFailed": "清除数据失败：{reason}",
 
   "about.title": "关于",
   "about.version": "版本 {version}",

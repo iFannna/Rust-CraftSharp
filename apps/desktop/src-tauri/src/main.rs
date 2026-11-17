@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod appdata;
 mod appicon;
 mod autostart;
 mod desktop;
@@ -426,6 +427,23 @@ fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// 调试页清除数据：删除应用文件、还原默认图标并移除开机自启
+#[tauri::command]
+async fn clear_app_data(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || appdata::clear(&app))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// 释放单实例互斥体后再拉起新进程，避免重启被旧实例挡住
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    use tauri::Manager;
+
+    singleinstance::release();
+    tauri::process::restart(&app.env());
+}
+
 #[cfg(windows)]
 fn double_click_ms() -> u32 {
     #[link(name = "user32")]
@@ -639,6 +657,8 @@ fn main() {
             set_autostart,
             tray_state,
             exit_app,
+            clear_app_data,
+            restart_app,
             install_caption_hook
         ])
         .run(tauri::generate_context!())
