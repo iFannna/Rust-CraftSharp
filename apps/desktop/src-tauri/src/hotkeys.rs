@@ -1,4 +1,5 @@
-//! 全局热键：低级键盘钩子记录有序序列，最多三键，全部松开后按顺序匹配并广播动作。
+//! 全局热键：按键统一还原左右修饰键，有序序列最多三键，全部松开后匹配并广播动作。
+//! 前台窗口属于本进程时钩子让路，由该窗口自己的输入路径处理。
 
 #![allow(non_snake_case)]
 
@@ -16,6 +17,8 @@ const WM_KEYUP: u32 = 0x0101;
 const WM_SYSKEYDOWN: u32 = 0x0104;
 const WM_SYSKEYUP: u32 = 0x0105;
 const WH_KEYBOARD_LL: i32 = 13;
+/// KBDLLHOOKSTRUCT.flags 的扩展键位，用于区分右侧 Ctrl/Alt
+pub(crate) const LLKHF_EXTENDED: u32 = 0x01;
 
 #[repr(C)]
 #[allow(dead_code)]
@@ -64,6 +67,12 @@ extern "system" {
     fn CallNextHookEx(hook: isize, code: i32, wparam: usize, lparam: isize) -> isize;
     fn GetAsyncKeyState(vk: i32) -> i16;
     fn GetForegroundWindow() -> isize;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetCurrentProcessId() -> u32;
 }
 
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -75,10 +84,6 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 /// 录制暂停时清空，匹配不到任何序列
 static HOOK_BINDINGS: Mutex<Vec<HookBinding>> = Mutex::new(Vec::new());
 static HOOK_ACTIVE: AtomicBool = AtomicBool::new(false);
-/// WebView 聚焦时由前端处理按键，钩子让路，避免被 WebView2 的钩子链截断
-static APP_FOCUSED: AtomicBool = AtomicBool::new(false);
-/// 物品栏窗口聚焦时由原生窗口自己广播全局动作
-static INVENTORY_HWND: AtomicIsize = AtomicIsize::new(0);
 static HOOK: AtomicIsize = AtomicIsize::new(0);
 /// 当前按住的虚拟键，用于自动重复抑制与松开判定
 static HOOK_DOWN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
@@ -104,7 +109,7 @@ pub fn register(app: &AppHandle, actions: Vec<String>) {
                     if hook != 0 {
                         HOOK.store(hook, Ordering::SeqCst);
                     } else {
-                        eprintln!("全局快捷键钩子安装失败");
+                        eprintln!("全局快捷键钩子安装失败 {:?}", std::io::Error::last_os_error());
                     }
                 }
             }
@@ -131,31 +136,80 @@ fn emit_spec(spec: &str) {
     }
 }
 
-/// 前端窗口取得焦点时置 true，失焦或隐藏时置 false
-pub fn set_app_focus(focused: bool) {
-    APP_FOCUSED.store(focused, Ordering::SeqCst);
-}
-
-/// 物品栏显示时登记窗口句柄，隐藏时清空
-pub fn set_inventory_hwnd(hwnd: isize) {
-    INVENTORY_HWND.store(hwnd, Ordering::SeqCst);
-}
-
-fn foreground_is_inventory() -> bool {
+/// 前台窗口属于本进程时由窗口自己的输入路径处理，钩子让路，避免重复触发
+fn foreground_is_app() -> bool {
     let hwnd = unsafe { GetForegroundWindow() };
-    hwnd != 0 && hwnd == INVENTORY_HWND.load(Ordering::Relaxed)
+    if hwnd == 0 {
+        return false;
+    }
+    let mut pid = 0u32;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &mut pid);
+    }
+    pid != 0 && pid == unsafe { GetCurrentProcessId() }
+}
+
+/// 钩子与窗口消息里的修饰键只有通用码，按扫描码和扩展位还原左右
+pub(crate) fn normalized_key(vk: u32, scan: u32, extended: bool) -> u32 {
+    match vk {
+        0x10 => {
+            if scan & 0xff == 0x36 {
+                0xA1
+            } else {
+                0xA0
+            }
+        }
+        0x11 => {
+            if extended {
+                0xA3
+            } else {
+                0xA2
+            }
+        }
+        0x12 => {
+            if extended {
+                0xA5
+            } else {
+                0xA4
+            }
+        }
+        _ => vk,
+    }
+}
+
+/// 从窗口按键消息的 lParam 还原左右明确的虚拟键码
+pub(crate) fn key_from_message(wparam: usize, lparam: isize) -> u32 {
+    let scan = ((lparam >> 16) & 0xff) as u32;
+    let extended = (lparam >> 24) & 1 != 0;
+    normalized_key(wparam as u32, scan, extended)
+}
+
+/// 原生窗口自己收到按键时，全部松开后按当前绑定广播全局动作
+pub(crate) fn dispatch(tap: &[u32], overflow: bool) {
+    if overflow || tap.is_empty() {
+        return;
+    }
+    let keys: Vec<HookKey> = tap.iter().map(|vk| hook_key_of(*vk)).collect();
+    let specs: Vec<String> = match HOOK_BINDINGS.lock() {
+        Ok(bindings) => bindings
+            .iter()
+            .filter(|binding| binding_matches(binding, &keys))
+            .map(|binding| binding.spec.clone())
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    for spec in specs {
+        emit_spec(&spec);
+    }
 }
 
 unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
-    if code >= 0
-        && !APP_FOCUSED.load(Ordering::Relaxed)
-        && !foreground_is_inventory()
-        && HOOK_ACTIVE.load(Ordering::Relaxed)
-    {
+    if code >= 0 && !foreground_is_app() && HOOK_ACTIVE.load(Ordering::Relaxed) {
         let data = &*(lparam as *const KeyboardHookData);
+        let vk = normalized_key(data.vk_code, data.scan_code, data.flags & LLKHF_EXTENDED != 0);
         match wparam as u32 {
-            WM_KEYDOWN | WM_SYSKEYDOWN => on_hook_down(data.vk_code),
-            WM_KEYUP | WM_SYSKEYUP => on_hook_up(data.vk_code),
+            WM_KEYDOWN | WM_SYSKEYDOWN => on_hook_down(vk),
+            WM_KEYUP | WM_SYSKEYUP => on_hook_up(vk),
             _ => {}
         }
     }

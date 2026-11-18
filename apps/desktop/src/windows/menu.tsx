@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { MenuItemSpec } from "@/hud/slots/menu";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { isTauri } from "@/lib/runtime";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { ThemeRoot } from "@/ui/theme-root";
@@ -114,4 +115,5 @@ function MenuWindow() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<MenuWindow />);

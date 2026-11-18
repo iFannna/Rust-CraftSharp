@@ -151,14 +151,7 @@ function inventoryConfig() {
       skinPath: config.player.skinPath
     },
     dropKey: config.hotkeys.dropItem,
-    openInventory: config.hotkeys.openInventory,
-    globalHotkeys: [
-      config.hotkeys.settings,
-      config.hotkeys.statusBar,
-      config.hotkeys.inventory,
-      config.hotkeys.crosshair,
-      config.hotkeys.desktopIcons
-    ]
+    openInventory: config.hotkeys.openInventory
   };
 }
 

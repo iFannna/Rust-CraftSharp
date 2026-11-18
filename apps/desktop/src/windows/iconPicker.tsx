@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -155,4 +156,5 @@ function IconPicker() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<IconPicker />);

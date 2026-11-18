@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig, type BossBarConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -190,4 +191,5 @@ function BossBarEditor() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<BossBarEditor />);

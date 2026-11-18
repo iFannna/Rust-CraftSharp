@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getConfig } from "@/config/appConfig";
 import { tOf, type TFunction } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -166,4 +167,5 @@ function HudIconPicker() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<HudIconPicker />);

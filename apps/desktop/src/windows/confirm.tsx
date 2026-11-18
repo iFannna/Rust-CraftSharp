@@ -4,6 +4,7 @@ import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { isTauri } from "@/lib/runtime";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { applyWindowTitle } from "@/lib/windowTitle";
@@ -123,4 +124,5 @@ function ConfirmDialog() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<ConfirmDialog />);

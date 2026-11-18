@@ -50,14 +50,6 @@ fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) {
 }
 
 #[tauri::command]
-fn set_hotkey_app_focus(focused: bool) {
-    #[cfg(windows)]
-    hotkeys::set_app_focus(focused);
-    #[cfg(not(windows))]
-    let _ = focused;
-}
-
-#[tauri::command]
 fn hotkey_failures() -> Vec<String> {
     #[cfg(windows)]
     {
@@ -641,7 +633,6 @@ fn main() {
             read_clipboard_paths,
             rename_path,
             register_hotkeys,
-            set_hotkey_app_focus,
             hotkey_failures,
             system_metrics,
             set_hit_mask,

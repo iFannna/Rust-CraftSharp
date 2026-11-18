@@ -5,6 +5,7 @@ import { containerStyleUrl } from "@/hud/inventory/stylePreviewAssets";
 import { CONTAINER_STYLES } from "@/hud/inventory/styles";
 import { tOf } from "@/i18n";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
@@ -96,4 +97,5 @@ function StylePreview() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<StylePreview />);

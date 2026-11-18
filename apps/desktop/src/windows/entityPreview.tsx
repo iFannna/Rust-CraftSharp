@@ -14,6 +14,7 @@ import {
 } from "@/entity3d";
 import { getConfig, subscribeConfig, updateConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { isTauri } from "@/lib/runtime";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { applyWindowTitle } from "@/lib/windowTitle";
@@ -585,4 +586,5 @@ function EntityPreview() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<EntityPreview />);

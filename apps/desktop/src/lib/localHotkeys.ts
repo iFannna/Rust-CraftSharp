@@ -1,4 +1,4 @@
-/** 局部快捷键：应用窗口聚焦时生效；全局项在该窗口内也由页面处理，失焦后交给系统钩子 */
+/** 应用快捷键：所有可聚焦窗口共用；本进程窗口聚焦时由页面处理，外部交给系统钩子 */
 
 import { invoke } from "@tauri-apps/api/core";
 import { getConfig } from "@/config/appConfig";
@@ -37,12 +37,13 @@ async function closeInventory(): Promise<boolean> {
   return true;
 }
 
-function reportFocus(focused: boolean) {
-  void invoke("set_hotkey_app_focus", { focused }).catch(() => undefined);
-}
+let installed = false;
 
-export function installLocalHotkeys() {
-  if (!("__TAURI_INTERNALS__" in window)) return;
+/** dialog 只处理全局项，Esc 与物品栏开关交回窗口自己 */
+export function installLocalHotkeys(options: { local?: boolean } = {}) {
+  if (installed || !("__TAURI_INTERNALS__" in window)) return;
+  installed = true;
+  const local = options.local ?? true;
 
   const pressed = new Set<string>();
   let sequence: SequenceKey[] = [];
@@ -62,7 +63,7 @@ export function installLocalHotkeys() {
 
     if (event.key === "Escape") {
       reset();
-      if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
+      if (!local || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
       void closeInventory().then((closed) => {
         if (closed) event.preventDefault();
       });
@@ -113,7 +114,7 @@ export function installLocalHotkeys() {
         return;
       }
 
-      if (hotkeysMatch(config.hotkeys.openInventory, captured)) {
+      if (local && hotkeysMatch(config.hotkeys.openInventory, captured)) {
         void toggleInventory();
       }
     }
@@ -121,12 +122,5 @@ export function installLocalHotkeys() {
     reset();
   });
 
-  window.addEventListener("focus", () => reportFocus(true));
-  window.addEventListener("blur", () => {
-    reset();
-    reportFocus(false);
-  });
-  window.addEventListener("pagehide", () => reportFocus(false));
-  document.addEventListener("visibilitychange", () => reportFocus(document.hasFocus()));
-  window.setTimeout(() => reportFocus(document.hasFocus()), 0);
+  window.addEventListener("blur", reset);
 }

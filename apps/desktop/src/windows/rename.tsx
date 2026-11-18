@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { emitDialogResult } from "@/lib/dialogWindow";
+import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { useRevealWindow } from "@/lib/windowReveal";
 import { isTauri } from "@/lib/runtime";
 import { applyWindowTitle } from "@/lib/windowTitle";
@@ -79,4 +80,5 @@ function RenameDialog() {
   );
 }
 
+installLocalHotkeys({ local: false });
 ReactDOM.createRoot(document.getElementById("root")!).render(<RenameDialog />);

@@ -82,21 +82,27 @@ unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize)
     // 只在点击快捷栏取得键盘焦点后接管，其他情况一律放过
     if code >= 0 && HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed) {
         let data = &*(lparam as *const KeyboardHookData);
-        if wparam == w::WM_KEYUP as usize {
-            if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
-                sequence.release(data.vk_code);
-            }
-        } else if wparam == w::WM_KEYDOWN as usize {
-            let handled = window::with_state(|state| {
-                if !state.visible || !state.shown || state.config.is_none() {
-                    return false;
+        let extended = data.flags & crate::hotkeys::LLKHF_EXTENDED != 0;
+        let vk = crate::hotkeys::normalized_key(data.vk_code, data.scan_code, extended);
+        match wparam as u32 {
+            w::WM_KEYUP | w::WM_SYSKEYUP => {
+                if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+                    sequence.release(vk);
                 }
-                on_key(state, data.vk_code as usize)
-            })
-            .unwrap_or(false);
-            if handled {
-                return 1;
             }
+            w::WM_KEYDOWN | w::WM_SYSKEYDOWN => {
+                let handled = window::with_state(|state| {
+                    if !state.visible || !state.shown || state.config.is_none() {
+                        return false;
+                    }
+                    on_key(state, vk)
+                })
+                .unwrap_or(false);
+                if handled {
+                    return 1;
+                }
+            }
+            _ => {}
         }
     }
     w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
@@ -169,6 +175,8 @@ pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
         | w::WM_MOUSEWHEEL
         | w::WM_KEYDOWN
         | w::WM_KEYUP
+        | w::WM_SYSKEYDOWN
+        | w::WM_SYSKEYUP
         | w::WM_CAPTURECHANGED => {
             window::with_state(|state| handle_message(state, message, wparam, lparam));
             Some(0)
@@ -185,10 +193,10 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_LBUTTONUP => on_up(state, wparam, lparam),
         w::WM_RBUTTONUP => on_menu(state, lparam),
         w::WM_MOUSEWHEEL => on_wheel(state, wparam),
-        w::WM_KEYDOWN => {
-            on_key(state, wparam);
+        w::WM_KEYDOWN | w::WM_SYSKEYDOWN => {
+            on_key(state, crate::hotkeys::key_from_message(wparam, lparam));
         }
-        w::WM_KEYUP => on_key_up(wparam),
+        w::WM_KEYUP | w::WM_SYSKEYUP => on_key_up(crate::hotkeys::key_from_message(wparam, lparam)),
         w::WM_CAPTURECHANGED => on_capture_lost(state),
         _ => {}
     }
@@ -394,9 +402,7 @@ fn on_wheel(state: &mut State, wparam: usize) {
 }
 
 /// 处理状态栏窗口内的快捷键，返回是否已经消费这个按键。
-fn on_key(state: &mut State, wparam: usize) -> bool {
-    let key = wparam as u32;
-
+fn on_key(state: &mut State, key: u32) -> bool {
     if (0x31..=0x39).contains(&key) {
         select(state, (key - 0x30) as i32 + 1);
         return true;
@@ -450,9 +456,9 @@ fn on_key(state: &mut State, wparam: usize) -> bool {
     false
 }
 
-fn on_key_up(wparam: usize) {
+fn on_key_up(key: u32) {
     if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
-        sequence.release(wparam as u32);
+        sequence.release(key);
     }
 }
 

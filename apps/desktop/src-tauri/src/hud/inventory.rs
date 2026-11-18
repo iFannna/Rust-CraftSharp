@@ -140,9 +140,6 @@ pub struct InventoryCfg {
     pub cut_slot: Option<String>,
     pub drop_key: String,
     pub open_inventory: String,
-    /// 设置、状态栏、物品栏、准星、桌面图标，顺序与前端动作下标一致
-    #[serde(default)]
-    pub global_hotkeys: Vec<String>,
     pub player: PlayerCfg,
 }
 
@@ -169,7 +166,6 @@ impl Default for InventoryCfg {
             cut_slot: None,
             drop_key: "q".into(),
             open_inventory: "e".into(),
-            global_hotkeys: Vec::new(),
             player: PlayerCfg::default(),
         }
     }
@@ -856,7 +852,6 @@ pub fn set_visible_inner(state: &mut State) {
         render(state);
         if state.shown {
             // SAFETY: 蒙版先显示，物品栏再提到最前，并拿到键盘焦点处理 E/ESC/Q
-            crate::hotkeys::set_inventory_hwnd(state.hwnd);
             w::raise_overlay(state.hwnd);
             unsafe {
                 w::SetForegroundWindow(state.hwnd);
@@ -879,7 +874,6 @@ pub fn set_visible_inner(state: &mut State) {
         state.drop_hover = None;
         state.q_down = false;
         state.last_move = None;
-        crate::hotkeys::set_inventory_hwnd(0);
         if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
             sequence.reset();
         }
@@ -1398,6 +1392,11 @@ fn click_slot(state: &mut State, index: usize) {
 
 fn handle_input(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
     match message {
+        // 系统键只跟踪序列，继续交给默认处理，不吞掉 Alt 组合
+        w::WM_SYSKEYDOWN | w::WM_SYSKEYUP => {
+            with_state(|state| handle_message(state, message, wparam, lparam));
+            None
+        }
         w::WM_MOUSEMOVE | w::WM_LBUTTONDOWN | w::WM_LBUTTONUP | w::WM_MBUTTONDOWN | w::WM_RBUTTONUP
         | w::WM_KEYDOWN | w::WM_KEYUP | w::WM_MOUSELEAVE | w::WM_CAPTURECHANGED | w::WM_TIMER
         | WM_SHIFT_SAMPLE => {
@@ -1432,8 +1431,8 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
             sync_tooltip(state, None);
             render(state);
         }
-        w::WM_KEYDOWN => on_key(state, wparam),
-        w::WM_KEYUP => on_key_up(state, wparam),
+        w::WM_KEYDOWN | w::WM_SYSKEYDOWN => on_key(state, crate::hotkeys::key_from_message(wparam, lparam)),
+        w::WM_KEYUP | w::WM_SYSKEYUP => on_key_up(state, crate::hotkeys::key_from_message(wparam, lparam)),
         w::WM_CAPTURECHANGED => {
             state.press = None;
             state.last_move = None;
@@ -1664,8 +1663,7 @@ fn on_right_up(state: &mut State, lparam: isize) {
     );
 }
 
-fn on_key_up(state: &mut State, wparam: usize) {
-    let key = wparam as u32;
+fn on_key_up(state: &mut State, key: u32) {
     let (released_all, tap, tap_overflow) = {
         let Ok(mut sequence) = KEY_SEQUENCE.lock() else { return };
         sequence.release(key);
@@ -1679,25 +1677,15 @@ fn on_key_up(state: &mut State, wparam: usize) {
         return;
     }
 
-    // 物品栏聚焦时钩子让路，由窗口自己按顺序广播全局快捷键
-    if !tap_overflow && !tap.is_empty() {
-        if let Some(index) = state
-            .config
-            .global_hotkeys
-            .iter()
-            .position(|spec| crate::hotkeys::sequence_matches(spec, &tap))
-        {
-            let _ = state.app.emit(crate::hotkeys::EVENT_NAME, index);
-        }
-    }
+    // 物品栏聚焦时钩子让路，由窗口按当前绑定广播全局快捷键
+    crate::hotkeys::dispatch(&tap, tap_overflow);
 
     if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
         sequence.reset();
     }
 }
 
-fn on_key(state: &mut State, wparam: usize) {
-    let key = wparam as u32;
+fn on_key(state: &mut State, key: u32) {
     if key == 0x1b {
         request_close(state);
         return;
