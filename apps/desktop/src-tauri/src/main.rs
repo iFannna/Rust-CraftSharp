@@ -12,6 +12,7 @@ mod platform;
 mod singleinstance;
 mod skins;
 mod slots;
+mod wallpaper;
 mod windowdrag;
 
 #[cfg(windows)]
@@ -434,6 +435,45 @@ fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// 拉取壁纸列表，网络请求放到阻塞线程
+#[tauri::command]
+async fn wallpaper_list(page: u32, kind: String, sort: String) -> Result<wallpaper::Page, String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::list(page, &kind, &sort))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// 下载并应用静态壁纸，返回本地缓存路径
+#[tauri::command]
+async fn wallpaper_apply(
+    app: tauri::AppHandle,
+    id: String,
+    preview_url: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::apply(&app, &id, &preview_url))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// 另存为对话框必须由主线程打开，异步命令里等待结果
+#[tauri::command]
+async fn wallpaper_pick_path(app: tauri::AppHandle, title: String) -> Option<String> {
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let _ = sender.try_send(wallpaper::pick(&handle, &title));
+    })
+    .ok()?;
+    receiver.recv().await.flatten()
+}
+
+#[tauri::command]
+async fn wallpaper_export(preview_url: String, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::export(&preview_url, &path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
 /// 调试页清除数据：删除应用文件、还原默认图标并移除开机自启
 #[tauri::command]
 async fn clear_app_data(app: tauri::AppHandle) -> Result<(), String> {
@@ -671,6 +711,10 @@ fn main() {
             exit_app,
             clear_app_data,
             reload_app_windows,
+            wallpaper_list,
+            wallpaper_apply,
+            wallpaper_pick_path,
+            wallpaper_export,
             install_caption_hook
         ])
         .run(tauri::generate_context!())

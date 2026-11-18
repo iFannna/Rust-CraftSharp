@@ -200,6 +200,14 @@ export interface PlayerConfig {
   skinName: string;
 }
 
+/** 静态壁纸只记录当前应用项，动态与多屏字段后续按需扩展 */
+export interface WallpaperConfig {
+  currentId: string;
+  title: string;
+  type: "static" | "none";
+  localPath: string;
+}
+
 export interface AppConfig {
   version: number;
   system: SystemConfig;
@@ -211,6 +219,7 @@ export interface AppConfig {
   bossBars: BossBarConfig[];
   hotkeys: HotkeysConfig;
   tray: TrayConfig;
+  wallpaper: WallpaperConfig;
   player: PlayerConfig;
 }
 
@@ -326,6 +335,7 @@ const DEFAULTS: AppConfig = {
       { id: "desktopIcons", visible: false }
     ]
   },
+  wallpaper: { currentId: "", title: "", type: "none", localPath: "" },
   player: { skinPath: "", skinType: "wide", skinName: "steve" }
 };
 
@@ -477,6 +487,11 @@ function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
     bossBars: Array.isArray(raw.bossBars) ? normalizeBossBars(raw.bossBars) : base.bossBars,
     hotkeys: { ...base.hotkeys, ...raw.hotkeys },
     tray: mergeTray(base.tray, raw.tray),
+    wallpaper: {
+      ...base.wallpaper,
+      ...raw.wallpaper,
+      type: raw.wallpaper?.type === "static" ? "static" : base.wallpaper.type
+    },
     player: { ...base.player, ...raw.player }
   };
 }

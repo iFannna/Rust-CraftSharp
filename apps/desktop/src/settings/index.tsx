@@ -12,7 +12,7 @@ import { tOf, type MessageKey } from "@/i18n";
 import { setSettingsVisible } from "@/lib/windowControls";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
-import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, PackageIcon, PaletteIcon, SettingsIcon, UserIcon, type IconProps } from "@/ui/icons";
+import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, MonitorIcon, PackageIcon, PaletteIcon, SettingsIcon, UserIcon, type IconProps } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 import { AboutSection } from "@/settings/sections/aboutSection";
 import { AppearanceSection } from "@/settings/sections/appearanceSection";
@@ -22,9 +22,22 @@ import { HudSection } from "@/settings/sections/hudSection";
 import { InventorySection } from "@/settings/sections/inventorySection";
 import { SkinSection } from "@/settings/sections/skinSection";
 import { SystemSection } from "@/settings/sections/systemSection";
+import { WallpaperSection } from "@/settings/sections/wallpaperSection";
 import "@/ui/styles.css";
 
-type SectionId = "system" | "appearance" | "skin" | "hud" | "inventory" | "hotkeys" | "about" | "debug";
+type SectionId =
+  | "system"
+  | "appearance"
+  | "wallpaper"
+  | "skin"
+  | "hud"
+  | "inventory"
+  | "hotkeys"
+  | "about"
+  | "debug";
+
+/** 需要占满内容区高度的页面，由自身负责滚动 */
+const FULL_HEIGHT_SECTIONS = new Set<SectionId>(["wallpaper", "skin"]);
 
 ensureSettingsFonts();
 installLocalHotkeys();
@@ -39,6 +52,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "system", labelKey: "nav.system", Icon: SettingsIcon, Section: SystemSection },
   { id: "appearance", labelKey: "nav.appearance", Icon: PaletteIcon, Section: AppearanceSection },
+  { id: "wallpaper", labelKey: "nav.wallpaper", Icon: MonitorIcon, Section: WallpaperSection },
   { id: "skin", labelKey: "nav.skin", Icon: UserIcon, Section: SkinSection },
   { id: "hud", labelKey: "nav.hud", Icon: DashboardIcon, Section: HudSection },
   { id: "inventory", labelKey: "nav.inventory", Icon: PackageIcon, Section: InventorySection },
@@ -272,7 +286,7 @@ function SettingsApp() {
             <div
               className={cn(
                 "settings-content mx-auto max-w-[1120px] pb-10",
-                active === "skin" && "flex h-full min-h-0 flex-col pb-6"
+                FULL_HEIGHT_SECTIONS.has(active) && "flex h-full min-h-0 flex-col pb-6"
               )}
             >
               <ActiveSection />
