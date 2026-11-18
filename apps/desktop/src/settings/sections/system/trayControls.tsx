@@ -3,9 +3,11 @@ import { updateConfig, getConfig, type TrayMenuItemConfig, type TrayMenuItemId }
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { trayItemLabel } from "@/lib/trayLabels";
+import { Accordion } from "@/settings/components/accordion";
 import { Row, Select, Toggle } from "@/settings/components/controls";
 import { readDragRows, reorderAtPointer } from "@/settings/components/reorder";
 import { trayActionOptions } from "@/settings/options";
+import { useCardState } from "@/settings/useCardState";
 import { GripIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 
@@ -43,6 +45,7 @@ export function TrayControls() {
 function TrayMenuEditor() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
+  const card = useCardState("System_TrayMenu");
   const [order, setOrder] = useState<TrayMenuItemConfig[]>(config.tray.menu);
   const [draggingId, setDraggingId] = useState<TrayMenuItemId | null>(null);
   const orderRef = useRef(order);
@@ -153,12 +156,13 @@ function TrayMenuEditor() {
   useEffect(() => () => detachDrag(), []);
 
   return (
-    <div className="mb-2 rounded-lg border bg-card">
-      <div className="border-b px-4 py-3">
-        <div className="text-sm font-medium">{t("tray.menuTitle")}</div>
-        <div className="mt-1 text-xs leading-snug text-muted-foreground">{t("tray.menuHint")}</div>
-      </div>
-      <div ref={listRef} className={cn(draggingId && "select-none")}>
+    <Accordion
+      title={t("tray.menuTitle")}
+      description={t("tray.menuHint")}
+      open={card.open}
+      onOpenChange={card.onChange}
+    >
+      <div ref={listRef} className={cn("-mx-4", draggingId && "select-none")}>
         {order.map((item) => {
           const label = trayItemLabel(t, item.id);
           return (
@@ -229,6 +233,6 @@ function TrayMenuEditor() {
           <Toggle checked disabled label={t("tray.itemExit")} onChange={() => undefined} />
         </div>
       </div>
-    </div>
+    </Accordion>
   );
 }

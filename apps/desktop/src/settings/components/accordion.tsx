@@ -9,12 +9,14 @@ import {
 /** 折叠卡片：受控时由父级决定开合，用于记住卡片状态 */
 export function Accordion({
   title,
+  description,
   open,
   defaultOpen = false,
   onOpenChange,
   children
 }: {
   title: string;
+  description?: ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -37,7 +39,14 @@ export function Accordion({
       className="mb-2"
     >
       <AccordionItem value="content" className="rounded-lg border bg-card px-4">
-        <AccordionTrigger className="py-3.5 text-sm font-medium hover:no-underline">{title}</AccordionTrigger>
+        <AccordionTrigger className="py-3.5 text-sm font-medium hover:no-underline">
+          <div className="min-w-0 space-y-1">
+            <div className="leading-snug">{title}</div>
+            {description ? (
+              <div className="text-xs font-normal leading-snug text-muted-foreground">{description}</div>
+            ) : null}
+          </div>
+        </AccordionTrigger>
         <AccordionContent className="pb-4 pt-0">{children}</AccordionContent>
       </AccordionItem>
     </AccordionRoot>
