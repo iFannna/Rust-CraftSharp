@@ -5,6 +5,7 @@ export const WINDOW_LABEL = {
   hudIconPicker: "hud-icon-picker",
   bossBarEditor: "boss-bar-editor",
   stylePreview: "style-preview",
+  colorPicker: "color-picker",
   confirm: "confirm-dialog",
   rename: "rename-dialog",
   entityPreview: "entity-preview"

@@ -7,7 +7,7 @@ import { openDialogWindow } from "@/lib/dialogWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { GripIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
-import { Button, Note } from "@/settings/components/controls";
+import { Button } from "@/settings/components/controls";
 import { readDragRows, reorderAtPointer } from "@/settings/components/reorder";
 
 const LINK = "flex-none rounded-sm px-1 text-xs text-muted-foreground transition-colors hover:text-foreground";
@@ -129,8 +129,6 @@ export function BossBarCardContent() {
 
   return (
     <>
-      {bars.length === 0 ? <Note>{t("bossBar.empty")}</Note> : null}
-
       <div ref={listRef} className={cn("mb-3 flex flex-col gap-2", draggingId && "select-none")}>
         {order.map((bar) => (
           <div
@@ -179,9 +177,7 @@ export function BossBarCardContent() {
               ) : null}
             </div>
 
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
-              {bar.name.trim() || t("bossBar.untitled")}
-            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{bar.name}</span>
 
             <button type="button" className={LINK} onClick={() => void openEditor(bar.id)}>
               {t("bossBar.edit")}

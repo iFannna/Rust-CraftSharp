@@ -57,7 +57,9 @@ function InventoryCardContent() {
   return (
     <>
       <Row plain label={t("inventory.styleLabel")} description={t("inventory.styleDesc")}>
-        <Button onClick={() => void openStylePreview()}>{styleLabel}</Button>
+        <Button ariaLabel={t("aria.changeStyle")} onClick={() => void openStylePreview()}>
+          {styleLabel}
+        </Button>
       </Row>
       <Row plain label={t("hud.openAction")} description={t("hud.openActionDesc")}>
         <Select

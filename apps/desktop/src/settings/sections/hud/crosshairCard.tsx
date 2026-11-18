@@ -117,7 +117,7 @@ export function AttackIndicatorCardContent() {
           />
         </Row>
       ) : null}
-      <Row plain label={t("hud.customValue")} description={t("hud.attackCustomDesc")}>
+      <Row plain label={t("hud.customValue")} description={t("hud.customValueDesc")}>
         <Toggle
           checked={indicator.customValueEnabled}
           label={t("aria.enableCustom")}

@@ -61,7 +61,7 @@ function BossBarEditor() {
   const [bar, setBar] = useState<BossBarConfig>(() => {
     const id = params.get("id");
     const existing = id ? getConfig().bossBars.find((item) => item.id === id) : undefined;
-    return existing ?? newBossBar(t("bossBar.defaultName"));
+    return existing ?? newBossBar("");
   });
 
   const finish = (value: BossBarConfig | null) => emitDialogResult(WINDOW_LABEL.bossBarEditor, value);
@@ -84,16 +84,6 @@ function BossBarEditor() {
       <WindowFrame title={t("bossBar.editorTitle")} controls="close" onClose={() => finish(null)}>
         <div className="ui-scroll min-h-0 flex-1 overflow-y-auto p-5">
           <div className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t("bossBar.name")}</span>
-              <TextField
-                value={bar.name}
-                ariaLabel={t("aria.bossName")}
-                placeholder={t("bossBar.namePlaceholder")}
-                onChange={(name) => patch({ name })}
-              />
-            </label>
-
             <div className="flex flex-col gap-1.5">
               <span className="text-xs text-muted-foreground">{t("bossBar.color")}</span>
               <HudIconButton
@@ -114,6 +104,7 @@ function BossBarEditor() {
                 value={bar.notch ?? ""}
                 topMost
                 className={PREVIEW_BOX}
+                tooltip={t("bossBar.notchDesc")}
                 onPicked={(notch) =>
                   patch({ notch: notch === "" ? null : (notch as BossBarConfig["notch"]) })
                 }
@@ -122,42 +113,68 @@ function BossBarEditor() {
               </HudIconButton>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t("hud.dataMapping")}</span>
-              <div className="flex items-center gap-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("bossBar.name")}</span>
+              <TextField
+                value={bar.name}
+                ariaLabel={t("aria.bossName")}
+                placeholder={t("bossBar.namePlaceholder")}
+                className="w-full"
+                onChange={(name) => patch({ name })}
+              />
+            </label>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-xs text-muted-foreground">{t("hud.dataMapping")}</span>
                 <Toggle
                   checked={bar.dataMappingEnabled}
                   label={t("aria.enableMapping")}
-                  onChange={(dataMappingEnabled) => patch({ dataMappingEnabled })}
+                  onChange={(dataMappingEnabled) =>
+                    patch({
+                      dataMappingEnabled,
+                      customValueEnabled: dataMappingEnabled ? false : bar.customValueEnabled
+                    })
+                  }
                 />
+              </div>
+              {bar.dataMappingEnabled ? (
                 <Select
                   value={bar.dataMappingType}
                   options={dataMappingOptions(t)}
-                  disabled={!bar.dataMappingEnabled}
                   ariaLabel={t("hud.dataMappingType")}
                   onChange={(dataMappingType) => patch({ dataMappingType })}
                 />
-              </div>
+              ) : null}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t("hud.customValue")}</span>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-xs text-muted-foreground">{t("hud.customValue")}</span>
                 <Toggle
                   checked={bar.customValueEnabled}
                   label={t("aria.enableCustom")}
-                  onChange={(customValueEnabled) => patch({ customValueEnabled })}
+                  onChange={(customValueEnabled) =>
+                    patch({
+                      customValueEnabled,
+                      dataMappingEnabled: customValueEnabled ? false : bar.dataMappingEnabled
+                    })
+                  }
                 />
-                <NumberField
-                  value={bar.currentValue}
-                  min={0}
-                  max={100}
-                  ariaLabel={t("hud.customValue")}
-                  disabled={!bar.customValueEnabled}
-                  onChange={(currentValue) => patch({ currentValue })}
-                />
-                <span className="text-xs text-muted-foreground">/100</span>
               </div>
+              {bar.customValueEnabled ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{t("hud.currentValue")}</span>
+                  <NumberField
+                    value={bar.currentValue}
+                    min={0}
+                    max={100}
+                    ariaLabel={t("hud.customValue")}
+                    onChange={(currentValue) => patch({ currentValue })}
+                  />
+                  <span className="text-xs text-muted-foreground">/100</span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

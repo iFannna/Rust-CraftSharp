@@ -94,7 +94,8 @@ export function Select<T extends string>({
   onChange,
   disabled = false,
   ariaLabel,
-  wide = false
+  wide = false,
+  renderLabel
 }: {
   value: T;
   options: Option<T>[];
@@ -103,6 +104,8 @@ export function Select<T extends string>({
   ariaLabel: string;
   /** 长文案（如托盘动作）用更宽的触发器，避免下拉项换行 */
   wide?: boolean;
+  /** 自定义选项内容，例如颜色选项的色块 */
+  renderLabel?: (option: Option<T>) => ReactNode;
 }) {
   return (
     <UISelect
@@ -124,7 +127,7 @@ export function Select<T extends string>({
           const internal = toInternal(option.value);
           return (
             <SelectItem key={internal} value={internal}>
-              {option.label}
+              {renderLabel ? renderLabel(option) : option.label}
             </SelectItem>
           );
         })}
@@ -138,18 +141,20 @@ export function TextField({
   onChange,
   ariaLabel,
   placeholder,
-  disabled = false
+  disabled = false,
+  className
 }: {
   value: string;
   onChange: (next: string) => void;
   ariaLabel: string;
   placeholder?: string;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <Input
       type="text"
-      className="h-9 w-[220px] max-w-full"
+      className={cn("h-9 w-[220px] max-w-full", className)}
       aria-label={ariaLabel}
       placeholder={placeholder}
       value={value}
@@ -198,7 +203,8 @@ export function Button({
   disabled = false,
   variant = "default",
   primary = false,
-  className
+  className,
+  ariaLabel
 }: {
   children: ReactNode;
   onClick: () => void;
@@ -206,6 +212,7 @@ export function Button({
   variant?: "default" | "danger";
   primary?: boolean;
   className?: string;
+  ariaLabel?: string;
 }) {
   const danger = variant === "danger";
   return (
@@ -214,6 +221,7 @@ export function Button({
       variant={primary ? (danger ? "destructive" : "default") : "outline"}
       className={cn(!primary && danger && "text-destructive hover:text-destructive", className)}
       disabled={disabled}
+      aria-label={ariaLabel}
       onClick={onClick}
     >
       {children}

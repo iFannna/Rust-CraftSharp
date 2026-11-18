@@ -19,6 +19,7 @@ export function HudIconButton({
   value,
   topMost = false,
   className,
+  tooltip,
   onPicked,
   children
 }: {
@@ -27,6 +28,8 @@ export function HudIconButton({
   /** 从置顶的编辑弹窗打开时保持在上层 */
   topMost?: boolean;
   className?: string;
+  /** 覆盖默认的「点击更换图标」提示 */
+  tooltip?: string;
   onPicked?: (style: string) => void;
   children: ReactNode;
 }) {
@@ -65,7 +68,7 @@ export function HudIconButton({
           {children}
         </button>
       </TooltipTrigger>
-      <TooltipContent>{t("appearance.iconTooltip")}</TooltipContent>
+      <TooltipContent>{tooltip ?? t("appearance.iconTooltip")}</TooltipContent>
     </Tooltip>
   );
 }

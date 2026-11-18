@@ -17,6 +17,7 @@ const pages = [
   "hud-icon-picker",
   "boss-bar-editor",
   "style-preview",
+  "color-picker",
   "settings",
   "entity-preview",
   "entity-view"
