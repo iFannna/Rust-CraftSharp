@@ -51,6 +51,12 @@ function windowApi() {
   return isTauri() ? getCurrentWindow() : null;
 }
 
+/** 与 tauri.conf.json 中设置窗口的 minWidth / minHeight 保持一致 */
+const MIN_WINDOW_SIZE = { width: 720, height: 480 };
+
+/** 最小化时 Windows 会把窗口挪到 -32000 附近并报告标题栏大小的矩形 */
+const OFFSCREEN_LIMIT = -30000;
+
 function SettingsApp() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
@@ -61,10 +67,31 @@ function SettingsApp() {
     return "system";
   });
   const maximizedRef = useRef(false);
+  /** 启动恢复完成前不接受最大化状态变化，避免初始的未最大化把记忆覆盖掉 */
+  const maximizedPersistReady = useRef(false);
   const ActiveSection = NAV_ITEMS.find((item) => item.id === active)!.Section;
 
   const syncMaximized = (value: boolean) => {
     maximizedRef.current = value;
+    if (!maximizedPersistReady.current) return;
+    const system = getConfig().system;
+    // 最大化状态单独记忆，跟随「记住窗口大小」开关
+    if (!system.rememberWindowSize || system.windowMaximized === value) return;
+    if (value) {
+      updateConfig({ system: { windowMaximized: true } });
+      return;
+    }
+    // 最小化时 isMaximized 会变成 false，这个变化不代表用户取消了最大化
+    const current = windowApi();
+    if (!current) return;
+    void current
+      .isMinimized()
+      .then((minimized) => {
+        if (!minimized && getConfig().system.windowMaximized) {
+          updateConfig({ system: { windowMaximized: false } });
+        }
+      })
+      .catch(() => undefined);
   };
 
   useEffect(() => {
@@ -96,37 +123,82 @@ function SettingsApp() {
       if (!pendingPosition) return;
       const position = pendingPosition;
       pendingPosition = null;
-      if (!maximizedRef.current && getConfig().system.rememberWindowPosition) {
-        updateConfig({ system: { windowPosition: position } });
-      }
+      if (!getConfig().system.rememberWindowPosition) return;
+      // maximizedRef 可能落后于事件，落盘前再向窗口确认一次
+      void current.isMaximized().then((maximized) => {
+        if (!maximized) updateConfig({ system: { windowPosition: position } });
+      }).catch(() => undefined);
     };
 
     const flushSize = () => {
       if (!pendingSize) return;
       const size = pendingSize;
       pendingSize = null;
-      if (!maximizedRef.current && getConfig().system.rememberWindowSize) {
-        updateConfig({ system: { windowSize: size } });
-      }
+      if (!getConfig().system.rememberWindowSize) return;
+      // 最大化尺寸不能写进还原尺寸，落盘前再向窗口确认一次
+      void current.isMaximized().then((maximized) => {
+        if (!maximized) updateConfig({ system: { windowSize: size } });
+      }).catch(() => undefined);
     };
 
     void (async () => {
       const system = getConfig().system;
-      if (system.rememberWindowSize && system.windowSize) {
-        await current.setSize(new LogicalSize(system.windowSize.width, system.windowSize.height)).catch(() => undefined);
+      // 旧版本可能把最小化矩形存成了尺寸，恢复时先夹到最小尺寸
+      const savedSize = system.windowSize;
+      const restoredSize = savedSize
+        ? {
+            width: Math.max(MIN_WINDOW_SIZE.width, Math.round(savedSize.width)),
+            height: Math.max(MIN_WINDOW_SIZE.height, Math.round(savedSize.height))
+          }
+        : null;
+      if (system.rememberWindowSize && restoredSize) {
+        await current.setSize(new LogicalSize(restoredSize.width, restoredSize.height)).catch(() => undefined);
       }
       if (system.rememberWindowPosition && system.windowPosition) {
-        const size = system.windowSize ?? { width: 1080, height: 720 };
+        const size = restoredSize ?? { width: 1080, height: 720 };
         const target = clampToWorkArea(system.windowPosition, size.width, size.height);
         if (target) {
           await current.setPosition(new LogicalPosition(target.x, target.y)).catch(() => undefined);
         }
       }
       factor = await current.scaleFactor().catch(() => factor);
+
+      if (!system.rememberWindowSize || !system.windowMaximized) {
+        maximizedPersistReady.current = true;
+        return;
+      }
+
+      let maximizing = false;
+      const applyMaximized = async () => {
+        if (maximizing) return;
+        maximizing = true;
+        await current.maximize().catch(() => undefined);
+        // 最大化落地后再放开状态记忆，挡住启动初期那次「未最大化」回写
+        maximizedPersistReady.current = true;
+      };
+
+      // 尺寸和位置恢复完成后再还原最大化，保证最大化落在上次的显示器上
+      if (await current.isVisible().catch(() => false)) {
+        await applyMaximized();
+        return;
+      }
+      // 隐藏窗口上最大化只改窗口样式、不会真正铺开，等首次显示聚焦后再执行
+      disposers.push(
+        await current.onFocusChanged(({ payload: focused }) => {
+          if (!focused || maximizedPersistReady.current) return;
+          void applyMaximized();
+        })
+      );
+      // 注册监听前若窗口已经显示并聚焦，补一次执行
+      if (await current.isVisible().catch(() => false)) {
+        await applyMaximized();
+      }
     })();
 
     const onMoved = ({ payload }: { payload: { x: number; y: number } }) => {
       if (!getConfig().system.rememberWindowPosition || maximizedRef.current) return;
+      // 最小化时窗口被系统挪到屏幕外，这个坐标不是用户摆放的位置
+      if (payload.x <= OFFSCREEN_LIMIT || payload.y <= OFFSCREEN_LIMIT) return;
       pendingPosition = { x: Math.round(payload.x / factor), y: Math.round(payload.y / factor) };
       window.clearTimeout(moveTimer);
       moveTimer = window.setTimeout(flushPosition, 300);
@@ -134,10 +206,13 @@ function SettingsApp() {
 
     const onResized = ({ payload }: { payload: { width: number; height: number } }) => {
       if (!getConfig().system.rememberWindowSize || maximizedRef.current) return;
-      pendingSize = {
+      const size = {
         width: Math.round(payload.width / factor),
         height: Math.round(payload.height / factor)
       };
+      // 最小化时系统报告的是标题栏大小的矩形，小于最小尺寸的事件直接丢弃
+      if (size.width < MIN_WINDOW_SIZE.width || size.height < MIN_WINDOW_SIZE.height) return;
+      pendingSize = size;
       window.clearTimeout(sizeTimer);
       sizeTimer = window.setTimeout(flushSize, 300);
     };

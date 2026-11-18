@@ -36,6 +36,8 @@ export interface SystemConfig {
   cardExpandedStates: Record<string, boolean>;
   windowPosition: PositionConfig | null;
   windowSize: WindowSizeConfig | null;
+  /** 关闭应用时设置窗口是否处于最大化，跟随「记住窗口大小」一起恢复 */
+  windowMaximized: boolean;
   lastSection: string;
 }
 
@@ -250,14 +252,15 @@ const DEFAULTS: AppConfig = {
     language: "zh-CN",
     autoStart: false,
     defaultOpenSettings: false,
-    rememberWindowPosition: true,
-    rememberWindowSize: true,
-    rememberNavSelection: true,
-    rememberCardStates: true,
+    rememberWindowPosition: false,
+    rememberWindowSize: false,
+    rememberNavSelection: false,
+    rememberCardStates: false,
     distinguishModifiers: true,
     cardExpandedStates: {},
     windowPosition: null,
     windowSize: null,
+    windowMaximized: false,
     lastSection: "system"
   },
   appearance: { theme: "dark", font: "yahei", fontSize: 14, appIcon: "" },
