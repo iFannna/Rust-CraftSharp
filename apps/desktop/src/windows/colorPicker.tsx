@@ -104,12 +104,14 @@ function parseInitial(raw: string | null): { rgb: Rgb; alpha: number } {
 const INITIAL = parseInitial(params.get("value"));
 const INITIAL_HSV = rgbToHsv(INITIAL.rgb);
 
-function checkerStyle(size: number): CSSProperties {
-  return {
-    backgroundImage: "repeating-conic-gradient(#cccccc 0% 25%, #ffffff 0% 50%)",
-    backgroundSize: `${size}px ${size}px`
-  };
-}
+/** 滑块圆点与主题描边保持同一套视觉 */
+const THUMB_STYLE = {
+  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.35)"
+} as CSSProperties;
+
+const CHECKER_LARGE = {
+  "--checker-size": "10px"
+} as CSSProperties;
 
 function rawByte(text: string): number | null {
   const trimmed = text.trim();
@@ -283,64 +285,74 @@ function ColorPicker() {
           <div className="flex h-[200px]">
             <div
               ref={spectrumRef}
-              className="relative h-full min-w-0 flex-1 touch-none bg-white"
+              className="relative h-full min-w-0 flex-1 touch-none rounded-md border border-border"
               {...dragProps(updateSpectrum)}
             >
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ background: spectrumBackground }}
-              />
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ background: "linear-gradient(to bottom, transparent, #000)" }}
-              />
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                <div
+                  className="absolute inset-0"
+                  style={{ background: spectrumBackground }}
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{ background: "linear-gradient(to bottom, transparent, #000)" }}
+                />
+              </div>
               <span
-                className="pointer-events-none absolute h-3 w-3 rounded-full border-2 border-white"
+                className="pointer-events-none absolute h-4 w-4 rounded-full border-2 border-white"
                 style={{
                   left: `${saturation * 100}%`,
                   top: `${(1 - brightness) * 100}%`,
                   transform: "translate(-50%, -50%)",
-                  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.4)"
+                  ...THUMB_STYLE
                 }}
               />
             </div>
             <div
               ref={hueRef}
-              className="relative ml-2 h-full w-6 flex-none touch-none overflow-hidden rounded-lg"
+              className="relative ml-2 h-full w-3 flex-none touch-none"
               {...dragProps(updateHue)}
             >
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ background: HUE_GRADIENT }}
-              />
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full border border-border">
+                <div
+                  className="absolute inset-0"
+                  style={{ background: HUE_GRADIENT }}
+                />
+              </div>
               <span
-                className="pointer-events-none absolute left-0 right-0 h-1 rounded-sm border border-white"
+                className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 rounded-full border-2 border-white"
                 style={{
                   top: `${(hue / 360) * 100}%`,
-                  transform: "translateY(-50%)",
-                  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.3)"
+                  transform: "translate(-50%, -50%)",
+                  ...THUMB_STYLE
                 }}
               />
             </div>
             <div
               ref={opacityRef}
-              className="relative ml-2 h-full w-6 flex-none touch-none overflow-hidden rounded-lg"
+              className="relative ml-2 h-full w-3 flex-none touch-none"
               {...dragProps(updateOpacity)}
             >
-              <div className="pointer-events-none absolute inset-0" style={checkerStyle(8)} />
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ background: opacityBackground }}
-              />
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full border border-border">
+                <div className="absolute inset-0 color-checker" />
+                <div
+                  className="absolute inset-0"
+                  style={{ background: opacityBackground }}
+                />
+              </div>
               <span
-                className="pointer-events-none absolute left-0 right-0 h-1 rounded-sm border border-neutral-400"
-                style={{ top: `${opacity * 100}%`, transform: "translateY(-50%)" }}
+                className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 rounded-full border-2 border-white"
+                style={{
+                  top: `${opacity * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                  ...THUMB_STYLE
+                }}
               />
             </div>
           </div>
 
-          <div className="relative h-10 overflow-hidden">
-            <div className="absolute inset-0" style={checkerStyle(10)} />
+          <div className="relative h-9 overflow-hidden rounded-md border border-border">
+            <div className="absolute inset-0 color-checker" style={CHECKER_LARGE} />
             <div
               className="absolute inset-0"
               style={{ backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})` }}
@@ -348,11 +360,11 @@ function ColorPicker() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="w-8 flex-none text-sm font-medium text-muted-foreground">HEX</span>
+            <span className="w-8 flex-none text-xs font-medium text-muted-foreground">HEX</span>
             <Input
               value={hexText}
               onChange={(event) => changeHex(event.target.value)}
-              className="h-9 min-w-0 flex-1 font-medium"
+              className="h-9 min-w-0 flex-1 font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="HEX"
@@ -361,7 +373,7 @@ function ColorPicker() {
               value={alphaText}
               onChange={(event) => changeAlpha(event.target.value)}
               onBlur={() => setAlphaText(percentText)}
-              className="h-9 w-[60px] flex-none text-center font-medium"
+              className="h-9 w-[60px] flex-none text-center font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="Alpha"
@@ -369,11 +381,11 @@ function ColorPicker() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="w-8 flex-none text-sm font-medium text-muted-foreground">RGB</span>
+            <span className="w-8 flex-none text-xs font-medium text-muted-foreground">RGB</span>
             <Input
               value={rText}
               onChange={(event) => changeChannel("r", event.target.value)}
-              className="h-9 min-w-0 flex-1 font-medium"
+              className="h-9 min-w-0 flex-1 font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="R"
@@ -381,7 +393,7 @@ function ColorPicker() {
             <Input
               value={gText}
               onChange={(event) => changeChannel("g", event.target.value)}
-              className="h-9 min-w-0 flex-1 font-medium"
+              className="h-9 min-w-0 flex-1 font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="G"
@@ -389,7 +401,7 @@ function ColorPicker() {
             <Input
               value={bText}
               onChange={(event) => changeChannel("b", event.target.value)}
-              className="h-9 min-w-0 flex-1 font-medium"
+              className="h-9 min-w-0 flex-1 font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="B"
@@ -398,7 +410,7 @@ function ColorPicker() {
               value={alphaText}
               onChange={(event) => changeAlpha(event.target.value)}
               onBlur={() => setAlphaText(percentText)}
-              className="h-9 w-[60px] flex-none text-center font-medium"
+              className="h-9 w-[60px] flex-none text-center font-medium tabular-nums"
               spellCheck={false}
               autoComplete="off"
               aria-label="Alpha"

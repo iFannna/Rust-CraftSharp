@@ -49,8 +49,8 @@ export function FileNameColorPicker({
       title: t("colorPicker.title"),
       page: "color-picker",
       params: { value: isHexColor(value) ? value : DEFAULT_FILE_NAME_COLOR },
-      width: 320,
-      height: 444,
+      width: 360,
+      height: 460,
       anchor: WINDOW_LABEL.settings
     });
     if (picked) onChange(picked.toUpperCase());
