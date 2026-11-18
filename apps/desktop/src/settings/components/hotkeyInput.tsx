@@ -1,33 +1,46 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { XIcon } from "@/ui/icons";
 import { useI18n } from "@/i18n/useI18n";
+import { setHotkeyRecording } from "@/lib/hotkeys";
 import { captureHotkey, isModifierCode } from "@/settings/hotkey";
+import { confirmHotkeyConflict, confirmSimpleHotkey } from "@/settings/hotkeyDialogs";
 import { Button } from "@/ui/components/button";
 import { Input } from "@/ui/components/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { cn } from "@/ui/lib/utils";
 
-/** 只读输入框，聚焦后进入捕获状态：Esc 取消、Backspace 清空，可配置是否必须带修饰键 */
+/**
+ * 只读输入框，聚焦后进入捕获状态
+ * 录制期间全局热键暂停；Esc 取消、Backspace 清空
+ */
 export function HotkeyInput({
   value,
   onChange,
   label,
-  allowSingle = false
+  allowSingle = false,
+  conflictLabel
 }: {
   value: string;
   onChange: (next: string) => void;
   label: string;
-  /** 本地快捷键允许单键，如 Q / E */
+  /** 局部快捷键允许单键，如 Q / E */
   allowSingle?: boolean;
+  /** 返回占用该组合的项名称，没有冲突时为 null */
+  conflictLabel?: (hotkey: string) => string | null;
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
+  /** 弹窗期间阻止失焦结束录制，与老版临时摘掉失焦处理一致 */
+  const busy = useRef(false);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => () => setHotkeyRecording(false), []);
 
   const stopRecording = () => {
     setRecording(false);
     setError(null);
+    setHotkeyRecording(false);
   };
 
   const finishAndBlur = () => {
@@ -40,8 +53,8 @@ export function HotkeyInput({
     setError(null);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!recording) return;
+  const handleKeyDown = async (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!recording || busy.current) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -64,9 +77,19 @@ export function HotkeyInput({
       return;
     }
 
-    if (!captured.hasModifier && !allowSingle) {
-      setError(t("hotkeys.needModifier"));
-      return;
+    busy.current = true;
+    try {
+      if (!captured.hasModifier && !allowSingle && !(await confirmSimpleHotkey(t, captured.text))) {
+        finishAndBlur();
+        return;
+      }
+      const occupied = conflictLabel?.(captured.text) ?? null;
+      if (occupied && !(await confirmHotkeyConflict(t, captured.text, occupied))) {
+        finishAndBlur();
+        return;
+      }
+    } finally {
+      busy.current = false;
     }
 
     onChange(captured.text);
@@ -93,11 +116,15 @@ export function HotkeyInput({
               : t("common.notSet")
           }
           onFocus={() => {
-            setRecording(true);
+            if (recording) return;
             setError(null);
+            setRecording(true);
+            setHotkeyRecording(true);
           }}
-          onBlur={stopRecording}
-          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (!busy.current) stopRecording();
+          }}
+          onKeyDown={(event) => void handleKeyDown(event)}
         />
         <Tooltip>
           <TooltipTrigger asChild>

@@ -42,14 +42,21 @@ fn install_caption_hook(app: tauri::AppHandle, window: tauri::WebviewWindow) -> 
 }
 
 #[tauri::command]
-fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) -> Vec<String> {
+fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) {
+    #[cfg(windows)]
+    hotkeys::register(&app, actions);
+    #[cfg(not(windows))]
+    let _ = (app, actions);
+}
+
+#[tauri::command]
+fn hotkey_failures() -> Vec<String> {
     #[cfg(windows)]
     {
-        hotkeys::register(&app, actions)
+        hotkeys::failures()
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, actions);
         Vec::new()
     }
 }
@@ -626,6 +633,7 @@ fn main() {
             read_clipboard_paths,
             rename_path,
             register_hotkeys,
+            hotkey_failures,
             system_metrics,
             set_hit_mask,
             drag_window,

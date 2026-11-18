@@ -60,6 +60,15 @@ export function isModifierCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
+/** 比较两个组合是否相同：忽略大小写与多余空白 */
+export function normalizeHotkey(text: string): string {
+  return text
+    .split("+")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+    .join("+");
+}
+
 function mainKeyName(event: KeyboardEvent): string | null {
   const code = event.code;
 

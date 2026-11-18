@@ -1,42 +1,54 @@
-/** 全局热键：注册配置中的组合键并把触发映射到窗口开关 */
+/** 全局热键：注册配置中的组合键并映射到窗口动作；录制期间整体暂停 */
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { getConfig, subscribeConfig } from "@/config/appConfig";
 import { applyWindowAction } from "@/lib/windowControls";
 
-const EVENT_NAME = "craftsharp-hotkey";
-const RELOAD_DEBOUNCE_MS = 300;
-const FAILURE_KEY = "craftsharp.hotkeyFailures";
+export const HOTKEY_EVENT = "craftsharp-hotkey";
+export const HOTKEY_FAILURES_EVENT = "craftsharp-hotkey-failures";
+export const HOTKEY_RECORDING_EVENT = "craftsharp-hotkey-recording";
 
-const actions = ["settings", "statusBar", "inventory", "crosshair"] as const;
+const RELOAD_DEBOUNCE_MS = 300;
+const ACTIONS = ["settings", "statusBar", "inventory", "crosshair"] as const;
 const DESKTOP_ICONS_INDEX = 4;
 
 let started = false;
-let reloadTimer = 0;
-let appliedSpecs = "";
+let timer = 0;
+let recording = false;
+/** 最近一次发送给 Rust 的组合签名；录制暂停时置空，表示当前没有注册 */
+let applied = "";
 
 function specsNow(): string[] {
   const hotkeys = getConfig().hotkeys;
   return [hotkeys.settings, hotkeys.statusBar, hotkeys.inventory, hotkeys.crosshair, hotkeys.desktopIcons];
 }
 
-async function applyHotkeys() {
+function send(specs: string[]) {
+  return invoke("register_hotkeys", { actions: specs }).catch(() => undefined);
+}
+
+async function apply() {
+  if (recording) return;
   const specs = specsNow();
   const signature = specs.join("|");
-  if (signature === appliedSpecs) return;
-  appliedSpecs = signature;
+  if (signature === applied) return;
+  applied = signature;
+  await send(specs);
+}
 
-  const failed = await invoke<string[]>("register_hotkeys", { actions: specs }).catch(() => []);
-  if (failed.length > 0) {
-    console.warn("以下热键注册失败", failed);
-  }
-  // 设置面板在独立窗口，用共享存储转达注册失败项
-  try {
-    localStorage.setItem(FAILURE_KEY, JSON.stringify(failed));
-  } catch {
-    // 存储不可用时只是设置面板看不到提示
-  }
+/** 录制时注销全部全局热键，结束后按当前配置恢复；所有窗口同步录制状态 */
+export function setHotkeyRecording(active: boolean) {
+  if (recording === active) return;
+  recording = active;
+  applied = "";
+  void emit(HOTKEY_RECORDING_EVENT, active).catch(() => undefined);
+  if (active) void send(["", "", "", "", ""]);
+  else void apply();
+}
+
+export function isHotkeyRecording(): boolean {
+  return recording;
 }
 
 /** 主窗口启动时调用一次 */
@@ -44,19 +56,26 @@ export function initializeHotkeys() {
   if (started || !("__TAURI_INTERNALS__" in window)) return;
   started = true;
 
-  void applyHotkeys();
+  void apply();
 
-  void listen<number>(EVENT_NAME, (event) => {
+  void listen<number>(HOTKEY_EVENT, (event) => {
     if (event.payload === DESKTOP_ICONS_INDEX) {
       void invoke("toggle_desktop_icons").catch(() => undefined);
       return;
     }
-    const action = actions[event.payload];
+    const action = ACTIONS[event.payload];
     if (action) void applyWindowAction(action);
   });
 
+  // 录制发生在设置窗口，这里同步暂停局部快捷键并让自己的缓存失效
+  void listen<boolean>(HOTKEY_RECORDING_EVENT, (event) => {
+    recording = event.payload;
+    applied = "";
+  });
+
   subscribeConfig(() => {
-    window.clearTimeout(reloadTimer);
-    reloadTimer = window.setTimeout(() => void applyHotkeys(), RELOAD_DEBOUNCE_MS);
+    if (recording) return;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => void apply(), RELOAD_DEBOUNCE_MS);
   });
 }

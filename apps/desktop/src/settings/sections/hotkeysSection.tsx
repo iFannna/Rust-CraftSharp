@@ -1,24 +1,17 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { HotkeysConfig } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
+import { HOTKEY_FAILURES_EVENT } from "@/lib/hotkeys";
 import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import { HotkeyInput } from "@/settings/components/hotkeyInput";
+import { normalizeHotkey } from "@/settings/hotkey";
 
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons" | "dropItem" | "openInventory";
-
-const FAILURE_KEY = "craftsharp.hotkeyFailures";
-
-function readFailures(): string[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(FAILURE_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 const HOTKEY_ITEMS: {
   key: HotkeyKey;
@@ -43,20 +36,35 @@ const HOTKEY_ITEMS: {
 export function HotkeysSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
-  const [failed, setFailed] = useState<string[]>(readFailures);
+  const [failed, setFailed] = useState<string[]>([]);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === FAILURE_KEY) setFailed(readFailures());
+    let alive = true;
+    void invoke<string[]>("hotkey_failures")
+      .then((list) => {
+        if (alive) setFailed(list);
+      })
+      .catch(() => undefined);
+    const stop = listen<string[]>(HOTKEY_FAILURES_EVENT, (event) => setFailed(event.payload));
+    return () => {
+      alive = false;
+      void stop.then((off) => off());
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const updateHotkey = (key: HotkeyKey, hotkey: string) => {
     const patch: Partial<HotkeysConfig> = {};
     patch[key] = hotkey;
     updateConfig({ hotkeys: patch });
+  };
+
+  const occupiedBy = (key: HotkeyKey, hotkey: string): string | null => {
+    const target = normalizeHotkey(hotkey);
+    if (!target) return null;
+    const occupied = HOTKEY_ITEMS.find(
+      (item) => item.key !== key && normalizeHotkey(config.hotkeys[item.key]) === target
+    );
+    return occupied ? t(occupied.labelKey) : null;
   };
 
   const resetHotkeys = async () => {
@@ -89,6 +97,7 @@ export function HotkeysSection() {
           <HotkeyInput
             value={config.hotkeys[item.key]}
             label={t(item.labelKey)}
+            conflictLabel={(hotkey) => occupiedBy(item.key, hotkey)}
             onChange={(hotkey) => updateHotkey(item.key, hotkey)}
           />
         </Row>
@@ -100,6 +109,7 @@ export function HotkeysSection() {
             value={config.hotkeys[item.key]}
             label={t(item.labelKey)}
             allowSingle
+            conflictLabel={(hotkey) => occupiedBy(item.key, hotkey)}
             onChange={(hotkey) => updateHotkey(item.key, hotkey)}
           />
         </Row>
@@ -107,7 +117,6 @@ export function HotkeysSection() {
       <ActionBar>
         <Button onClick={resetHotkeys}>{t("common.restoreDefaults")}</Button>
       </ActionBar>
-      <Note>{t("hotkeys.hint")}</Note>
     </>
   );
 }
