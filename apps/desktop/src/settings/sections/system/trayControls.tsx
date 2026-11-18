@@ -184,7 +184,7 @@ function TrayMenuEditor() {
               <button
                 type="button"
                 className={cn(
-                  "grid h-8 w-8 flex-none touch-none cursor-grab place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent active:cursor-grabbing",
+                  "grid h-8 w-8 flex-none touch-none cursor-grab place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing",
                   !item.visible && "opacity-50"
                 )}
                 aria-label={t("aria.dragHandle")}

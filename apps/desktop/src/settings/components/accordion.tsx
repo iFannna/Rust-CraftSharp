@@ -38,8 +38,11 @@ export function Accordion({
       }}
       className="mb-2"
     >
-      <AccordionItem value="content" className="rounded-lg border bg-card px-4">
-        <AccordionTrigger className="py-3.5 text-sm font-medium hover:no-underline">
+      <AccordionItem
+        value="content"
+        className="rounded-lg border bg-card px-4 has-[h3>button:focus-visible]:ring-1 has-[h3>button:focus-visible]:ring-ring"
+      >
+        <AccordionTrigger className="py-3.5 text-sm font-medium transition-colors hover:no-underline focus-visible:outline-none">
           <div className="min-w-0 space-y-1">
             <div className="leading-snug">{title}</div>
             {description ? (

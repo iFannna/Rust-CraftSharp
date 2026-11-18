@@ -53,8 +53,21 @@ export function HotkeyInput({
     setError(null);
   };
 
+  const startRecording = () => {
+    setError(null);
+    setRecording(true);
+    setHotkeyRecording(true);
+  };
+
   const handleKeyDown = async (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!recording || busy.current) return;
+
+    // Tab 用于离开，不拦下来记成热键
+    if (event.key === "Tab") {
+      stopRecording();
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
 
@@ -115,16 +128,23 @@ export function HotkeyInput({
               ? t(allowSingle ? "hotkeys.pressKey" : "hotkeys.pressCombination")
               : t("common.notSet")
           }
-          onFocus={() => {
-            if (recording) return;
-            setError(null);
-            setRecording(true);
-            setHotkeyRecording(true);
+          onPointerDown={() => {
+            if (!recording) startRecording();
           }}
           onBlur={() => {
             if (!busy.current) stopRecording();
           }}
-          onKeyDown={(event) => void handleKeyDown(event)}
+          onKeyDown={(event) => {
+            if (!recording) {
+              // 键盘聚焦时用回车或空格开始录制，Tab 保持正常移动焦点
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                startRecording();
+              }
+              return;
+            }
+            void handleKeyDown(event);
+          }}
         />
         <Tooltip>
           <TooltipTrigger asChild>

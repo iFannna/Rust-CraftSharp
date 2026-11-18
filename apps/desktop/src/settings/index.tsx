@@ -176,7 +176,7 @@ function SettingsApp() {
                   key={id}
                   type="button"
                   className={cn(
-                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors",
+                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     id === active
                       ? "bg-secondary font-medium text-secondary-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
