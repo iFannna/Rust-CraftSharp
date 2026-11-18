@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button as UIButton } from "@/ui/components/button";
 import { Checkbox } from "@/ui/components/checkbox";
 import { Input } from "@/ui/components/input";
@@ -164,13 +164,18 @@ export function TextField({
   );
 }
 
+/**
+ * 与老版一致：只接受数字输入，失焦或回车时才生效
+ * 编辑期间保留原始输入，清空后回落 emptyValue，默认用上限
+ */
 export function NumberField({
   value,
   min,
   max,
   onChange,
   ariaLabel,
-  disabled = false
+  disabled = false,
+  emptyValue
 }: {
   value: number;
   min: number;
@@ -178,20 +183,37 @@ export function NumberField({
   onChange: (next: number) => void;
   ariaLabel: string;
   disabled?: boolean;
+  emptyValue?: number;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    const parsed = draft === "" ? null : Number(draft);
+    const fallback = emptyValue ?? max;
+    const next = Math.min(max, Math.max(min, parsed ?? fallback));
+    if (next !== value) onChange(next);
+  };
+
   return (
     <Input
-      type="number"
-      className="h-9 w-[88px] max-w-full"
+      type="text"
+      inputMode="numeric"
+      className="h-9 w-[88px] max-w-full tabular-nums"
       aria-label={ariaLabel}
-      min={min}
-      max={max}
-      value={value}
+      value={draft ?? String(value)}
       disabled={disabled}
       onChange={(event) => {
-        const next = Number(event.target.value);
-        if (!Number.isFinite(next)) return;
-        onChange(Math.min(max, Math.max(min, Math.round(next))));
+        const text = event.target.value;
+        const digits = text.replace(/\D/g, "");
+        // 非法字符不会进入状态，这里同步回写受控值，避免输入框残留脏字符
+        if (digits !== text) event.target.value = digits;
+        setDraft(digits);
+      }}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
       }}
     />
   );

@@ -121,6 +121,7 @@ function InventoryCardContent() {
               value={inventory.grayOverlayOpacity}
               min={0}
               max={100}
+              emptyValue={50}
               ariaLabel={t("aria.grayOpacity")}
               onChange={(grayOverlayOpacity) => patch({ grayOverlayOpacity })}
             />
