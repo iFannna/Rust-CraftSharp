@@ -238,6 +238,8 @@ export const enUS: Messages = {
   "hud.showHotbarDesc": "Display hotbar window on desktop",
   "hud.hoverEffect": "Hover Effect",
   "hud.hoverEffectDesc": "Show selection frame when hovering over slot",
+  "hud.showFileName": "Show File Name",
+  "hud.showFileNameDesc": "Show file name when hotbar slot is selected",
   "hud.leftOffhand": "Left Offhand",
   "hud.leftOffhandDesc": "Show offhand slot on the left side of hotbar",
   "hud.rightOffhand": "Right Offhand",

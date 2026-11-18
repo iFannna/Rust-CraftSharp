@@ -220,6 +220,9 @@ fn apply_inner(state: &mut State, config: HudConfig) {
             state.style = Some(FrameStyle::load(&config));
         }
         state.visible = config.visible && !state.hidden_by_inventory;
+        if !config.show_file_name {
+            state.label = None;
+        }
         state.config = Some(config);
         // 拖放结束且源格已按新数据清空后，解除源格固定
         if state.drag_source >= 0
@@ -671,6 +674,10 @@ pub fn show_label(state: &mut State, slot: i32) {
         return;
     }
     let Some(config) = &state.config else { return };
+    if !config.show_file_name {
+        state.label = None;
+        return;
+    }
     let Some(item) = config.slot(slot) else {
         state.label = None;
         return;

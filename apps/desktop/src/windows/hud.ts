@@ -39,6 +39,12 @@ function elementOf(element: ReturnType<typeof getConfig>["hudElements"]["element
   };
 }
 
+/** 文件名标签不带后缀，点开头的隐藏文件保持原样 */
+function labelName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 function buildConfig() {
   const config = getConfig();
   const hotbar = config.hotbar;
@@ -48,7 +54,7 @@ function buildConfig() {
   const slots: Array<{ index: number; path: string; name: string }> = [];
   for (let index = 0; index < 11; index += 1) {
     const item = getSlotItem(index);
-    if (item) slots.push({ index, path: item.path, name: displayNameOf(item) });
+    if (item) slots.push({ index, path: item.path, name: labelName(displayNameOf(item)) });
   }
 
   const scale =
@@ -69,6 +75,7 @@ function buildConfig() {
     rememberPosition: config.statusBar.rememberPosition,
     position: config.statusBar.position ?? null,
     positionHeight: config.statusBar.positionHeight ?? null,
+    showFileName: hotbar.showFileName,
     fileNameColor: hotbar.fileNameColor,
     dropKey: config.hotkeys.dropItem,
     openInventory: config.hotkeys.openInventory,

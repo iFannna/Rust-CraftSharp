@@ -12,21 +12,6 @@ export function HotbarCardContent() {
 
   return (
     <>
-      <Row plain label={t("hud.fileNameColor")} description={t("hud.fileNameColorDesc")}>
-        <FileNameColorPicker
-          value={hotbar.fileNameColor}
-          label={t("aria.hotbarFileNameColor")}
-          onChange={(fileNameColor) => updateConfig({ hotbar: { fileNameColor } })}
-        />
-      </Row>
-      <Row plain label={t("hud.openAction")} description={t("hud.openActionDesc")}>
-        <Select
-          value={hotbar.clickMode}
-          options={clickModeOptions(t)}
-          ariaLabel={t("aria.hotbarAction")}
-          onChange={(clickMode) => updateConfig({ hotbar: { clickMode } })}
-        />
-      </Row>
       <Row plain label={t("hud.showHotbar")} description={t("hud.showHotbarDesc")}>
         <Toggle
           checked={hotbar.visible}
@@ -39,6 +24,30 @@ export function HotbarCardContent() {
           checked={hotbar.hoverEffect}
           label={t("hud.hoverEffect")}
           onChange={(hoverEffect) => updateConfig({ hotbar: { hoverEffect } })}
+        />
+      </Row>
+      <Row plain label={t("hud.showFileName")} description={t("hud.showFileNameDesc")}>
+        <Toggle
+          checked={hotbar.showFileName}
+          label={t("hud.showFileName")}
+          onChange={(showFileName) => updateConfig({ hotbar: { showFileName } })}
+        />
+      </Row>
+      {hotbar.showFileName ? (
+        <Row plain label={t("hud.fileNameColor")} description={t("hud.fileNameColorDesc")}>
+          <FileNameColorPicker
+            value={hotbar.fileNameColor}
+            label={t("aria.hotbarFileNameColor")}
+            onChange={(fileNameColor) => updateConfig({ hotbar: { fileNameColor } })}
+          />
+        </Row>
+      ) : null}
+      <Row plain label={t("hud.openAction")} description={t("hud.openActionDesc")}>
+        <Select
+          value={hotbar.clickMode}
+          options={clickModeOptions(t)}
+          ariaLabel={t("aria.hotbarAction")}
+          onChange={(clickMode) => updateConfig({ hotbar: { clickMode } })}
         />
       </Row>
       <Row plain label={t("hud.leftOffhand")} description={t("hud.leftOffhandDesc")}>

@@ -61,6 +61,7 @@ export interface HotbarConfig {
   clickMode: ClickMode;
   hoverEffect: boolean;
   showTargetIcon: boolean;
+  showFileName: boolean;
   fileNameColor: string;
 }
 
@@ -265,6 +266,7 @@ const DEFAULTS: AppConfig = {
     clickMode: "double",
     hoverEffect: true,
     showTargetIcon: false,
+    showFileName: true,
     fileNameColor: "#FCFCFC"
   },
   inventory: {

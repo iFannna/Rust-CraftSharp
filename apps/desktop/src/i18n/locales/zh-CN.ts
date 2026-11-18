@@ -236,6 +236,8 @@ export const zhCN = {
   "hud.showHotbarDesc": "在桌面显示快捷栏窗口",
   "hud.hoverEffect": "悬浮效果",
   "hud.hoverEffectDesc": "鼠标悬停时显示选中框",
+  "hud.showFileName": "显示文件名",
+  "hud.showFileNameDesc": "选中快捷栏格子时显示文件名",
   "hud.leftOffhand": "左副手槽",
   "hud.leftOffhandDesc": "在快捷栏左侧显示副手槽位",
   "hud.rightOffhand": "右副手槽",

@@ -10,6 +10,10 @@ fn visible_default() -> bool {
     true
 }
 
+fn show_file_name_default() -> bool {
+    true
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Element {
@@ -116,6 +120,9 @@ pub struct HudConfig {
     /// 记录位置时的窗口高度，用于按底边换算
     #[serde(default)]
     pub position_height: Option<i32>,
+    /// 选中格子时是否显示文件名标签
+    #[serde(default = "show_file_name_default")]
+    pub show_file_name: bool,
     #[serde(default)]
     pub file_name_color: String,
     #[serde(default)]
