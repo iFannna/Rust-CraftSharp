@@ -61,7 +61,7 @@ pub fn install(font: Font) {
     FONT.with(|cell| *cell.borrow_mut() = Some(font));
 }
 
-/// 在内容区底部上方 50 倍缩放处居中绘制文件名，整段文字带同色阴影。
+/// 在窗口底上方 50 倍缩放处绘制文件名，按快捷栏与经验条同宽的核心容器居中。
 pub fn draw_label(frame: &mut Frame, layout: &Layout, text: &str, color: u32, alpha: u8) {
     let px = 8.0 * layout.scale;
     let Some(glyphs) = with_font(|font| rasterize(font, text, px)) else {
@@ -71,23 +71,23 @@ pub fn draw_label(frame: &mut Frame, layout: &Layout, text: &str, color: u32, al
         return;
     }
 
-    let total: f32 = glyphs.iter().map(|glyph| glyph.advance).sum();
+    // 字形 x 已经是累计位移，按实际墨迹范围居中
+    let left = glyphs.iter().map(|glyph| glyph.x).fold(f32::MAX, f32::min);
+    let right = glyphs.iter().map(|glyph| glyph.x + glyph.width as f32).fold(f32::MIN, f32::max);
     let min_top = glyphs.iter().map(|glyph| glyph.top).fold(f32::MAX, f32::min);
     let max_bottom = glyphs.iter().map(|glyph| glyph.top + glyph.height as f32).fold(f32::MIN, f32::max);
-    // 内容很矮时把文字收进可视区域，避免落到窗口上方
-    let gap = (50.0 * layout.scale).min((layout.height - 10.0 * layout.scale).max(0.0));
-    let bottom = layout.height - gap;
+    // 布局已按标签高度在顶部补了透明带，这里固定 50 即可，与老项目一致
+    let bottom = layout.height - 50.0 * layout.scale;
+    let origin_x = layout.core_left + (layout.core_width - (right - left)) / 2.0 - left;
     let origin_y = bottom - (max_bottom - min_top);
-    let mut pen = (layout.width - total) / 2.0;
     let shadow = (0.53 * layout.scale).round();
     let shadow_color = darken(color);
 
     for glyph in &glyphs {
-        let x = pen + glyph.x;
+        let x = origin_x + glyph.x;
         let y = origin_y + (glyph.top - min_top);
         blit(frame, &glyph.bitmap, glyph.width, glyph.height, x + shadow, y + shadow, shadow_color, alpha);
         blit(frame, &glyph.bitmap, glyph.width, glyph.height, x, y, color, alpha);
-        pen += glyph.advance;
     }
 }
 
@@ -169,7 +169,6 @@ struct Glyph {
     height: usize,
     x: f32,
     top: f32,
-    advance: f32,
 }
 
 fn rasterize(font: &Font, text: &str, px: f32) -> Vec<Glyph> {
@@ -190,7 +189,6 @@ fn rasterize(font: &Font, text: &str, px: f32) -> Vec<Glyph> {
                 height: metrics.height,
                 x: pen + metrics.xmin as f32,
                 top: ascent - (metrics.height as f32 + metrics.ymin as f32),
-                advance: metrics.advance_width,
             });
         }
         pen += metrics.advance_width;
@@ -245,4 +243,53 @@ fn blend(dst: &mut u32, src: u32) {
         | (((src >> 16 & 0xff) + dr).min(255) << 16)
         | (((src >> 8 & 0xff) + dg).min(255) << 8)
         | ((src & 0xff) + db).min(255);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hud::layout::{compute, Offhand, Visibility};
+    use crate::hud::sprite::Frame;
+
+    fn ink_center(frame: &Frame) -> f32 {
+        let mut left = frame.width;
+        let mut right = 0;
+        for y in 0..frame.height {
+            for x in 0..frame.width {
+                if frame.pixels[(y * frame.width + x) as usize] != 0 {
+                    left = left.min(x);
+                    right = right.max(x);
+                }
+            }
+        }
+        assert!(right >= left, "没有画出字形");
+        (left + right + 1) as f32 / 2.0
+    }
+
+    #[test]
+    fn label_centers_on_core_with_either_offhand() {
+        let visible = Visibility {
+            health: true,
+            food: true,
+            air: false,
+            armor: false,
+            absorbing: false,
+            exp_bar: true,
+            hotbar: true,
+        };
+        // 左、右单侧副手各测一次，标签都要与核心容器同轴
+        for left_offhand in [true, false] {
+            let layout = compute(
+                6.0,
+                Offhand { left: left_offhand, right: !left_offhand },
+                visible,
+                0,
+            );
+            let mut frame = Frame::new(layout.width.ceil() as u32, layout.height.ceil() as u32);
+            draw_label(&mut frame, &layout, "example.txt", 0xffff_ffff, 255);
+            let core = layout.core_left + layout.core_width / 2.0;
+            // 阴影整体偏右下 3 像素，中心误差不超过 3
+            assert!((ink_center(&frame) - core).abs() <= 3.0);
+        }
+    }
 }

@@ -227,6 +227,7 @@ pub const WM_TIMER: u32 = 0x0113;
 pub const WM_DPICHANGED: u32 = 0x02E0;
 pub const WM_CAPTURECHANGED: u32 = 0x0215;
 pub const HTCLIENT: isize = 1;
+pub const HTTRANSPARENT: isize = -1;
 pub const MA_ACTIVATE: isize = 1;
 pub const MA_NOACTIVATE: isize = 3;
 

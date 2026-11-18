@@ -19,6 +19,8 @@ pub const ABSORBING_PER_ROW: f32 = 10.0;
 pub const ABSORBING_MAX_GAP_ADJUSTMENT: f32 = 7.0;
 /// 左右各留 1 MC 像素，容纳比格子宽 4 像素的选中框
 pub const SIDE_PADDING: f32 = 1.0;
+/// 文件名标签：距底 50 加一行文字高度，内容不足时在顶部补透明带
+pub const LABEL_BAND: f32 = 60.0;
 
 /// 全局格子索引对应的格子 id：0 左副手、1 右副手、2-10 主快捷栏。
 pub fn slot_id(index: i32) -> String {
@@ -76,7 +78,10 @@ pub struct Layout {
     pub core_width: f32,
     pub core_left: f32,
     pub width: f32,
+    /// 窗口高度，含顶部文件名透明带
     pub height: f32,
+    /// 内容起始 y，即顶部透明带高度
+    pub content_top: f32,
     pub icon_size: f32,
     pub slot_size: f32,
     pub gap: f32,
@@ -148,10 +153,13 @@ pub fn compute(scale: f32, offhand: Offhand, visible: Visibility, max_absorption
     let right_height = right;
 
     let status_height = left_height.max(right_height);
-    let height = (if visible.hotbar { hotbar_height } else { 0.0 })
+    let content_height = (if visible.hotbar { hotbar_height } else { 0.0 })
         + (if visible.exp_bar { exp_margin + exp_height } else { 0.0 })
         + row_gap
         + status_height;
+    // 标签固定画在窗口底上方 50，内容不够高时窗口向上补透明带，避免压到格子
+    let content_top = (LABEL_BAND * scale - content_height).max(0.0);
+    let height = content_height + content_top;
 
     let mut cursor = height;
     let mut hotbar_top = cursor;
@@ -173,6 +181,7 @@ pub fn compute(scale: f32, offhand: Offhand, visible: Visibility, max_absorption
         core_left,
         width,
         height,
+        content_top,
         icon_size: icon,
         slot_size: SLOT * scale,
         gap,
@@ -300,4 +309,51 @@ impl Layout {
 
 fn hit(rect: Rect, x: f32, y: f32) -> bool {
     x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn visible(air: bool, armor: bool, absorbing: bool) -> Visibility {
+        Visibility {
+            health: true,
+            food: true,
+            air,
+            armor,
+            absorbing,
+            exp_bar: true,
+            hotbar: true,
+        }
+    }
+
+    #[test]
+    fn short_content_reserves_label_band() {
+        let scale = 6.0;
+        let layout = compute(scale, Offhand { left: false, right: false }, visible(false, false, false), 0);
+        // 默认内容 39：22 快捷栏 + 7 经验条 + 1 行间距 + 9 状态行
+        assert_eq!(layout.content_top, (LABEL_BAND - 39.0) * scale);
+        assert_eq!(layout.height, LABEL_BAND * scale);
+        assert_eq!(layout.hotbar_top, layout.height - HOTBAR_HEIGHT * scale);
+    }
+
+    #[test]
+    fn label_sits_above_hotbar_and_band_has_no_slots() {
+        let scale = 6.0;
+        let layout = compute(scale, Offhand { left: false, right: false }, visible(false, false, false), 0);
+        let label_bottom = layout.height - 50.0 * scale;
+        // 文字底边在内容顶之上，不与格子或选中框重叠
+        assert!(label_bottom <= layout.content_top);
+        let rect = layout.slot_drop_rect(0);
+        assert_eq!(layout.slot_at(rect.left + 1.0, rect.top + 1.0), 2);
+        assert_eq!(layout.slot_at(rect.left, layout.content_top / 2.0), -1);
+    }
+
+    #[test]
+    fn tall_content_needs_no_band() {
+        let scale = 2.0;
+        let layout = compute(scale, Offhand { left: true, right: true }, visible(true, true, true), 200);
+        assert_eq!(layout.content_top, 0.0);
+        assert!(layout.height > LABEL_BAND * scale);
+    }
 }

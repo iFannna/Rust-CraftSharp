@@ -94,23 +94,26 @@ unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize)
     w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
 }
 
+/// 光标是否落在快捷栏内容区，顶部文件名透明带不算。
+fn on_hotbar_at(state: &State, point: w::Point) -> bool {
+    if !state.visible || !state.shown || w::window_from_point(point) != state.hwnd {
+        return false;
+    }
+    let band = state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0);
+    (w::to_client(state.hwnd, point).y as f32) >= band
+}
+
 unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) -> isize {
     if code >= 0 {
         let data = &*(lparam as *const MouseHookData);
         if wparam == w::WM_LBUTTONDOWN as usize {
             // 点击快捷栏取得键盘焦点，点击别处失去
-            let on_hotbar = window::with_state(|state| {
-                state.visible && state.shown && w::window_from_point(data.pt) == state.hwnd
-            })
-            .unwrap_or(false);
+            let on_hotbar = window::with_state(|state| on_hotbar_at(state, data.pt)).unwrap_or(false);
             HOTBAR_KEY_ACTIVE.store(on_hotbar, Ordering::Relaxed);
         } else if wparam == w::WM_MOUSEWHEEL as usize {
             // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
             let handled = window::with_state(|state| {
-                if !state.visible || !state.shown || state.config.is_none() {
-                    return false;
-                }
-                if w::window_from_point(data.pt) != state.hwnd {
+                if state.config.is_none() || !on_hotbar_at(state, data.pt) {
                     return false;
                 }
                 on_wheel(state, data.mouse_data as usize);

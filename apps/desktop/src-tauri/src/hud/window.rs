@@ -371,7 +371,7 @@ pub fn render(state: &mut State) {
             rect.x + (rect.core_left - layout.core_left).round() as i32,
             rect.y + rect.height as i32 - height as i32,
         ),
-        None => initial_position(state, &config, width, height),
+        None => initial_position(state, &config, width, height, layout.content_top),
     };
     if let Some(moving) = &state.moving {
         let cursor = w::cursor_pos();
@@ -541,11 +541,12 @@ pub fn repark_desktop_windows() {
     crate::hud::crosshair::repark_desktop();
 }
 
-fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32) -> (i32, i32) {
+fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32, band: f32) -> (i32, i32) {
     let dpi = state.dpi;
     if config.remember_position {
         if let Some(position) = &config.position {
-            let height_css = height as f32 / dpi;
+            // 记录的是内容高度，不含顶部透明带
+            let height_css = (height as f32 - band) / dpi;
             let saved_height = config.position_height.unwrap_or(height_css.ceil() as i32) as f32;
             let bottom = position.y as f32 + saved_height.max(height_css);
             return (
@@ -795,12 +796,14 @@ pub fn persist_position(state: &State) {
         return;
     }
     let dpi = state.dpi;
+    // 落盘内容顶与内容高，顶部透明带不计入，恢复时按同一口径换算
+    let band = state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0);
     let _ = state.app.emit(
         "hud-moved",
         serde_json::json!({
             "x": (rect.x as f32 / dpi).round() as i32,
-            "y": (rect.y as f32 / dpi).round() as i32,
-            "height": (rect.height as f32 / dpi).round() as i32,
+            "y": ((rect.y as f32 + band) / dpi).round() as i32,
+            "height": ((rect.height as f32 - band) / dpi).round() as i32,
         }),
     );
 }
@@ -813,7 +816,29 @@ unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lp
             w::validate(hwnd);
             return 0;
         }
-        w::WM_NCHITTEST => return w::HTCLIENT,
+        w::WM_NCHITTEST => {
+            // 顶部透明带只承载文件名，点击与悬停都交给下层桌面
+            let band = with_state(|state| {
+                state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0)
+            })
+            .unwrap_or(0.0);
+            if band > 0.0 {
+                let point = w::Point {
+                    x: (lparam & 0xffff) as i16 as i32,
+                    y: ((lparam >> 16) & 0xffff) as i16 as i32,
+                };
+                if (w::to_client(hwnd, point).y as f32) < band {
+                    with_state(|state| {
+                        if state.hover != -1 {
+                            state.hover = -1;
+                            render(state);
+                        }
+                    });
+                    return w::HTTRANSPARENT;
+                }
+            }
+            return w::HTCLIENT;
+        }
         w::WM_TIMER => {
             if wparam == TIMER_ANIM {
                 with_state(tick_anim);
