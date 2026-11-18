@@ -46,6 +46,9 @@ export const enUS: Messages = {
   "system.rememberNavDesc": "Restore last selected settings page on next launch",
   "system.basicSettings": "Basic Settings",
   "system.traySettings": "System Tray Settings",
+  "system.hotkeySettings": "Hotkey Settings",
+  "system.distinguishModifiersLabel": "Distinguish Left/Right Modifiers",
+  "system.distinguishModifiersDesc": "Key bindings distinguish left and right modifier keys",
 
   "tray.singleClick": "Single-click Action",
   "tray.doubleClick": "Double-click Action",
@@ -203,8 +206,8 @@ export const enUS: Messages = {
   "hotkeys.conflictHint": "Do you still want to use this hotkey?",
   "hotkeys.simpleTitle": "Warning",
   "hotkeys.simpleMessage": "The hotkey \"{hotkey}\" is too simple. To avoid conflicts with other features and accidental triggers, please use a more complex key combination. Do you want to use this hotkey?",
-  "hotkeys.pressKey": "Press a key...",
-  "hotkeys.pressCombination": "Press a key combination...",
+  "hotkeys.press": "Press shortcut",
+  "hotkeys.tooMany": "Up to 3 keys per shortcut",
   "hotkeys.clear": "Clear hotkey",
 
   "hud.title": "HUD Settings",

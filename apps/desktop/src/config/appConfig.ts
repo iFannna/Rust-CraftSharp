@@ -31,6 +31,8 @@ export interface SystemConfig {
   rememberWindowSize: boolean;
   rememberNavSelection: boolean;
   rememberCardStates: boolean;
+  /** 快捷键绑定区分左右修饰键，默认开启 */
+  distinguishModifiers: boolean;
   cardExpandedStates: Record<string, boolean>;
   windowPosition: PositionConfig | null;
   windowSize: WindowSizeConfig | null;
@@ -252,6 +254,7 @@ const DEFAULTS: AppConfig = {
     rememberWindowSize: true,
     rememberNavSelection: true,
     rememberCardStates: true,
+    distinguishModifiers: true,
     cardExpandedStates: {},
     windowPosition: null,
     windowSize: null,

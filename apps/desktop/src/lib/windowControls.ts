@@ -18,7 +18,9 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
 
   if (!visible) {
     if (label === WINDOW_LABEL.settings) {
-      // 设置面板收起时，从它打开的展示窗口一起收起
+      // 设置面板收起后交给全局钩子，避免页面失焦事件缺失导致钩子一直让路
+      void invoke("set_hotkey_app_focus", { focused: false }).catch(() => undefined);
+      // 从它打开的展示窗口一起收起
       const picker = await WebviewWindow.getByLabel(WINDOW_LABEL.iconPicker);
       await picker?.close().catch(() => undefined);
     }

@@ -21,6 +21,9 @@ static FOREGROUND_HOOK: AtomicIsize = AtomicIsize::new(0);
 static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// 点击快捷栏视为取得键盘焦点，点击别处或切换前台窗口即失去。
 static HOTBAR_KEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// 状态栏内的局部快捷键序列
+static KEY_SEQUENCE: std::sync::Mutex<crate::hotkeys::SequenceState> =
+    std::sync::Mutex::new(crate::hotkeys::SequenceState::new());
 
 #[repr(C)]
 #[allow(dead_code)]
@@ -46,13 +49,12 @@ pub fn install_desktop_hooks() {
     if HOOKS_INSTALLED.swap(true, Ordering::SeqCst) {
         return;
     }
-    // SAFETY: 钩子过程在本进程内，安装在有消息循环的线程
-    let module = unsafe { w::GetModuleHandleW(std::ptr::null()) };
-    let key_hook = unsafe { w::SetWindowsHookExW(w::WH_KEYBOARD_LL, Some(keyboard_hook), module, 0) };
+    // SAFETY: 钩子过程在本进程内，hMod 必须为 0 才会回调
+    let key_hook = unsafe { w::SetWindowsHookExW(w::WH_KEYBOARD_LL, Some(keyboard_hook), 0, 0) };
     if key_hook != 0 {
         KEY_HOOK.store(key_hook, Ordering::SeqCst);
     }
-    let mouse_hook = unsafe { w::SetWindowsHookExW(w::WH_MOUSE_LL, Some(mouse_hook), module, 0) };
+    let mouse_hook = unsafe { w::SetWindowsHookExW(w::WH_MOUSE_LL, Some(mouse_hook), 0, 0) };
     if mouse_hook != 0 {
         MOUSE_HOOK.store(mouse_hook, Ordering::SeqCst);
     }
@@ -78,17 +80,23 @@ pub fn install_desktop_hooks() {
 
 unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
     // 只在点击快捷栏取得键盘焦点后接管，其他情况一律放过
-    if code >= 0 && wparam == w::WM_KEYDOWN as usize && HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed) {
+    if code >= 0 && HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed) {
         let data = &*(lparam as *const KeyboardHookData);
-        let handled = window::with_state(|state| {
-            if !state.visible || !state.shown || state.config.is_none() {
-                return false;
+        if wparam == w::WM_KEYUP as usize {
+            if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+                sequence.release(data.vk_code);
             }
-            on_key(state, data.vk_code as usize)
-        })
-        .unwrap_or(false);
-        if handled {
-            return 1;
+        } else if wparam == w::WM_KEYDOWN as usize {
+            let handled = window::with_state(|state| {
+                if !state.visible || !state.shown || state.config.is_none() {
+                    return false;
+                }
+                on_key(state, data.vk_code as usize)
+            })
+            .unwrap_or(false);
+            if handled {
+                return 1;
+            }
         }
     }
     w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
@@ -110,6 +118,11 @@ unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) ->
             // 点击快捷栏取得键盘焦点，点击别处失去
             let on_hotbar = window::with_state(|state| on_hotbar_at(state, data.pt)).unwrap_or(false);
             HOTBAR_KEY_ACTIVE.store(on_hotbar, Ordering::Relaxed);
+            if !on_hotbar {
+                if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+                    sequence.reset();
+                }
+            }
         } else if wparam == w::WM_MOUSEWHEEL as usize {
             // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
             let handled = window::with_state(|state| {
@@ -139,6 +152,9 @@ unsafe extern "system" fn foreground_event(
 ) {
     // 前台切到别的窗口，快捷栏不再持有键盘焦点
     HOTBAR_KEY_ACTIVE.store(false, Ordering::Relaxed);
+    if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+        sequence.reset();
+    }
     // 显示桌面恢复后窗口可能停在应用之上，前台回到外部窗口时重新置底归位
     window::repark_desktop_windows();
 }
@@ -152,6 +168,7 @@ pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
         | w::WM_RBUTTONUP
         | w::WM_MOUSEWHEEL
         | w::WM_KEYDOWN
+        | w::WM_KEYUP
         | w::WM_CAPTURECHANGED => {
             window::with_state(|state| handle_message(state, message, wparam, lparam));
             Some(0)
@@ -171,6 +188,7 @@ fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize)
         w::WM_KEYDOWN => {
             on_key(state, wparam);
         }
+        w::WM_KEYUP => on_key_up(wparam),
         w::WM_CAPTURECHANGED => on_capture_lost(state),
         _ => {}
     }
@@ -377,7 +395,7 @@ fn on_wheel(state: &mut State, wparam: usize) {
 
 /// 处理状态栏窗口内的快捷键，返回是否已经消费这个按键。
 fn on_key(state: &mut State, wparam: usize) -> bool {
-    let key = wparam as u8;
+    let key = wparam as u32;
 
     if (0x31..=0x39).contains(&key) {
         select(state, (key - 0x30) as i32 + 1);
@@ -401,31 +419,41 @@ fn on_key(state: &mut State, wparam: usize) -> bool {
         return true;
     }
 
-    let drop_key = state
-        .config
-        .as_ref()
-        .map(|config| config.drop_key.to_lowercase())
-        .unwrap_or_default();
-    if drop_key.len() == 1 && drop_key.as_bytes()[0].to_ascii_uppercase() == key {
-        if state.selected >= 2 {
-            let _ = state.app.emit("hud-drop", state.selected);
+    let Some(config) = state.config.as_ref() else { return false };
+    let drop_key = config.drop_key.clone();
+    let open_key = config.open_inventory.clone();
+    let selected = state.selected;
+
+    let Ok(mut sequence) = KEY_SEQUENCE.lock() else { return false };
+    sequence.press(key);
+
+    // 状态栏聚焦时按局部快捷键开关物品栏，一次按下只切换一次
+    if !sequence.fired() && sequence.matches(&open_key) {
+        sequence.mark_fired();
+        drop(sequence);
+        let _ = state.app.emit("hud-open-inventory", ());
+        return true;
+    }
+
+    // 自动重复继续触发，实现按住连续丢弃
+    let drop_match = sequence.matches(&drop_key);
+    drop(sequence);
+
+    if drop_match {
+        if selected >= 2 {
+            let _ = state.app.emit("hud-drop", selected);
             return true;
         }
         return false;
     }
 
-    // 状态栏聚焦时按局部快捷键开关物品栏
-    let open_key = state
-        .config
-        .as_ref()
-        .map(|config| config.open_inventory.to_lowercase())
-        .unwrap_or_default();
-    if open_key.len() == 1 && open_key.as_bytes()[0].to_ascii_uppercase() == key {
-        let _ = state.app.emit("hud-open-inventory", ());
-        return true;
-    }
-
     false
+}
+
+fn on_key_up(wparam: usize) {
+    if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+        sequence.release(wparam as u32);
+    }
 }
 
 fn on_menu(state: &mut State, lparam: isize) {

@@ -44,6 +44,9 @@ export const zhCN = {
   "system.rememberNavDesc": "下次启动时恢复上次选中的设置页面",
   "system.basicSettings": "基础设置",
   "system.traySettings": "系统托盘设置",
+  "system.hotkeySettings": "快捷键设置",
+  "system.distinguishModifiersLabel": "区分左右修饰键",
+  "system.distinguishModifiersDesc": "键位绑定区分左右修饰键",
 
   "tray.singleClick": "单击动作",
   "tray.doubleClick": "双击动作",
@@ -201,8 +204,8 @@ export const zhCN = {
   "hotkeys.conflictHint": "是否仍要继续使用此快捷键？",
   "hotkeys.simpleTitle": "警告",
   "hotkeys.simpleMessage": "快捷键 \"{hotkey}\" 过于简单，为避免与其他功能冲突和误触，请设置更复杂的快捷键组合。确定要使用此快捷键吗？",
-  "hotkeys.pressKey": "请按下按键…",
-  "hotkeys.pressCombination": "请按下组合键…",
+  "hotkeys.press": "按下快捷键",
+  "hotkeys.tooMany": "最多3个按键组合",
   "hotkeys.clear": "清除快捷键",
 
   "hud.title": "HUD 设置",

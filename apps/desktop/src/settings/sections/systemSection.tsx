@@ -4,6 +4,7 @@ import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { languageOptions } from "@/settings/options";
+import { stripHotkeySides } from "@/settings/hotkey";
 import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead, Select, Toggle } from "@/settings/components/controls";
 import { TrayControls } from "@/settings/sections/system/trayControls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
@@ -93,6 +94,19 @@ export function SystemSection() {
       </Row>
       <SectionSubhead>{t("system.traySettings")}</SectionSubhead>
       <TrayControls />
+      <SectionSubhead>{t("system.hotkeySettings")}</SectionSubhead>
+      <Row label={t("system.distinguishModifiersLabel")} description={t("system.distinguishModifiersDesc")}>
+        <Toggle
+          checked={config.system.distinguishModifiers}
+          label={t("system.distinguishModifiersLabel")}
+          onChange={(distinguishModifiers) =>
+            updateConfig({
+              system: { distinguishModifiers },
+              ...(distinguishModifiers ? {} : { hotkeys: stripHotkeySides(config.hotkeys) })
+            })
+          }
+        />
+      </Row>
       <ActionBar>
         <Button onClick={resetSystem}>{t("common.restoreDefaults")}</Button>
       </ActionBar>

@@ -9,7 +9,7 @@ import { HOTKEY_FAILURES_EVENT } from "@/lib/hotkeys";
 import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead } from "@/settings/components/controls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 import { HotkeyInput } from "@/settings/components/hotkeyInput";
-import { normalizeHotkey } from "@/settings/hotkey";
+import { hotkeysConflict } from "@/settings/hotkey";
 
 type HotkeyKey = "settings" | "statusBar" | "inventory" | "crosshair" | "desktopIcons" | "dropItem" | "openInventory";
 
@@ -59,10 +59,9 @@ export function HotkeysSection() {
   };
 
   const occupiedBy = (key: HotkeyKey, hotkey: string): string | null => {
-    const target = normalizeHotkey(hotkey);
-    if (!target) return null;
+    if (!hotkey.trim()) return null;
     const occupied = HOTKEY_ITEMS.find(
-      (item) => item.key !== key && normalizeHotkey(config.hotkeys[item.key]) === target
+      (item) => item.key !== key && hotkeysConflict(hotkey, config.hotkeys[item.key])
     );
     return occupied ? t(occupied.labelKey) : null;
   };
@@ -97,6 +96,7 @@ export function HotkeysSection() {
           <HotkeyInput
             value={config.hotkeys[item.key]}
             label={t(item.labelKey)}
+            distinguish={config.system.distinguishModifiers}
             conflictLabel={(hotkey) => occupiedBy(item.key, hotkey)}
             onChange={(hotkey) => updateHotkey(item.key, hotkey)}
           />
@@ -109,6 +109,7 @@ export function HotkeysSection() {
             value={config.hotkeys[item.key]}
             label={t(item.labelKey)}
             allowSingle
+            distinguish={config.system.distinguishModifiers}
             conflictLabel={(hotkey) => occupiedBy(item.key, hotkey)}
             onChange={(hotkey) => updateHotkey(item.key, hotkey)}
           />

@@ -140,6 +140,9 @@ pub struct InventoryCfg {
     pub cut_slot: Option<String>,
     pub drop_key: String,
     pub open_inventory: String,
+    /// 设置、状态栏、物品栏、准星、桌面图标，顺序与前端动作下标一致
+    #[serde(default)]
+    pub global_hotkeys: Vec<String>,
     pub player: PlayerCfg,
 }
 
@@ -166,6 +169,7 @@ impl Default for InventoryCfg {
             cut_slot: None,
             drop_key: "q".into(),
             open_inventory: "e".into(),
+            global_hotkeys: Vec::new(),
             player: PlayerCfg::default(),
         }
     }
@@ -201,6 +205,10 @@ struct Distribute {
     path: String,
     last: Option<usize>,
 }
+
+/// 物品栏内的局部快捷键序列
+static KEY_SEQUENCE: std::sync::Mutex<crate::hotkeys::SequenceState> =
+    std::sync::Mutex::new(crate::hotkeys::SequenceState::new());
 
 pub struct State {
     app: AppHandle,
@@ -848,6 +856,7 @@ pub fn set_visible_inner(state: &mut State) {
         render(state);
         if state.shown {
             // SAFETY: 蒙版先显示，物品栏再提到最前，并拿到键盘焦点处理 E/ESC/Q
+            crate::hotkeys::set_inventory_hwnd(state.hwnd);
             w::raise_overlay(state.hwnd);
             unsafe {
                 w::SetForegroundWindow(state.hwnd);
@@ -870,6 +879,10 @@ pub fn set_visible_inner(state: &mut State) {
         state.drop_hover = None;
         state.q_down = false;
         state.last_move = None;
+        crate::hotkeys::set_inventory_hwnd(0);
+        if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+            sequence.reset();
+        }
         if state.shown {
             state.shown = false;
             // SAFETY: 只隐藏窗口
@@ -1652,31 +1665,62 @@ fn on_right_up(state: &mut State, lparam: isize) {
 }
 
 fn on_key_up(state: &mut State, wparam: usize) {
-    let key = wparam as u8;
-    let drop_key = state.config.drop_key.to_lowercase();
-    if drop_key.len() == 1 && drop_key.as_bytes()[0].to_ascii_uppercase() == key {
-        state.q_down = false;
-        state.last_dropped = None;
+    let key = wparam as u32;
+    let (released_all, tap, tap_overflow) = {
+        let Ok(mut sequence) = KEY_SEQUENCE.lock() else { return };
+        sequence.release(key);
+        (sequence.is_empty(), sequence.tap().to_vec(), sequence.tap_overflow())
+    };
+
+    state.q_down = false;
+    state.last_dropped = None;
+
+    if !released_all {
+        return;
+    }
+
+    // 物品栏聚焦时钩子让路，由窗口自己按顺序广播全局快捷键
+    if !tap_overflow && !tap.is_empty() {
+        if let Some(index) = state
+            .config
+            .global_hotkeys
+            .iter()
+            .position(|spec| crate::hotkeys::sequence_matches(spec, &tap))
+        {
+            let _ = state.app.emit(crate::hotkeys::EVENT_NAME, index);
+        }
+    }
+
+    if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
+        sequence.reset();
     }
 }
 
 fn on_key(state: &mut State, wparam: usize) {
-    // 带修饰键的组合交给全局热键，不在窗口内重复处理
-    if w::key_down(0x11) || w::key_down(0x12) || w::key_down(0x5b) || w::key_down(0x5c) {
-        return;
-    }
-    let key = wparam as u8;
+    let key = wparam as u32;
     if key == 0x1b {
         request_close(state);
         return;
     }
-    let open_key = state.config.open_inventory.to_lowercase();
-    if open_key.len() == 1 && open_key.as_bytes()[0].to_ascii_uppercase() == key {
+
+    let drop_key = state.config.drop_key.clone();
+    let open_key = state.config.open_inventory.clone();
+    let Ok(mut sequence) = KEY_SEQUENCE.lock() else { return };
+    sequence.press(key);
+
+    // 一次按下只关闭一次，自动重复不反复切换
+    if !sequence.fired() && sequence.matches(&open_key) {
+        sequence.mark_fired();
+        drop(sequence);
         request_close(state);
         return;
     }
-    let drop_key = state.config.drop_key.to_lowercase();
-    if drop_key.len() == 1 && drop_key.as_bytes()[0].to_ascii_uppercase() == key {
+
+    // 自动重复继续触发，实现按住连续丢弃
+    let drop_match = sequence.matches(&drop_key);
+    drop(sequence);
+
+    if drop_match {
         state.q_down = true;
         state.last_dropped = None;
         if let Some(index) = state.hover {

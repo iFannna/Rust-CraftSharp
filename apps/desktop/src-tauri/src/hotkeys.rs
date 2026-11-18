@@ -1,53 +1,90 @@
-//! 全局热键：Win32 RegisterHotKey + 独立消息线程，触发后向前端广播事件。
+//! 全局热键：低级键盘钩子记录有序序列，最多三键，全部松开后按顺序匹配并广播动作。
 
 #![allow(non_snake_case)]
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use tauri::{AppHandle, Emitter};
 
 pub const EVENT_NAME: &str = "craftsharp-hotkey";
 pub const FAILURES_EVENT: &str = "craftsharp-hotkey-failures";
+pub(crate) const MAX_SEQUENCE: usize = 3;
 
-const MOD_ALT: u32 = 0x0001;
-const MOD_CONTROL: u32 = 0x0002;
-const MOD_SHIFT: u32 = 0x0004;
-const MOD_WIN: u32 = 0x0008;
-const MOD_NOREPEAT: u32 = 0x4000;
-
-const WM_HOTKEY: u32 = 0x0312;
-const WM_APP_RELOAD: u32 = 0x8001;
+const WM_KEYDOWN: u32 = 0x0100;
+const WM_KEYUP: u32 = 0x0101;
+const WM_SYSKEYDOWN: u32 = 0x0104;
+const WM_SYSKEYUP: u32 = 0x0105;
+const WH_KEYBOARD_LL: i32 = 13;
 
 #[repr(C)]
-struct Msg {
-    hwnd: isize,
-    message: u32,
-    wparam: usize,
-    lparam: isize,
+#[allow(dead_code)]
+struct KeyboardHookData {
+    vk_code: u32,
+    scan_code: u32,
+    flags: u32,
     time: u32,
-    pt_x: i32,
-    pt_y: i32,
-    private: u32,
+    extra_info: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ModBase {
+    Ctrl,
+    Shift,
+    Alt,
+    Win,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ModKey {
+    base: ModBase,
+    /// Some(true) 左键，Some(false) 右键，None 表示任意一侧
+    side: Option<bool>,
+}
+
+#[derive(Clone, Copy)]
+enum HookKey {
+    Mod(ModKey),
+    Vk(u32),
+}
+
+struct HookBinding {
+    spec: String,
+    keys: Vec<HookKey>,
 }
 
 #[link(name = "user32")]
 extern "system" {
-    fn RegisterHotKey(hwnd: isize, id: i32, modifiers: u32, vk: u32) -> i32;
-    fn UnregisterHotKey(hwnd: isize, id: i32) -> i32;
-    fn GetMessageW(msg: *mut Msg, hwnd: isize, min: u32, max: u32) -> i32;
-    fn PostThreadMessageW(thread_id: u32, msg: u32, wparam: usize, lparam: isize) -> i32;
-    fn GetCurrentThreadId() -> u32;
+    fn SetWindowsHookExW(
+        id_hook: i32,
+        proc: Option<unsafe extern "system" fn(i32, usize, isize) -> isize>,
+        hmod: isize,
+        thread_id: u32,
+    ) -> isize;
+    fn CallNextHookEx(hook: isize, code: i32, wparam: usize, lparam: isize) -> isize;
+    fn GetAsyncKeyState(vk: i32) -> i16;
+    fn GetForegroundWindow() -> isize;
 }
 
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
-/// 每个动作下标注册成功的组合，失败或未设置时为 None
+/// 每个动作下标当前生效的组合，未设置或解析失败时为 None
 static REGISTERED: Mutex<Vec<Option<String>>> = Mutex::new(Vec::new());
-/// Win32 注册 ID 与组合的对应，同一组合只注册一次
-static BINDINGS: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
 static FAILURES: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static APP: OnceLock<AppHandle> = OnceLock::new();
+
+/// 录制暂停时清空，匹配不到任何序列
+static HOOK_BINDINGS: Mutex<Vec<HookBinding>> = Mutex::new(Vec::new());
+static HOOK_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// WebView 聚焦时由前端处理按键，钩子让路，避免被 WebView2 的钩子链截断
+static APP_FOCUSED: AtomicBool = AtomicBool::new(false);
+/// 物品栏窗口聚焦时由原生窗口自己广播全局动作
+static INVENTORY_HWND: AtomicIsize = AtomicIsize::new(0);
+static HOOK: AtomicIsize = AtomicIsize::new(0);
+/// 当前按住的虚拟键，用于自动重复抑制与松开判定
+static HOOK_DOWN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+/// 本次按下的顺序序列，最多三键
+static HOOK_SEQUENCE: Mutex<Vec<HookKey>> = Mutex::new(Vec::new());
+static HOOK_OVERFLOW: AtomicBool = AtomicBool::new(false);
 
 /// 注册一批热键，下标即热键 id；失败项通过事件和查询命令回传。
 pub fn register(app: &AppHandle, actions: Vec<String>) {
@@ -57,73 +94,183 @@ pub fn register(app: &AppHandle, actions: Vec<String>) {
         *pending = actions;
     }
 
-    let thread_id = THREAD_ID.load(Ordering::SeqCst);
-    if thread_id == 0 {
-        spawn_thread(app.clone());
+    // 钩子挂在主线程的消息循环上，WebView 聚焦时也能稳定回调
+    if HOOK.load(Ordering::SeqCst) == 0 {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if HOOK.load(Ordering::SeqCst) == 0 {
+                unsafe {
+                    let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), 0, 0);
+                    if hook != 0 {
+                        HOOK.store(hook, Ordering::SeqCst);
+                    } else {
+                        eprintln!("全局快捷键钩子安装失败");
+                    }
+                }
+            }
+            apply_hotkeys(&handle);
+        });
         return;
     }
 
-    unsafe {
-        PostThreadMessageW(thread_id, WM_APP_RELOAD, 0, 0);
-    }
+    apply_hotkeys(app);
 }
 
-/// 最近一次注册失败的组合，供快捷键页初始化。
+/// 最近一次解析失败的组合，供快捷键页初始化。
 pub fn failures() -> Vec<String> {
     FAILURES.lock().map(|list| list.clone()).unwrap_or_default()
 }
 
-fn spawn_thread(app: AppHandle) {
-    std::thread::spawn(move || {
-        THREAD_ID.store(unsafe { GetCurrentThreadId() }, Ordering::SeqCst);
-        apply_hotkeys(&app);
-
-        loop {
-            let mut msg: Msg = unsafe { std::mem::zeroed() };
-            let result = unsafe { GetMessageW(&mut msg, 0, 0, 0) };
-            if result <= 0 {
-                break;
-            }
-
-            match msg.message {
-                WM_HOTKEY => emit_actions(&app, msg.wparam as u32),
-                WM_APP_RELOAD => {
-                    apply_hotkeys(&app);
-                }
-                _ => {}
-            }
-        }
-    });
-}
-
-/// 同一组合可能对应多个动作，逐个广播动作下标
-fn emit_actions(app: &AppHandle, id: u32) {
-    let spec = BINDINGS
-        .lock()
-        .ok()
-        .and_then(|bindings| bindings.iter().find(|(binding, _)| *binding == id).map(|(_, spec)| spec.clone()));
-    let Some(spec) = spec else { return };
-
+fn emit_spec(spec: &str) {
+    let Some(app) = APP.get() else { return };
     let Ok(registered) = REGISTERED.lock() else { return };
     for (index, action) in registered.iter().enumerate() {
-        if action.as_deref() == Some(spec.as_str()) {
+        if action.as_deref() == Some(spec) {
             let _ = app.emit(EVENT_NAME, index);
         }
     }
 }
 
-fn apply_hotkeys(app: &AppHandle) {
-    let actions = PENDING.lock().map(|pending| pending.clone()).unwrap_or_default();
+/// 前端窗口取得焦点时置 true，失焦或隐藏时置 false
+pub fn set_app_focus(focused: bool) {
+    APP_FOCUSED.store(focused, Ordering::SeqCst);
+}
 
-    if let Ok(bindings) = BINDINGS.lock() {
-        for (id, _) in bindings.iter() {
-            unsafe {
-                UnregisterHotKey(0, *id as i32);
-            }
+/// 物品栏显示时登记窗口句柄，隐藏时清空
+pub fn set_inventory_hwnd(hwnd: isize) {
+    INVENTORY_HWND.store(hwnd, Ordering::SeqCst);
+}
+
+fn foreground_is_inventory() -> bool {
+    let hwnd = unsafe { GetForegroundWindow() };
+    hwnd != 0 && hwnd == INVENTORY_HWND.load(Ordering::Relaxed)
+}
+
+unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    if code >= 0
+        && !APP_FOCUSED.load(Ordering::Relaxed)
+        && !foreground_is_inventory()
+        && HOOK_ACTIVE.load(Ordering::Relaxed)
+    {
+        let data = &*(lparam as *const KeyboardHookData);
+        match wparam as u32 {
+            WM_KEYDOWN | WM_SYSKEYDOWN => on_hook_down(data.vk_code),
+            WM_KEYUP | WM_SYSKEYUP => on_hook_up(data.vk_code),
+            _ => {}
+        }
+    }
+    // 钩子只负责触发，不拦截系统与应用的按键
+    CallNextHookEx(HOOK.load(Ordering::SeqCst), code, wparam, lparam)
+}
+
+fn on_hook_down(vk: u32) {
+    let fresh = {
+        let Ok(mut down) = HOOK_DOWN.lock() else { return };
+        if down.contains(&vk) {
+            return;
+        }
+        let fresh = down.is_empty();
+        down.push(vk);
+        fresh
+    };
+
+    if fresh {
+        if let Ok(mut sequence) = HOOK_SEQUENCE.lock() {
+            sequence.clear();
+        }
+        HOOK_OVERFLOW.store(false, Ordering::SeqCst);
+    }
+
+    let Ok(mut sequence) = HOOK_SEQUENCE.lock() else { return };
+    if sequence.len() >= MAX_SEQUENCE {
+        HOOK_OVERFLOW.store(true, Ordering::SeqCst);
+        return;
+    }
+    sequence.push(hook_key_of(vk));
+}
+
+fn on_hook_up(vk: u32) {
+    let released = {
+        let Ok(mut down) = HOOK_DOWN.lock() else { return };
+        if !down.contains(&vk) {
+            return;
+        }
+        down.retain(|item| *item != vk);
+        down.is_empty()
+    };
+
+    if !released {
+        return;
+    }
+
+    let sequence = HOOK_SEQUENCE.lock().map(|list| list.clone()).unwrap_or_default();
+    let overflow = HOOK_OVERFLOW.swap(false, Ordering::SeqCst);
+
+    if !overflow && !sequence.is_empty() {
+        let specs: Vec<String> = match HOOK_BINDINGS.lock() {
+            Ok(bindings) => bindings
+                .iter()
+                .filter(|binding| binding_matches(binding, &sequence))
+                .map(|binding| binding.spec.clone())
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        for spec in specs {
+            emit_spec(&spec);
         }
     }
 
-    let mut bindings: Vec<(u32, String)> = Vec::new();
+    if let Ok(mut list) = HOOK_SEQUENCE.lock() {
+        list.clear();
+    }
+}
+
+fn mod_of(vk: u32) -> Option<ModKey> {
+    let (base, left) = match vk {
+        0xA2 => (ModBase::Ctrl, true),
+        0xA3 => (ModBase::Ctrl, false),
+        0xA0 => (ModBase::Shift, true),
+        0xA1 => (ModBase::Shift, false),
+        0xA4 => (ModBase::Alt, true),
+        0xA5 => (ModBase::Alt, false),
+        0x5B => (ModBase::Win, true),
+        0x5C => (ModBase::Win, false),
+        0x11 => (ModBase::Ctrl, true),
+        0x10 => (ModBase::Shift, true),
+        0x12 => (ModBase::Alt, true),
+        _ => return None,
+    };
+    Some(ModKey { base, side: Some(left) })
+}
+
+fn hook_key_of(vk: u32) -> HookKey {
+    mod_of(vk).map(HookKey::Mod).unwrap_or(HookKey::Vk(vk))
+}
+
+fn key_matches(target: &HookKey, actual: &HookKey) -> bool {
+    match (target, actual) {
+        (HookKey::Mod(target), HookKey::Mod(actual)) => {
+            target.base == actual.base && target.side.map_or(true, |side| actual.side == Some(side))
+        }
+        (HookKey::Vk(target), HookKey::Vk(actual)) => target == actual,
+        _ => false,
+    }
+}
+
+fn binding_matches(binding: &HookBinding, sequence: &[HookKey]) -> bool {
+    binding.keys.len() == sequence.len()
+        && binding
+            .keys
+            .iter()
+            .zip(sequence)
+            .all(|(target, actual)| key_matches(target, actual))
+}
+
+fn apply_hotkeys(app: &AppHandle) {
+    let actions = PENDING.lock().map(|pending| pending.clone()).unwrap_or_default();
+    let hook_ready = HOOK.load(Ordering::SeqCst) != 0;
+
+    let mut bindings: Vec<HookBinding> = Vec::new();
     let mut registered: Vec<Option<String>> = Vec::new();
     let mut failures: Vec<String> = Vec::new();
 
@@ -132,29 +279,28 @@ fn apply_hotkeys(app: &AppHandle) {
             registered.push(None);
             continue;
         }
-        if bindings.iter().any(|(_, spec)| spec == action) {
+
+        if bindings.iter().any(|binding| binding.spec == action.as_str()) {
             registered.push(Some(action.clone()));
             continue;
         }
 
-        let ok = if let Some((modifiers, vk)) = parse_hotkey(action) {
-            let id = bindings.len() as u32 + 1;
-            let registered = unsafe { RegisterHotKey(0, id as i32, modifiers, vk) != 0 };
-            if registered {
-                bindings.push((id, action.clone()));
+        match parse_sequence_spec(action) {
+            Some(keys) if hook_ready => {
+                bindings.push(HookBinding { spec: action.clone(), keys });
+                registered.push(Some(action.clone()));
             }
-            registered
-        } else {
-            false
-        };
-
-        registered.push(ok.then(|| action.clone()));
-        if !ok && !failures.contains(action) {
-            failures.push(action.clone());
+            _ => {
+                registered.push(None);
+                if !failures.contains(action) {
+                    failures.push(action.clone());
+                }
+            }
         }
     }
 
-    if let Ok(mut current) = BINDINGS.lock() {
+    HOOK_ACTIVE.store(!bindings.is_empty(), Ordering::SeqCst);
+    if let Ok(mut current) = HOOK_BINDINGS.lock() {
         *current = bindings;
     }
     if let Ok(mut current) = REGISTERED.lock() {
@@ -164,33 +310,165 @@ fn apply_hotkeys(app: &AppHandle) {
         *current = failures.clone();
     }
     let _ = app.emit(FAILURES_EVENT, failures);
+
+    reset_hook_state();
 }
 
-/// 解析 "Ctrl+Alt+E" 形式的热键，大小写不敏感。
-fn parse_hotkey(spec: &str) -> Option<(u32, u32)> {
-    let parts: Vec<&str> = spec.split('+').map(|part| part.trim()).filter(|part| !part.is_empty()).collect();
-    let key = parts.last()?;
-    let mut modifiers = 0u32;
+/// 配置重载时清空序列，并按物理按键重建修饰键，避免录制留下脏状态
+fn reset_hook_state() {
+    if let Ok(mut sequence) = HOOK_SEQUENCE.lock() {
+        sequence.clear();
+    }
+    HOOK_OVERFLOW.store(false, Ordering::SeqCst);
 
-    for part in &parts[..parts.len() - 1] {
-        match part.to_ascii_lowercase().as_str() {
-            "ctrl" | "control" => modifiers |= MOD_CONTROL,
-            "alt" => modifiers |= MOD_ALT,
-            "shift" => modifiers |= MOD_SHIFT,
-            "win" | "super" | "meta" => modifiers |= MOD_WIN,
-            _ => return None,
+    let mut down = Vec::new();
+    for vk in [0xA0u32, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C] {
+        let pressed = (unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000) != 0;
+        if pressed {
+            down.push(vk);
+        }
+    }
+    if let Ok(mut current) = HOOK_DOWN.lock() {
+        *current = down;
+    }
+}
+
+fn parse_sequence_spec(spec: &str) -> Option<Vec<HookKey>> {
+    let parts: Vec<&str> = spec.split('+').map(str::trim).filter(|part| !part.is_empty()).collect();
+    if parts.is_empty() || parts.len() > MAX_SEQUENCE {
+        return None;
+    }
+
+    parts
+        .iter()
+        .map(|part| match parse_modifier(part) {
+            Some(modifier) => Some(HookKey::Mod(modifier)),
+            None => Some(HookKey::Vk(virtual_key(part)?)),
+        })
+        .collect()
+}
+
+fn parse_modifier(part: &str) -> Option<ModKey> {
+    let lower = part.to_ascii_lowercase();
+    let (side, name) = if let Some(rest) = lower.strip_prefix('l') {
+        (Some(true), rest)
+    } else if let Some(rest) = lower.strip_prefix('r') {
+        (Some(false), rest)
+    } else {
+        (None, lower.as_str())
+    };
+
+    let base = match name {
+        "ctrl" | "control" => ModBase::Ctrl,
+        "shift" => ModBase::Shift,
+        "alt" => ModBase::Alt,
+        "win" | "super" | "meta" => ModBase::Win,
+        _ => return None,
+    };
+
+    Some(ModKey { base, side })
+}
+
+/// 原生窗口内的局部序列：松开任一键结束当前序列
+pub(crate) struct SequenceState {
+    down: Vec<u32>,
+    keys: Vec<u32>,
+    /// 本次按下的完整顺序，松开后仍保留到全部松开再判定
+    tap: Vec<u32>,
+    overflow: bool,
+    tap_overflow: bool,
+    fired: bool,
+}
+
+impl SequenceState {
+    pub const fn new() -> Self {
+        Self {
+            down: Vec::new(),
+            keys: Vec::new(),
+            tap: Vec::new(),
+            overflow: false,
+            tap_overflow: false,
+            fired: false,
         }
     }
 
-    // 单键不加 MOD_NOREPEAT，与老版注册保持一致
-    if modifiers != 0 {
-        modifiers |= MOD_NOREPEAT;
+    /// 返回是否为新按下的键；自动重复返回 false，但仍可继续触发按住动作
+    pub fn press(&mut self, vk: u32) -> bool {
+        if self.down.contains(&vk) {
+            return false;
+        }
+        if self.down.is_empty() {
+            self.keys.clear();
+            self.tap.clear();
+            self.overflow = false;
+            self.tap_overflow = false;
+            self.fired = false;
+        }
+        self.down.push(vk);
+        if self.keys.len() < MAX_SEQUENCE {
+            self.keys.push(vk);
+        } else {
+            self.overflow = true;
+        }
+        if self.tap.len() < MAX_SEQUENCE {
+            self.tap.push(vk);
+        } else {
+            self.tap_overflow = true;
+        }
+        true
     }
 
-    Some((modifiers, virtual_key(key)?))
+    /// 松开任一键即结束当前序列，按住动作随之停止
+    pub fn release(&mut self, vk: u32) {
+        if !self.down.contains(&vk) {
+            return;
+        }
+        self.down.retain(|item| *item != vk);
+        self.keys.clear();
+        self.overflow = false;
+        self.fired = false;
+    }
+
+    pub fn matches(&self, spec: &str) -> bool {
+        !self.overflow && sequence_matches(spec, &self.keys)
+    }
+
+    pub fn tap(&self) -> &[u32] {
+        &self.tap
+    }
+
+    pub fn tap_overflow(&self) -> bool {
+        self.tap_overflow
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.down.is_empty()
+    }
+
+    pub fn fired(&self) -> bool {
+        self.fired
+    }
+
+    pub fn mark_fired(&mut self) {
+        self.fired = true;
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
 }
 
-fn virtual_key(key: &str) -> Option<u32> {
+/// 局部快捷键：按顺序比较按下序列；绑定没有侧别时任意一侧都算
+pub(crate) fn sequence_matches(spec: &str, pressed: &[u32]) -> bool {
+    let Some(binding) = parse_sequence_spec(spec) else { return false };
+    binding.len() == pressed.len()
+        && binding
+            .iter()
+            .zip(pressed)
+            .all(|(target, vk)| key_matches(target, &hook_key_of(*vk)))
+}
+
+pub(crate) fn virtual_key(key: &str) -> Option<u32> {
     let upper = key.to_ascii_uppercase();
 
     if upper.len() == 1 {
@@ -248,6 +526,50 @@ fn virtual_key(key: &str) -> Option<u32> {
         "NUMMULTIPLY" => Some(0x6A),
         "NUMDIVIDE" => Some(0x6F),
         "NUMDECIMAL" => Some(0x6E),
+        "NUMEQUAL" => Some(0x92),
+        "NUMCOMMA" => Some(0x6E),
+        "CAPSLOCK" => Some(0x14),
+        "NUMLOCK" => Some(0x90),
+        "SCROLLLOCK" => Some(0x91),
+        "PRINTSCREEN" => Some(0x2C),
+        "PAUSE" => Some(0x13),
+        "CONTEXTMENU" => Some(0x5D),
+        "VOLUMEMUTE" => Some(0xAD),
+        "VOLUMEDOWN" => Some(0xAE),
+        "VOLUMEUP" => Some(0xAF),
+        "MEDIATRACKNEXT" => Some(0xB0),
+        "MEDIATRACKPREVIOUS" => Some(0xB1),
+        "MEDIASTOP" => Some(0xB2),
+        "MEDIAPLAYPAUSE" => Some(0xB3),
+        "LAUNCHMAIL" => Some(0xB4),
+        "LAUNCHMEDIAPLAYER" => Some(0xB5),
+        "LAUNCHAPP1" => Some(0xB6),
+        "LAUNCHAPP2" => Some(0xB7),
+        "BROWSERBACK" => Some(0xA6),
+        "BROWSERFORWARD" => Some(0xA7),
+        "BROWSERREFRESH" => Some(0xA8),
+        "BROWSERSTOP" => Some(0xA9),
+        "BROWSERSEARCH" => Some(0xAA),
+        "BROWSERFAVORITES" => Some(0xAB),
+        "BROWSERHOME" => Some(0xAC),
+        "INTLBACKSLASH" => Some(0xE2),
+        "INTLRO" => Some(0xC1),
+        "INTLYEN" => Some(0xDC),
+        "CONVERT" => Some(0x1C),
+        "NONCONVERT" => Some(0x1D),
+        "KANAMODE" => Some(0x15),
+        "LANG1" => Some(0x94),
+        "LANG2" => Some(0x95),
+        "LANG3" => Some(0x96),
+        "LANG4" => Some(0x97),
+        "LANG5" => Some(0x98),
+        "HELP" => Some(0x2F),
+        "SELECT" => Some(0x29),
+        "CLEAR" => Some(0x0C),
+        "EXECUTE" => Some(0x2B),
+        "SLEEP" => Some(0x5F),
+        "POWER" => Some(0x5E),
+        "WAKEUP" => Some(0x5F),
         _ => None,
     }
 }
