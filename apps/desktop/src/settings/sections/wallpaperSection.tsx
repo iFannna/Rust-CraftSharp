@@ -342,9 +342,6 @@ export function WallpaperSection() {
       </div>
 
       <div className="mb-3 flex flex-none flex-wrap items-center gap-2 text-xs">
-        {monitors.length > 1 ? (
-          <span className="text-muted-foreground">{t("wallpaper.multiHint")}</span>
-        ) : null}
         {isTauri() ? (
           <div className="ml-auto flex items-center gap-2">
             <span className="text-muted-foreground">

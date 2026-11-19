@@ -488,6 +488,48 @@ fn wallpaper_session() -> bool {
 }
 
 #[tauri::command]
+fn wallpaper_storage(app: tauri::AppHandle) -> String {
+    wallpaper::storage_path(&app)
+}
+
+/// 切换壁纸存储目录，复制期间不中断正在播放的动态壁纸
+#[tauri::command]
+async fn wallpaper_migrate_storage(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::migrate_storage(&app, &path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// 文件夹选择器同样必须由主线程打开
+#[tauri::command]
+async fn wallpaper_pick_folder(app: tauri::AppHandle, title: String) -> Option<String> {
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let _ = sender.try_send(wallpaper::pick_folder(&handle, &title));
+    })
+    .ok()?;
+    receiver.recv().await.flatten()
+}
+
+/// 恢复默认存储目录，同时把缓存迁回应用数据目录
+#[tauri::command]
+async fn wallpaper_reset_storage(app: tauri::AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::reset_storage(&app))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// 在资源管理器中打开存储目录
+#[tauri::command]
+fn wallpaper_open_storage(app: tauri::AppHandle) -> Result<(), String> {
+    wallpaper::open_storage(&app)
+}
+
+#[tauri::command]
 fn wallpaper_capture_session(app: tauri::AppHandle) -> Result<(), String> {
     wallpaper::capture_session(&app)
 }
@@ -741,6 +783,11 @@ fn main() {
             wallpaper_pick_path,
             wallpaper_export,
             wallpaper_session,
+            wallpaper_storage,
+            wallpaper_migrate_storage,
+            wallpaper_pick_folder,
+            wallpaper_reset_storage,
+            wallpaper_open_storage,
             wallpaper_capture_session,
             wallpaper_logout,
             install_caption_hook

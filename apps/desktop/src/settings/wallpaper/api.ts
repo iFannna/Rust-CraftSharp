@@ -81,6 +81,30 @@ export function sessionStatus() {
   return invoke<boolean>("wallpaper_session");
 }
 
+export function storagePath() {
+  return invoke<string>("wallpaper_storage");
+}
+
+/** 切换存储目录并迁移现有缓存，返回实际生效的新路径 */
+export function migrateStorage(path: string) {
+  return invoke<string>("wallpaper_migrate_storage", { path });
+}
+
+/** 恢复默认存储目录，返回实际生效的路径 */
+export function resetStorage() {
+  return invoke<string>("wallpaper_reset_storage");
+}
+
+/** 在资源管理器中打开当前存储目录 */
+export function openStorage() {
+  return invoke<void>("wallpaper_open_storage");
+}
+
+/** 系统文件夹选择器，取消返回 null */
+export function pickFolder(title: string) {
+  return invoke<string | null>("wallpaper_pick_folder", { title });
+}
+
 export function captureSession() {
   return invoke<void>("wallpaper_capture_session");
 }

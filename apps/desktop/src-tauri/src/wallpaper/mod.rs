@@ -3,9 +3,10 @@
 mod auth;
 mod client;
 mod desktop;
+mod dialog;
 mod dynamic;
 pub(crate) mod layout;
-mod save;
+mod storage;
 mod store;
 
 use tauri::{AppHandle, Manager};
@@ -15,6 +16,7 @@ pub use desktop::MonitorInfo;
 pub use layout::ApplyResult;
 
 pub fn init(app: &AppHandle) {
+    storage::init(app);
     auth::load(app);
 }
 
@@ -42,14 +44,37 @@ pub fn logout(app: &AppHandle) {
     auth::clear(app);
 }
 
+pub fn storage_path(app: &AppHandle) -> String {
+    storage::current(app)
+}
+
+pub fn migrate_storage(app: &AppHandle, target: &str) -> Result<String, String> {
+    storage::migrate(app, target)
+}
+
+pub fn reset_storage(app: &AppHandle) -> Result<String, String> {
+    storage::reset(app)
+}
+
+pub fn open_storage(app: &AppHandle) -> Result<(), String> {
+    storage::open(app)
+}
+
 /// 以设置窗口为 owner 打开另存为对话框，必须在主线程调用
 pub fn pick(app: &AppHandle, title: &str) -> Option<String> {
-    let owner = app
-        .get_webview_window("settings")
+    dialog::pick(title, owner(app))
+}
+
+/// 选择文件夹，必须在主线程调用
+pub fn pick_folder(app: &AppHandle, title: &str) -> Option<String> {
+    dialog::pick_folder(title, owner(app))
+}
+
+fn owner(app: &AppHandle) -> isize {
+    app.get_webview_window("settings")
         .and_then(|window| window.hwnd().ok())
         .map(|handle| handle.0 as isize)
-        .unwrap_or(0);
-    save::pick(title, owner)
+        .unwrap_or(0)
 }
 
 /// 从登录窗口读取会话 Cookie，成功后关闭窗口并发事件

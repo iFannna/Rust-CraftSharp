@@ -7,17 +7,20 @@ import { languageOptions } from "@/settings/options";
 import { stripHotkeySides } from "@/settings/hotkey";
 import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead, Select, Toggle } from "@/settings/components/controls";
 import { TrayControls } from "@/settings/sections/system/trayControls";
+import { StorageControls } from "@/settings/sections/system/storageControls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 
 export function SystemSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const [autoStartFailed, setAutoStartFailed] = useState(false);
+  const [storageReset, setStorageReset] = useState(0);
 
   const resetSystem = async () => {
     if (!(await confirmRestoreDefaults(t))) return;
     const defaults = defaultConfig();
     updateConfig({ system: defaults.system, tray: defaults.tray });
+    setStorageReset((value) => value + 1);
     // 配置里关闭自启还不够，注册表项也要一起移除
     if ("__TAURI_INTERNALS__" in window) {
       void invoke("set_autostart", { enabled: false })
@@ -107,6 +110,7 @@ export function SystemSection() {
           }
         />
       </Row>
+      <StorageControls resetSignal={storageReset} />
       <ActionBar>
         <Button onClick={resetSystem}>{t("common.restoreDefaults")}</Button>
       </ActionBar>

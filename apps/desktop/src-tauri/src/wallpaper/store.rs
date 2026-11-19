@@ -4,10 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use super::desktop::MonitorInfo;
-use super::{auth, client};
+use super::{auth, client, storage};
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -34,11 +34,8 @@ impl Default for Transform {
     }
 }
 
-fn root(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|dir| dir.join("wallpapers"))
-        .map_err(|error| error.to_string())
+fn root(app: &AppHandle) -> PathBuf {
+    storage::root(app)
 }
 
 fn post_url(id: &str) -> String {
@@ -64,17 +61,21 @@ fn file_id(id: &str) -> Result<&str, String> {
 /// 下载静态壁纸并转成 JPEG；登录后取原图，未登录用 1920 预览
 pub fn prepare(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     let id = file_id(id)?;
-    let dir = root(app)?;
+    let name = format!("{id}-{}.jpg", if auth::logged_in() { "full" } else { "preview" });
+    let dir = root(app);
     fs::create_dir_all(&dir).map_err(|error| format!("创建壁纸目录失败：{error}"))?;
 
-    let suffix = if auth::logged_in() { "full" } else { "preview" };
-    let target = dir.join(format!("{id}-{suffix}.jpg"));
+    let target = dir.join(&name);
     if target.metadata().is_ok_and(|meta| meta.len() > 0) {
         return Ok(target);
     }
 
     let bytes = download_with_retry(&post_url(id))?;
     let jpeg = to_jpeg(&bytes)?;
+    // 下载耗时较长，期间可能已切换存储目录
+    let dir = root(app);
+    fs::create_dir_all(&dir).map_err(|error| format!("创建壁纸目录失败：{error}"))?;
+    let target = dir.join(&name);
     write_atomic(&target, &jpeg)?;
     Ok(target)
 }
@@ -85,7 +86,7 @@ pub fn prepare_video(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
         return Err("动态壁纸需要先登录 mcblock.top".into());
     }
     let id = file_id(id)?;
-    let dir = root(app)?.join("videos");
+    let dir = root(app).join("videos");
     fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
 
     let target = dir.join(format!("{id}.mp4"));
@@ -93,6 +94,9 @@ pub fn prepare_video(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
         return Ok(target);
     }
     let bytes = download_with_retry(&client::original_url(id))?;
+    let dir = root(app).join("videos");
+    fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
+    let target = dir.join(format!("{id}.mp4"));
     write_atomic(&target, &bytes)?;
     Ok(target)
 }
@@ -109,7 +113,7 @@ pub fn span_crops(
     }
     let source = prepare(app, id)?;
     let id = file_id(id)?;
-    let dir = root(app)?.join("span").join(id);
+    let dir = root(app).join("span").join(id);
     fs::create_dir_all(&dir).map_err(|error| format!("创建拼接目录失败：{error}"))?;
 
     let transform = Transform {
@@ -181,7 +185,7 @@ pub fn span_crops(
 
 /// 清理其他壁纸的拼接目录
 pub fn sweep_span(app: &AppHandle, keep: &str) {
-    let Ok(dir) = root(app) else { return };
+    let dir = root(app);
     let Ok(entries) = fs::read_dir(dir.join("span")) else {
         return;
     };
@@ -193,9 +197,9 @@ pub fn sweep_span(app: &AppHandle, keep: &str) {
     }
 }
 
-/// 只保留给定文件，其他缓存与视频删除
+/// 只清理由本应用命名的缓存文件，避免影响目录内的其他内容
 pub fn sweep(app: &AppHandle, keeps: &[PathBuf]) {
-    let Ok(dir) = root(app) else { return };
+    let dir = root(app);
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -204,7 +208,10 @@ pub fn sweep(app: &AppHandle, keeps: &[PathBuf]) {
         if path.is_dir() || keeps.iter().any(|keep| keep == &path) {
             continue;
         }
-        let _ = fs::remove_file(path);
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with("-full.jpg") || name.ends_with("-preview.jpg") {
+            let _ = fs::remove_file(path);
+        }
     }
 }
 

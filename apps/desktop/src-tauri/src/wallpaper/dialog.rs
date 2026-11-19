@@ -1,4 +1,4 @@
-//! 原生另存为对话框，保留旧版下载流程，默认保存为 JPEG。
+//! 原生保存与选择文件夹对话框，壁纸导出和存储目录共用。
 
 use super::store;
 
@@ -103,5 +103,45 @@ pub fn pick(title: &str, owner: isize) -> Option<String> {
 
 #[cfg(not(windows))]
 pub fn pick(_title: &str, _owner: isize) -> Option<String> {
+    None
+}
+
+/// 现代文件夹选择器，只返回文件系统路径
+#[cfg(windows)]
+pub fn pick_folder(title: &str, owner: isize) -> Option<String> {
+    use windows::core::{HSTRING, IUnknown};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_INPROC_SERVER,
+        COINIT_APARTMENTTHREADED,
+    };
+    use windows::Win32::UI::Shell::{
+        FileOpenDialog, IFileOpenDialog, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
+        SIGDN_FILESYSPATH,
+    };
+
+    // SAFETY: 由设置窗口主线程调用，COM 已初始化；重复初始化只返回状态码
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let dialog: IFileOpenDialog =
+            CoCreateInstance(&FileOpenDialog, None::<&IUnknown>, CLSCTX_INPROC_SERVER).ok()?;
+        let options = dialog.GetOptions().ok()?;
+        dialog
+            .SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)
+            .ok()?;
+        if !title.is_empty() {
+            let _ = dialog.SetTitle(&HSTRING::from(title));
+        }
+        dialog.Show(Some(HWND(owner as *mut _))).ok()?;
+        let item = dialog.GetResult().ok()?;
+        let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let text = name.to_string().ok();
+        CoTaskMemFree(Some(name.0 as *const _));
+        text
+    }
+}
+
+#[cfg(not(windows))]
+pub fn pick_folder(_title: &str, _owner: isize) -> Option<String> {
     None
 }
