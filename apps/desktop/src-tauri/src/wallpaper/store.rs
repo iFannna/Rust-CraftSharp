@@ -3,13 +3,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use super::desktop::MonitorInfo;
 use super::{auth, client, storage};
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
     #[serde(default = "unit_zoom")]
@@ -80,25 +80,33 @@ pub fn prepare(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-/// 动态壁纸视频，必须登录后取原文件
+/// 动态壁纸视频；已有缓存直接播放，缺文件才需要登录下载
 pub fn prepare_video(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    if !auth::logged_in() {
-        return Err("动态壁纸需要先登录 mcblock.top".into());
-    }
     let id = file_id(id)?;
     let dir = root(app).join("videos");
-    fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
-
     let target = dir.join(format!("{id}.mp4"));
     if target.metadata().is_ok_and(|meta| meta.len() > 0) {
         return Ok(target);
     }
+    if !auth::logged_in() {
+        return Err("动态壁纸需要先登录 mcblock.top".into());
+    }
+    fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
     let bytes = download_with_retry(&client::original_url(id))?;
     let dir = root(app).join("videos");
     fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
     let target = dir.join(format!("{id}.mp4"));
     write_atomic(&target, &bytes)?;
     Ok(target)
+}
+
+/// 已缓存的视频，不要求登录；启动恢复只播放本地文件
+pub fn cached_video(app: &AppHandle, id: &str) -> Option<PathBuf> {
+    let id = file_id(id).ok()?;
+    let path = root(app).join("videos").join(format!("{id}.mp4"));
+    path.metadata()
+        .is_ok_and(|meta| meta.len() > 0)
+        .then_some(path)
 }
 
 /// 按显示器裁出拼接块，返回设备路径与图片路径；缓存键包含拓扑和变换

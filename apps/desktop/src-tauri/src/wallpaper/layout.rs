@@ -7,6 +7,7 @@ use tauri::AppHandle;
 
 use super::store::Transform;
 use super::{desktop, dynamic, store};
+use dynamic::Saved;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -79,15 +80,25 @@ fn apply_sync(
             .map(|monitor| (monitor.device_path.clone(), video.clone()))
             .collect();
         dynamic::apply_monitors(&targets)?;
+        let saved: Vec<Saved> = monitors
+            .iter()
+            .map(|monitor| Saved {
+                id: entry.id.clone(),
+                device: Some(monitor.device_path.clone()),
+                transform: None,
+            })
+            .collect();
+        dynamic::remember(app, &saved);
         result
             .applied
             .extend(targets.into_iter().map(|(device, _)| device));
         return Ok(result);
     }
 
-    dynamic::stop_all();
     let path = store::prepare(app, &entry.id)?;
     desktop::apply(&path)?;
+    dynamic::stop_all();
+    dynamic::forget(app);
     store::sweep(app, std::slice::from_ref(&path));
     result
         .applied
@@ -102,12 +113,19 @@ fn apply_independent(app: &AppHandle, entries: Vec<MonitorPlan>) -> Result<Apply
     let mut result = ApplyResult::default();
     let mut keeps = Vec::new();
     let mut dynamics = Vec::new();
+    let mut statics = Vec::new();
+    let mut saved = Vec::new();
 
     for item in entries {
         match item.entry.kind.as_str() {
             "dynamic" => match store::prepare_video(app, &item.entry.id) {
                 Ok(video) => {
                     keeps.push(video.clone());
+                    saved.push(Saved {
+                        id: item.entry.id.clone(),
+                        device: Some(item.monitor.clone()),
+                        transform: None,
+                    });
                     dynamics.push((item.monitor, video));
                 }
                 Err(error) => result.warnings.push(format!("{}：{error}", item.monitor)),
@@ -116,23 +134,29 @@ fn apply_independent(app: &AppHandle, entries: Vec<MonitorPlan>) -> Result<Apply
                 Ok(path) => {
                     keeps.push(path.clone());
                     match desktop::set_for(&item.monitor, &path) {
-                        Ok(()) => result.applied.push(item.monitor),
+                        Ok(()) => result.applied.push(item.monitor.clone()),
                         Err(error) => result.warnings.push(error),
                     }
+                    statics.push(item.monitor);
                 }
                 Err(error) => result.warnings.push(format!("{}：{error}", item.monitor)),
             },
         }
     }
 
+    // 已切换为静态的显示器先铺静态图，再淡出该屏的动态实例
+    dynamic::stop_devices(&statics);
     if !dynamics.is_empty() {
         if let Err(error) = dynamic::apply_monitors(&dynamics) {
             result.warnings.push(error);
         } else {
+            dynamic::remember(app, &saved);
             result
                 .applied
                 .extend(dynamics.into_iter().map(|(device, _)| device));
         }
+    } else {
+        dynamic::forget(app);
     }
     if keeps.is_empty() && result.applied.is_empty() {
         return Err(result
@@ -156,13 +180,20 @@ fn apply_span(
     if span.entry.kind == "dynamic" {
         let video = store::prepare_video(app, &span.entry.id)?;
         dynamic::apply_span(&video, span.transform)?;
+        dynamic::remember(
+            app,
+            &[Saved {
+                id: span.entry.id.clone(),
+                device: None,
+                transform: Some(span.transform),
+            }],
+        );
         result
             .applied
             .extend(monitors.iter().map(|m| m.device_path.clone()));
         return Ok(result);
     }
 
-    dynamic::stop_all();
     let crops = store::span_crops(app, &span.entry.id, monitors, span.transform)?;
     let mut keeps: Vec<PathBuf> = crops.iter().map(|(_, path)| path.clone()).collect();
     if let Ok(source) = store::prepare(app, &span.entry.id) {
@@ -174,6 +205,8 @@ fn apply_span(
             Err(error) => result.warnings.push(error),
         }
     }
+    dynamic::stop_all();
+    dynamic::forget(app);
     store::sweep(app, &keeps);
     Ok(result)
 }

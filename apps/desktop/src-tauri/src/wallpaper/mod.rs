@@ -18,6 +18,7 @@ pub use layout::ApplyResult;
 pub fn init(app: &AppHandle) {
     storage::init(app);
     auth::load(app);
+    dynamic::restore(app);
 }
 
 pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {

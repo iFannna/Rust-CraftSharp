@@ -1,4 +1,4 @@
-/** 启动时恢复动态壁纸；静态壁纸由 Windows 持久化，仅在存储迁移后重设 */
+/** 静态壁纸跟随存储路径重设；动态壁纸由原生侧在启动时恢复 */
 
 import { getConfig, type WallpaperKind } from "@/config/appConfig";
 import { isTauri } from "@/lib/runtime";
@@ -36,12 +36,6 @@ function planFor(kind: WallpaperKind): ApplyPlan | null {
   }
 
   return null;
-}
-
-export async function restoreDynamicWallpaper(): Promise<void> {
-  if (!isTauri()) return;
-  const plan = planFor("dynamic");
-  if (plan) await applyLayout(plan).catch(() => undefined);
 }
 
 /** 缓存位置变化后重新交给系统，同一张图不产生可见切换 */

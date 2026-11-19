@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { getConfig } from "@/config/appConfig";
 import { applyConfiguredVisibility, setSettingsVisible } from "@/lib/windowControls";
 import { initializeTray } from "@/lib/tray";
-import { restoreDynamicWallpaper } from "@/lib/wallpaperRestore";
+import { reapplyStaticWallpaper } from "@/lib/wallpaperRestore";
 
 /**
  * 主窗口只承担宿主职责：初始化窗口显隐、接管托盘手势。
@@ -15,7 +15,8 @@ export default function App() {
       if (getConfig().system.defaultOpenSettings) {
         await setSettingsVisible(true).catch(() => undefined);
       }
-      await restoreDynamicWallpaper();
+      // 动态壁纸由原生侧恢复；静态壁纸跟随当前存储路径重设
+      await reapplyStaticWallpaper().catch(() => undefined);
     })();
 
     return initializeTray();
