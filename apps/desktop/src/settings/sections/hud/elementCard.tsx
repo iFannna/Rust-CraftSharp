@@ -140,7 +140,7 @@ export function ElementCard({ id, label }: { id: HudElementId; label: string }) 
               max={maxLimit}
               ariaLabel={t("aria.elementMax", { label })}
               onChange={(maxValue) => {
-                // 与老版一致：上限内取偶数，并把当前值和饱和度一并夹紧
+                // 上限内取偶数，并把当前值和饱和度一并夹紧
                 const next = Math.floor(Math.min(maxLimit, Math.max(2, maxValue)) / 2) * 2;
                 patch({
                   maxValue: next,

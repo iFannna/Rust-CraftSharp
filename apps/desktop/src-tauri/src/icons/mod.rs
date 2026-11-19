@@ -30,7 +30,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 
-/// 与原 WPF IconExtractor 保持一致的图片扩展名列表
 const IMAGE_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"];
 /// 格子图标最大边长，覆盖最大缩放与高 DPI
 const MAX_SIZE: u32 = 128;
@@ -133,7 +132,7 @@ fn stamp_of(path: &str) -> Option<(u64, u64)> {
     Some((metadata.len(), elapsed.as_secs()))
 }
 
-/// 解码后按目标尺寸等比缩放并居中留白，和 WPF 的 Stretch=Uniform 一致。
+/// 解码后按目标尺寸等比缩放并居中留白。
 fn build_decoded(path: &str, show_target_icon: bool, size: u32) -> Option<Arc<Decoded>> {
     let bytes = raw_bytes(path, show_target_icon)?;
     let image = image::load_from_memory(&bytes).ok()?.to_rgba8();

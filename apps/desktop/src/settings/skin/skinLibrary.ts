@@ -16,7 +16,7 @@ export type SkinSource =
 
 export const SKIN_TYPES: SkinType[] = ["wide", "slim"];
 
-/** 内置皮肤按名称排序，与老项目目录读取顺序一致 */
+/** 内置皮肤按名称排序 */
 export function builtinSources(type: SkinType): SkinSource[] {
   return [...PLAYER_SKINS]
     .sort((a, b) => a.localeCompare(b))

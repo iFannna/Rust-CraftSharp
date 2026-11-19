@@ -146,7 +146,7 @@ export class EntityView {
     if (!this.model) return;
     this.player.update(dt);
     this.player.apply(this.model);
-    // 注视按 WPF 契约作用于整个模型组，头部再绕脖子额外俯仰
+    // 注视作用于整个模型组，头部再绕脖子额外俯仰
     this.model.group.rotation.set(
       THREE.MathUtils.degToRad(this.look.pitch),
       THREE.MathUtils.degToRad(this.look.yaw),

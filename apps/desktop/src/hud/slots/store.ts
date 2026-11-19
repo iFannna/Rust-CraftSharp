@@ -143,7 +143,7 @@ async function bootstrap() {
 
   void listen<Snapshot>("slots-changed", ({ payload }) => applySnapshot(payload)).catch(() => undefined);
 
-  // 旧版 localStorage 只在首次启动、没有 slots.json 时导入一次
+  // 首次启动且没有 slots.json 时，从 localStorage 导入一次
   try {
     const flat = localStorage.getItem(STORAGE_KEY);
     const styles = localStorage.getItem(STYLE_STORAGE_KEY);

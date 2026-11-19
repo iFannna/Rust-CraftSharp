@@ -6,7 +6,7 @@ mod imp {
 
     use tauri::AppHandle;
 
-    // 与旧版 WPF 程序区分身份，两者可同时运行且不会互相唤醒
+    // 独立命名，避免与同机其他版本互相唤醒
     const MUTEX_NAME: &str = "Local\\CraftSharp.Next.SingleInstance";
     const EVENT_NAME: &str = "Local\\CraftSharp.Next.Activate";
     const ERROR_ALREADY_EXISTS: u32 = 183;

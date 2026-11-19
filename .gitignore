@@ -12,8 +12,3 @@ apps/desktop/src-tauri/gen/
 Thumbs.db
 .idea/
 .vscode/
-
-# Temporary comparison artifacts
-docs/refactor/evidence/food-*.png
-docs/refactor/evidence/food1-*.png
-docs/refactor/evidence/hud-window.png

@@ -165,7 +165,7 @@ export function TextField({
 }
 
 /**
- * 与老版一致：只接受数字输入，失焦或回车时才生效
+ * 只接受数字输入，失焦或回车时才生效
  * 编辑期间保留原始输入，清空后回落 emptyValue，默认用上限
  */
 export function NumberField({

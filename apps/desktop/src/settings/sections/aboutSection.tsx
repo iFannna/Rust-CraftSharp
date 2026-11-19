@@ -52,7 +52,7 @@ interface ReleaseInfo {
   body: string;
 }
 
-/** 与 WPF 版一致：取 GitHub 最新 release，解析失败或已是最新时返回 null */
+/** 取 GitHub 最新 release，解析失败或已是最新时返回 null */
 async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   try {
     const response = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } });

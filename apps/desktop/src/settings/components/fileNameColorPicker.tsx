@@ -21,7 +21,7 @@ const CHECKER: CSSProperties = {
   backgroundSize: "8px 8px"
 };
 
-/** 老项目：自定义色排最前，然后 9 个预设，最后自动与其他... */
+/** 自定义色排最前，然后 9 个预设，最后自动与其他... */
 export function FileNameColorPicker({
   value,
   onChange,

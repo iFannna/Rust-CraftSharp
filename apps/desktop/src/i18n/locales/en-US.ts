@@ -1,5 +1,3 @@
-/** English copy, verbatim from the WPF project's Strings.en-US.xaml where a key exists */
-
 import type { Messages } from "./zh-CN";
 
 export const enUS: Messages = {

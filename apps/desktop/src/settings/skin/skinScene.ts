@@ -281,7 +281,7 @@ export class SkinPreview {
 
   private applyFrustum() {
     const aspect = this.width / this.height;
-    // 横向宽度按老项目 30 基准，面板过矮时保证整个模型仍在画面内
+    // 横向宽度按 30 基准，面板过矮时保证整个模型仍在画面内
     const halfH = Math.max(this.zoom / 2 / aspect, 24);
     const halfW = halfH * aspect;
     this.camera.left = -halfW;

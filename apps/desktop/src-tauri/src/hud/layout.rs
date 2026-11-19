@@ -1,4 +1,4 @@
-//! 状态栏布局，数值与 WPF 原版一一对应，单位是 MC GUI 像素乘缩放。
+//! 状态栏布局，单位是 MC GUI 像素乘缩放。
 
 pub const CORE_WIDTH: f32 = 182.0;
 pub const HOTBAR_HEIGHT: f32 = 22.0;
@@ -98,7 +98,7 @@ pub struct Layout {
     pub visible: Visibility,
 }
 
-/// 复刻 WPF StackPanel 重力布局：整块贴底，隐藏元素后上方元素向下掉落。
+/// 重力布局：整块贴底，隐藏元素后上方元素向下掉落。
 pub fn compute(scale: f32, offhand: Offhand, visible: Visibility, max_absorption: i32) -> Layout {
     let icon = ICON * scale;
     let gap = ICON_GAP * scale;

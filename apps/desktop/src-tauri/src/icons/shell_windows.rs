@@ -1,7 +1,7 @@
 #![allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms)]
 
 //! Windows Shell 图标与快捷方式解析。
-//! 取值方式与原 WPF 实现一致：SHGetFileInfoW + SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES，
+//! 取值方式：SHGetFileInfoW + SHGFI_ICON + SHGFI_LARGEICON + SHGFI_USEFILEATTRIBUTES，
 //! 实测与不带 USEFILEATTRIBUTES 的结果相同，.lnk 得到带角标的快捷方式图标。
 
 use std::ffi::c_void;

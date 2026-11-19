@@ -76,7 +76,7 @@ pub fn draw_label(frame: &mut Frame, layout: &Layout, text: &str, color: u32, al
     let right = glyphs.iter().map(|glyph| glyph.x + glyph.width as f32).fold(f32::MIN, f32::max);
     let min_top = glyphs.iter().map(|glyph| glyph.top).fold(f32::MAX, f32::min);
     let max_bottom = glyphs.iter().map(|glyph| glyph.top + glyph.height as f32).fold(f32::MIN, f32::max);
-    // 布局已按标签高度在顶部补了透明带，这里固定 50 即可，与老项目一致
+    // 布局已按标签高度在顶部补了透明带，这里固定 50 即可
     let bottom = layout.height - 50.0 * layout.scale;
     let origin_x = layout.core_left + (layout.core_width - (right - left)) / 2.0 - left;
     let origin_y = bottom - (max_bottom - min_top);

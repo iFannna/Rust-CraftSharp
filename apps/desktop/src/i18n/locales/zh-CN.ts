@@ -1,5 +1,3 @@
-/** 简体中文文案，设置面板所有可见文字的基准；key 与 WPF 版 Strings.zh-CN.xaml 对齐 */
-
 export const zhCN = {
   "common.restoreDefaults": "恢复默认设置",
   "common.restoreConfirmText": "此操作将恢复当前页面的所有设置为默认值，是否继续？",

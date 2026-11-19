@@ -662,7 +662,7 @@ fn sync_entity_setup(state: &mut State) {
     let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": visible }));
 }
 
-/// 按 WPF 契约换算头身跟随角度
+/// 换算头身跟随角度
 fn sync_entity_look(state: &mut State, x: f32, y: f32) {
     if !state.visible {
         return;

@@ -618,7 +618,7 @@ function normalizeConfig(config: AppConfig): AppConfig {
   return { ...config, appearance: { ...config.appearance, font: "system" } };
 }
 
-/** 版本 2：HUD 默认值对齐老项目，重置现有配置中受影响的字段 */
+/** 版本 2 迁移：重置受 HUD 默认值影响的字段 */
 function migrateHudDefaults(config: AppConfig): AppConfig {
   const defaults = defaultConfig();
   const elements = { ...config.hudElements.elements };

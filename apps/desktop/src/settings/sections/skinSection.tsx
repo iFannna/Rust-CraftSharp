@@ -201,7 +201,7 @@ export function SkinSection() {
     forgetSkinUrl(source.path);
     void refresh();
     if (getConfig().player.skinPath === source.path) {
-      // 与老项目一致：移除当前皮肤后回退内置 Alex wide
+      // 移除当前皮肤后回退内置 Alex wide
       const fallback: SkinSource = { kind: "builtin", type: "wide", name: "alex" };
       select(fallback);
     } else if (sourceKey(preview) === sourceKey(source)) {
