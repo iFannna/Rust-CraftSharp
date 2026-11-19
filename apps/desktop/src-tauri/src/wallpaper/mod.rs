@@ -4,6 +4,7 @@ mod auth;
 mod client;
 mod desktop;
 mod dialog;
+mod display;
 mod dynamic;
 pub(crate) mod layout;
 mod storage;
@@ -23,6 +24,11 @@ pub fn init(app: &AppHandle) {
 
 pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
     client::list(page, kind, sort)
+}
+
+/// 本地协议响应：静态壁纸的无水印缩略图与预览图
+pub fn image_response(app: &AppHandle, path: &str) -> tauri::http::Response<Vec<u8>> {
+    display::response(app, path)
 }
 
 pub fn monitors() -> Vec<MonitorInfo> {
@@ -82,6 +88,14 @@ fn owner(app: &AppHandle) -> isize {
 pub fn capture_session(app: &AppHandle) -> Result<(), String> {
     #[cfg(windows)]
     {
+        let handle = app.clone();
+        if let Some(site) = app.get_webview("wallpaper-login-site") {
+            return site
+                .with_webview(move |webview| {
+                    cookie::capture(&handle, &webview.controller());
+                })
+                .map_err(|error| error.to_string());
+        }
         let window = app
             .get_webview_window("wallpaper-login")
             .ok_or_else(|| "登录窗口未打开".to_string())?;

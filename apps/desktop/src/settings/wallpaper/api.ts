@@ -2,6 +2,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+export const LOGIN_URL = "https://mcblock.top/wallpapers";
+
 export type WallpaperKind = "all" | "static" | "dynamic";
 export type WallpaperSort = "latest" | "popular" | "downloads";
 export type WallpaperMode = "sync" | "independent" | "span";

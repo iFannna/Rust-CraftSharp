@@ -20,7 +20,10 @@ const pages = [
   "color-picker",
   "settings",
   "entity-preview",
-  "entity-view"
+  "entity-view",
+  "wallpaper-preview",
+  "wallpaper-apply",
+  "wallpaper-login"
 ];
 
 export default defineConfig({

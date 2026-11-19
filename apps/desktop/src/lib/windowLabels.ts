@@ -9,5 +9,7 @@ export const WINDOW_LABEL = {
   confirm: "confirm-dialog",
   rename: "rename-dialog",
   entityPreview: "entity-preview",
-  wallpaperLogin: "wallpaper-login"
+  wallpaperLogin: "wallpaper-login",
+  wallpaperPreview: "wallpaper-preview",
+  wallpaperApply: "wallpaper-apply"
 } as const;

@@ -683,6 +683,13 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("wpimg", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let path = request.uri().path().to_string();
+            std::thread::spawn(move || {
+                responder.respond(wallpaper::image_response(&app, &path));
+            });
+        })
         .setup(|app| {
             use tauri::Manager;
 

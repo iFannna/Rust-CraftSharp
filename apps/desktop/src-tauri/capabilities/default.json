@@ -16,6 +16,9 @@
     "color-picker",
     "entity-preview",
     "entity-view",
+    "wallpaper-preview",
+    "wallpaper-apply",
+    "wallpaper-login",
     "settings"
   ],
   "permissions": [
@@ -27,6 +30,9 @@
     "core:window:allow-outer-position",
     "core:window:allow-scale-factor",
     "core:webview:allow-create-webview-window",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-set-webview-position",
+    "core:webview:allow-set-webview-size",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-is-visible",

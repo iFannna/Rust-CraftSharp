@@ -1,23 +1,25 @@
-/** 多屏目标与模式弹窗：同步、逐个设置、跨屏拼接及拼接裁剪 */
+/** 壁纸设置面板：应用方式、显示器选择与实际效果预览 */
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/ui/components/button";
-import { XIcon } from "@/ui/icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { cn } from "@/ui/lib/utils";
+import { Card } from "@/settings/components/controls";
 import type { TFunction } from "@/i18n";
 import type {
   SpanTransform,
   WallpaperItem,
   WallpaperMode,
   WallpaperMonitor
-} from "@/settings/wallpaper/api";
+} from "./api";
 
-interface TargetsProps {
+interface WallpaperApplyPanelProps {
   item: WallpaperItem;
   monitors: WallpaperMonitor[];
   initialMode: WallpaperMode;
   initialSelected: string[];
   initialTransform: SpanTransform;
+  busy: boolean;
   t: TFunction;
   onClose: () => void;
   onApply: (mode: WallpaperMode, selected: string[], transform: SpanTransform) => void;
@@ -29,16 +31,17 @@ const MODES: { value: WallpaperMode; key: "wallpaper.modeSync" | "wallpaper.mode
   { value: "span", key: "wallpaper.modeSpan" }
 ];
 
-export function WallpaperTargets({
+export function WallpaperApplyPanel({
   item,
   monitors,
   initialMode,
   initialSelected,
   initialTransform,
+  busy,
   t,
   onClose,
   onApply
-}: TargetsProps) {
+}: WallpaperApplyPanelProps) {
   const [mode, setMode] = useState<WallpaperMode>(initialMode);
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const [transform, setTransform] = useState<SpanTransform>(initialTransform);
@@ -48,262 +51,300 @@ export function WallpaperTargets({
       current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
     );
 
-  const hint =
-    mode === "sync"
-      ? t("wallpaper.modeHintSync")
-      : mode === "independent"
-        ? t("wallpaper.modeHintIndependent")
-        : t("wallpaper.modeHintSpan");
+  const modeLabel = t(MODES.find((option) => option.value === mode)!.key);
+  const targetCount = mode === "independent" ? selected.length : monitors.length;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("wallpaper.targetsTitle")}
-      className="fixed inset-0 z-[60] flex flex-col bg-black/85"
-    >
-      <header className="flex flex-none items-center gap-4 px-5 py-4 text-white">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{t("wallpaper.targetsTitle")}</p>
-          <p className="truncate text-xs text-white/60">{item.title}</p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="ui-scroll-auto min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col gap-4 p-5">
+          <Card className="flex-none p-4">
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" title={item.title}>
+                  {item.title}
+                </p>
+                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{item.resolution}</p>
+              </div>
+              <div className="flex w-[300px] flex-none gap-1 rounded-lg border bg-muted/40 p-1">
+                {MODES.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      "h-8 flex-1 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+                      option.value === mode
+                        ? "bg-background font-medium text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    aria-pressed={option.value === mode}
+                    disabled={busy}
+                    onClick={() => setMode(option.value)}
+                  >
+                    {t(option.key)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="flex min-h-[200px] flex-1 flex-col p-4">
+            <div className="mb-3 text-sm font-medium">{t("wallpaper.effect")}</div>
+            <div className="relative min-h-0 flex-1 rounded-lg bg-muted/20">
+              <MonitorStage
+                item={item}
+                monitors={monitors}
+                mode={mode}
+                selected={selected}
+                busy={busy}
+                transform={transform}
+                onToggle={toggle}
+                onTransform={setTransform}
+                t={t}
+              />
+            </div>
+          </Card>
         </div>
-        <Button
-          autoFocus
-          variant="ghost"
-          size="icon"
-          className="ml-auto text-white hover:bg-white/15 hover:text-white"
-          aria-label={t("window.close")}
-          onClick={onClose}
-        >
-          <XIcon className="h-5 w-5" />
-        </Button>
-      </header>
-
-      <div className="flex min-h-0 flex-1 flex-col items-center gap-4 overflow-y-auto px-6 py-2 text-white">
-        <div className="flex items-center gap-1">
-          {MODES.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={cn(
-                "h-8 rounded px-3 text-sm transition-colors",
-                option.value === mode
-                  ? "bg-white text-black"
-                  : "text-white/70 hover:bg-white/10"
-              )}
-              aria-pressed={option.value === mode}
-              onClick={() => setMode(option.value)}
-            >
-              {t(option.key)}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-white/60">{hint}</p>
-
-        <MonitorDiagram
-          monitors={monitors}
-          selectable={mode === "independent"}
-          selected={mode === "independent" ? selected : monitors.map((m) => m.devicePath)}
-          onToggle={toggle}
-          t={t}
-        />
-
-        {mode === "span" ? (
-          <SpanPreview
-            item={item}
-            monitors={monitors}
-            transform={transform}
-            t={t}
-            onChange={setTransform}
-          />
-        ) : null}
       </div>
 
-      <footer className="flex flex-none justify-end gap-2 px-6 py-4">
-        <Button variant="ghost" size="sm" className="text-white hover:bg-white/15 hover:text-white" onClick={onClose}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          disabled={mode === "independent" && selected.length === 0}
-          onClick={() => onApply(mode, selected, transform)}
-        >
-          {t("wallpaper.apply")}
-        </Button>
+      <footer className="flex-none border-t">
+        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-3 px-5 py-3">
+          <span className="text-xs text-muted-foreground">
+            {modeLabel} · {t("wallpaper.monitorCount", { count: targetCount })}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              className="min-w-[84px] gap-2"
+              disabled={busy || (mode === "independent" && selected.length === 0)}
+              onClick={() => onApply(mode, selected, transform)}
+            >
+              {busy ? (
+                <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+              ) : null}
+              {busy ? t("wallpaper.setting") : t("wallpaper.apply")}
+            </Button>
+          </div>
+        </div>
       </footer>
     </div>
   );
 }
 
-function MonitorDiagram({
-  monitors,
-  selectable,
-  selected,
-  onToggle,
-  t
-}: {
-  monitors: WallpaperMonitor[];
-  selectable: boolean;
-  selected: string[];
-  onToggle: (path: string) => void;
-  t: TFunction;
-}) {
-  const bounds = virtualBounds(monitors);
-  const ratio = bounds.width / bounds.height;
-  const width = Math.min(560, window.innerWidth * 0.65, (window.innerHeight * 0.32) * ratio);
-  const height = width / ratio;
+/** 按容器宽高拟合显示器拼合比例，窗口缩放实时跟随 */
+function useStageSize(ratio: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
 
-  return (
-    <div className="relative rounded border border-white/15 bg-white/5" style={{ width, height }}>
-      {monitors.map((monitor, index) => {
-        const left = ((monitor.left - bounds.left) / bounds.width) * 100;
-        const top = ((monitor.top - bounds.top) / bounds.height) * 100;
-        const w = ((monitor.right - monitor.left) / bounds.width) * 100;
-        const h = ((monitor.bottom - monitor.top) / bounds.height) * 100;
-        const active = selected.includes(monitor.devicePath);
-        return (
-          <button
-            key={monitor.devicePath}
-            type="button"
-            disabled={!selectable}
-            className={cn(
-              "absolute flex flex-col items-center justify-center gap-1 rounded border text-[11px] transition-colors",
-              active
-                ? "border-primary bg-primary/25 text-white"
-                : "border-white/20 text-white/50",
-              selectable && "hover:border-white/60"
-            )}
-            style={{
-              left: `calc(${left}% + 2px)`,
-              top: `calc(${top}% + 2px)`,
-              width: `calc(${w}% - 4px)`,
-              height: `calc(${h}% - 4px)`
-            }}
-            aria-pressed={active}
-            onClick={() => onToggle(monitor.devicePath)}
-          >
-            <span>{t("wallpaper.monitor", { index: index + 1 })}</span>
-            <span className="text-white/50">
-              {monitor.right - monitor.left}×{monitor.bottom - monitor.top}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const update = () => {
+      if (!node.clientWidth || !node.clientHeight) return;
+      const width = Math.max(1, Math.min(node.clientWidth, node.clientHeight * ratio));
+      const next = { width, height: width / ratio };
+      setSize((current) =>
+        current.width === next.width && current.height === next.height ? current : next
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [ratio]);
+
+  return { ref, width: size.width, height: size.height };
 }
 
-function SpanPreview({
+function MonitorStage({
   item,
   monitors,
+  mode,
+  selected,
+  busy,
   transform,
-  t,
-  onChange
+  onToggle,
+  onTransform,
+  t
 }: {
   item: WallpaperItem;
   monitors: WallpaperMonitor[];
+  mode: WallpaperMode;
+  selected: string[];
+  busy: boolean;
   transform: SpanTransform;
+  onToggle: (path: string) => void;
+  onTransform: (transform: SpanTransform) => void;
   t: TFunction;
-  onChange: (value: SpanTransform) => void;
 }) {
   const bounds = virtualBounds(monitors);
   const ratio = bounds.width / bounds.height;
-  const width = Math.min(520, window.innerWidth * 0.6, (window.innerHeight * 0.3) * ratio);
-  const height = width / ratio;
+  const { ref, width, height } = useStageSize(ratio);
+  const spanRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+
+  /** 偏移只允许到图片仍铺满画布的范围 */
+  const clampOffset = (value: number, zoom: number) => {
+    const limit = Math.max(0, (zoom - 1) / 2);
+    return Math.min(limit, Math.max(-limit, value));
+  };
+
+  const updateSpan = (next: SpanTransform) =>
+    onTransform({
+      zoom: next.zoom,
+      offsetX: clampOffset(next.offsetX, next.zoom),
+      offsetY: clampOffset(next.offsetY, next.zoom)
+    });
+
+  useEffect(() => {
+    if (mode !== "span" || busy) return;
+    const node = spanRef.current;
+    if (!node) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      updateSpan({
+        zoom: Math.round(Math.min(3, Math.max(1, transform.zoom + (event.deltaY < 0 ? 0.1 : -0.1))) * 100) / 100,
+        offsetX: transform.offsetX,
+        offsetY: transform.offsetY
+      });
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, [mode, busy, transform]);
+
+  const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (mode !== "span" || busy || transform.zoom <= 1 || event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: transform.offsetX,
+      offsetY: transform.offsetY
+    };
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    updateSpan({
+      zoom: transform.zoom,
+      offsetX: drag.offsetX + (event.clientX - drag.x) / rect.width,
+      offsetY: drag.offsetY + (event.clientY - drag.y) / rect.height
+    });
+  };
+
+  const endDrag = () => {
+    dragRef.current = null;
+  };
+
+  const tileStyle = (monitor: WallpaperMonitor) => ({
+    left: `calc(${((monitor.left - bounds.left) / bounds.width) * 100}% + 2px)`,
+    top: `calc(${((monitor.top - bounds.top) / bounds.height) * 100}% + 2px)`,
+    width: `calc(${((monitor.right - monitor.left) / bounds.width) * 100}% - 4px)`,
+    height: `calc(${((monitor.bottom - monitor.top) / bounds.height) * 100}% - 4px)`
+  });
 
   return (
-    <div className="flex w-full max-w-[620px] flex-col items-center gap-3">
-      <div className="relative overflow-hidden rounded border border-white/15" style={{ width, height }}>
-        <img
-          src={item.previewUrl}
-          alt=""
-          draggable={false}
-          className="h-full w-full object-cover"
-          style={{
-            transform: `translate(${transform.offsetX * 100}%, ${transform.offsetY * 100}%) scale(${transform.zoom})`
-          }}
-        />
-        <div className="pointer-events-none absolute inset-0">
-          {monitors.map((monitor) => (
+    <div ref={ref} className="absolute inset-0 flex items-center justify-center">
+      <div className="relative" style={{ width, height }}>
+        {mode === "span" ? (
+          <>
             <div
-              key={monitor.devicePath}
-              className="absolute border border-dashed border-white/50"
-              style={{
-                left: `${((monitor.left - bounds.left) / bounds.width) * 100}%`,
-                top: `${((monitor.top - bounds.top) / bounds.height) * 100}%`,
-                width: `${((monitor.right - monitor.left) / bounds.width) * 100}%`,
-                height: `${((monitor.bottom - monitor.top) / bounds.height) * 100}%`
-              }}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="grid w-full gap-2">
-        <Slider
-          label={t("wallpaper.spanZoom")}
-          value={transform.zoom}
-          min={1}
-          max={3}
-          step={0.05}
-          onChange={(zoom) => onChange({ ...transform, zoom })}
-        />
-        <Slider
-          label={t("wallpaper.spanOffsetX")}
-          value={transform.offsetX}
-          min={-1}
-          max={1}
-          step={0.01}
-          onChange={(offsetX) => onChange({ ...transform, offsetX })}
-        />
-        <Slider
-          label={t("wallpaper.spanOffsetY")}
-          value={transform.offsetY}
-          min={-1}
-          max={1}
-          step={0.01}
-          onChange={(offsetY) => onChange({ ...transform, offsetY })}
-        />
+              ref={spanRef}
+              className={cn(
+                "absolute inset-0 touch-none overflow-hidden rounded-lg border bg-muted/20",
+                transform.zoom > 1 && !busy && "cursor-grab active:cursor-grabbing"
+              )}
+              onPointerDown={startDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onDoubleClick={() => onTransform({ zoom: 1, offsetX: 0, offsetY: 0 })}
+            >
+              <img
+                src={item.previewUrl}
+                alt=""
+                draggable={false}
+                className="h-full w-full object-cover"
+                style={{
+                  transform: `translate(${transform.offsetX * 100}%, ${transform.offsetY * 100}%) scale(${transform.zoom})`
+                }}
+              />
+            </div>
+            {monitors.map((monitor, index) => (
+              <div
+                key={monitor.devicePath}
+                className="pointer-events-none absolute rounded-lg border border-dashed border-foreground/50"
+                style={tileStyle(monitor)}
+              >
+                <span className="absolute bottom-1.5 left-1.5 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground shadow-sm backdrop-blur">
+                  {t("wallpaper.monitor", { index: index + 1 })}
+                </span>
+              </div>
+            ))}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="absolute bottom-2 right-2 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-foreground shadow-sm backdrop-blur">
+                  {transform.zoom.toFixed(2)}×
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("wallpaper.spanHint")}</TooltipContent>
+            </Tooltip>
+          </>
+        ) : (
+          monitors.map((monitor, index) => {
+            const active = mode === "sync" || selected.includes(monitor.devicePath);
+            return (
+              <button
+                key={monitor.devicePath}
+                type="button"
+                disabled={mode === "sync" || busy}
+                className={cn(
+                  "absolute overflow-hidden rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default",
+                  active ? "border-primary/70" : "border-border",
+                  mode === "independent" && !busy && "cursor-pointer hover:border-ring"
+                )}
+                style={tileStyle(monitor)}
+                aria-pressed={mode === "independent" ? active : undefined}
+                onClick={() => onToggle(monitor.devicePath)}
+              >
+                <img
+                  src={item.previewUrl}
+                  alt=""
+                  draggable={false}
+                  className={cn(
+                    "absolute inset-0 size-full object-cover",
+                    !active && "opacity-25 grayscale"
+                  )}
+                />
+                {!active ? (
+                  <span className="absolute inset-0 grid place-items-center">
+                    <span className="rounded border bg-background/85 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm">
+                      {t("wallpaper.monitorOff")}
+                    </span>
+                  </span>
+                ) : null}
+                <span className="absolute bottom-1.5 left-1.5 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground shadow-sm backdrop-blur">
+                  {t("wallpaper.monitor", { index: index + 1 })}
+                </span>
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
-  );
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="grid grid-cols-[96px_minmax(0,1fr)_56px] items-center gap-3 text-xs">
-      <span className="text-white/70">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <span className="text-right tabular-nums text-white/50">{value.toFixed(2)}</span>
-    </label>
   );
 }
 
 function virtualBounds(monitors: WallpaperMonitor[]) {
   if (!monitors.length) return { left: 0, top: 0, width: 16, height: 9 };
-  const left = Math.min(...monitors.map((m) => m.left));
-  const top = Math.min(...monitors.map((m) => m.top));
-  const right = Math.max(...monitors.map((m) => m.right));
-  const bottom = Math.max(...monitors.map((m) => m.bottom));
+  const left = Math.min(...monitors.map((monitor) => monitor.left));
+  const top = Math.min(...monitors.map((monitor) => monitor.top));
+  const right = Math.max(...monitors.map((monitor) => monitor.right));
+  const bottom = Math.max(...monitors.map((monitor) => monitor.bottom));
   return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 }

@@ -1,5 +1,6 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { windowPosition } from "@/lib/appWindow";
 import { isTauri } from "@/lib/runtime";
 
 const DIALOG_RESULT = "dialog:result";
@@ -17,38 +18,6 @@ async function closeWindow(label: string): Promise<void> {
 export async function closeDialogWindow(label: string): Promise<void> {
   if (!isTauri()) return;
   await closeWindow(label);
-}
-
-/** 按锚点窗口居中，未指定或窗口不存在时回落到屏幕居中 */
-async function centeredPosition(
-  anchor: string | undefined,
-  width: number,
-  height: number
-): Promise<{ x: number; y: number }> {
-  if (anchor) {
-    const target = await WebviewWindow.getByLabel(anchor).catch(() => null);
-    if (target) {
-      try {
-        const [scale, position, size] = await Promise.all([
-          target.scaleFactor(),
-          target.outerPosition(),
-          target.outerSize()
-        ]);
-        return {
-          x: Math.round((position.x + (size.width - width * scale) / 2) / scale),
-          y: Math.round((position.y + (size.height - height * scale) / 2) / scale)
-        };
-      } catch {
-        // 锚点窗口在取坐标时被关闭，回落到屏幕居中
-      }
-    }
-  }
-
-  const screen = window.screen as Screen & { availLeft?: number; availTop?: number };
-  return {
-    x: (screen.availLeft ?? 0) + Math.round((screen.availWidth - width) / 2),
-    y: (screen.availTop ?? 0) + Math.round((screen.availHeight - height) / 2)
-  };
 }
 
 interface DialogWindowOptions {
@@ -85,7 +54,7 @@ export async function openDialogWindow<T>({
   if (!isTauri()) return null;
 
   await closeWindow(label);
-  const { x, y } = await centeredPosition(anchor, width, height);
+  const { x, y } = await windowPosition(anchor, width, height);
 
   return new Promise<T | null>((resolve) => {
     let settled = false;

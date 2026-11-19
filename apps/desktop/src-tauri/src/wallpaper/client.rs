@@ -105,18 +105,25 @@ pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
     let items = data
         .wallpapers
         .into_iter()
-        .map(|raw| Item {
-            id: raw.id,
-            title: raw.title,
-            kind: if raw.kind == "dynamic" {
-                "dynamic"
-            } else {
-                "static"
+        .map(|raw| {
+            let kind = if raw.kind == "dynamic" { "dynamic" } else { "static" };
+            let clean = kind == "static";
+            Item {
+                thumbnail_url: if clean {
+                    super::display::url(&raw.id, "thumb")
+                } else {
+                    absolute(&raw.thumbnail_url)
+                },
+                preview_url: if clean {
+                    super::display::url(&raw.id, "preview")
+                } else {
+                    with_size(&absolute(&raw.preview_url), 1920)
+                },
+                id: raw.id,
+                title: raw.title,
+                kind: kind.into(),
+                resolution: raw.resolution,
             }
-            .into(),
-            thumbnail_url: absolute(&raw.thumbnail_url),
-            preview_url: with_size(&absolute(&raw.preview_url), 1920),
-            resolution: raw.resolution,
         })
         .collect();
 

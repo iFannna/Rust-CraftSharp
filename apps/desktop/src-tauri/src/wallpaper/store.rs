@@ -46,7 +46,7 @@ fn post_url(id: &str) -> String {
     }
 }
 
-fn file_id(id: &str) -> Result<&str, String> {
+pub(crate) fn file_id(id: &str) -> Result<&str, String> {
     if id.is_empty()
         || id.len() > 64
         || !id
@@ -376,7 +376,7 @@ fn to_jpeg_from(image: &image::DynamicImage) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
     let temp = target.with_extension("tmp");
     fs::write(&temp, bytes).map_err(|error| format!("写入壁纸失败：{error}"))?;
     if fs::rename(&temp, target).is_err() {

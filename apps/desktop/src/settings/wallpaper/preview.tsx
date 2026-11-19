@@ -1,41 +1,41 @@
-/** 壁纸预览浮层：缩放、拖拽、切换与下载，设置页内完成，不额外开窗 */
+/** 壁纸查看器：窗口内翻页、缩放拖拽与下载，列表与窗口生命周期由入口负责 */
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/ui/components/button";
-import { WarningIcon, XIcon } from "@/ui/icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
+import { ChevronLeftIcon, ChevronRightIcon, MinusIcon, PlusIcon, WarningIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 import type { TFunction } from "@/i18n";
-import type { WallpaperItem } from "@/settings/wallpaper/api";
+import type { WallpaperItem } from "./api";
 
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const FIT_INDEX = 3;
 
-interface WallpaperPreviewProps {
-  items: WallpaperItem[];
+interface WallpaperViewerProps {
+  item: WallpaperItem;
   index: number;
-  applyingId: string | null;
-  savingId: string | null;
-  dynamicEnabled: boolean;
+  total: number;
+  saving: boolean;
   t: TFunction;
   onClose: () => void;
-  onIndexChange: (index: number) => void;
-  onApply: (item: WallpaperItem) => void;
-  onDownload: (item: WallpaperItem) => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onDownload: () => void;
+  onApply: () => void;
 }
 
-export function WallpaperPreview({
-  items,
+export function WallpaperViewer({
+  item,
   index,
-  applyingId,
-  savingId,
-  dynamicEnabled,
+  total,
+  saving,
   t,
   onClose,
-  onIndexChange,
-  onApply,
-  onDownload
-}: WallpaperPreviewProps) {
-  const item = items[index];
+  onPrev,
+  onNext,
+  onDownload,
+  onApply
+}: WallpaperViewerProps) {
   const [zoomIndex, setZoomIndex] = useState(FIT_INDEX);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -43,15 +43,13 @@ export function WallpaperPreview({
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
   const zoom = ZOOM_LEVELS[zoomIndex];
-  const dynamic = item?.kind === "dynamic";
-  const applying = item ? applyingId === item.id : false;
-  const saving = item ? savingId === item.id : false;
+  const dynamic = item.kind === "dynamic";
 
   useEffect(() => {
     setZoomIndex(FIT_INDEX);
     setOffset({ x: 0, y: 0 });
     setStatus("loading");
-  }, [index]);
+  }, [item.id]);
 
   useEffect(() => {
     if (zoom <= 1) setOffset({ x: 0, y: 0 });
@@ -79,18 +77,16 @@ export function WallpaperPreview({
       }
       if (event.key === "ArrowLeft" && index > 0) {
         event.preventDefault();
-        onIndexChange(index - 1);
+        onPrev();
       }
-      if (event.key === "ArrowRight" && index < items.length - 1) {
+      if (event.key === "ArrowRight" && index < total - 1) {
         event.preventDefault();
-        onIndexChange(index + 1);
+        onNext();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [index, items.length, onClose, onIndexChange]);
-
-  if (!item) return null;
+  }, [index, total, onClose, onPrev, onNext]);
 
   const resetView = () => {
     setZoomIndex(FIT_INDEX);
@@ -116,141 +112,151 @@ export function WallpaperPreview({
     dragRef.current = null;
   };
 
-  const footerButton = "text-white hover:bg-white/15 hover:text-white";
+  const iconButton = "h-7 w-7";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("wallpaper.previewTitle")}
-      className="fixed inset-0 z-50 flex flex-col bg-black/90"
-    >
-      <header className="flex flex-none items-center gap-4 px-5 py-4 text-white">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{item.title}</p>
-          <p className="text-xs text-white/60">
-            {item.resolution}
-            {dynamic ? ` · ${t("wallpaper.dynamicBadge")}` : ""}
-          </p>
-        </div>
-        <Button
-          autoFocus
-          variant="ghost"
-          size="icon"
-          className={cn("ml-auto", footerButton)}
-          aria-label={t("window.close")}
-          onClick={onClose}
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div
+          ref={stageRef}
+          className={cn(
+            "relative min-h-0 flex-1 select-none overflow-hidden",
+            zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+          )}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onDoubleClick={resetView}
         >
-          <XIcon className="h-5 w-5" />
-        </Button>
-      </header>
+          <div className="absolute inset-0 grid place-items-center p-6">
+            <img
+              src={item.previewUrl}
+              alt=""
+              draggable={false}
+              onLoad={() => setStatus("ready")}
+              onError={() => setStatus("error")}
+              style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+              className={cn(
+                "max-h-full max-w-full object-contain shadow-sm transition-opacity",
+                status === "ready" ? "opacity-100" : "opacity-0"
+              )}
+            />
+          </div>
 
-      <div
-        ref={stageRef}
-        className={cn(
-          "relative min-h-0 flex-1 select-none overflow-hidden",
-          zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-        )}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onDoubleClick={resetView}
-      >
-        <div className="absolute inset-0 grid place-items-center p-6">
-          <img
-            src={item.previewUrl}
-            alt=""
-            draggable={false}
-            onLoad={() => setStatus("ready")}
-            onError={() => setStatus("error")}
-            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
-            className={cn(
-              "max-h-full max-w-full object-contain",
-              status === "ready" ? "opacity-100" : "opacity-0"
-            )}
-          />
+          {status === "loading" ? (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center">
+              <div className="size-7 animate-spin rounded-full border-2 border-muted border-t-primary" />
+            </div>
+          ) : null}
+
+          {status === "error" ? (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center">
+              <span className="flex items-center gap-2 rounded-md border bg-background/90 px-3 py-1.5 text-sm text-muted-foreground">
+                <WarningIcon className="size-4" />
+                {t("wallpaper.imageFailed")}
+              </span>
+            </div>
+          ) : null}
         </div>
 
-        {status === "loading" ? (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-          </div>
-        ) : null}
+        <footer className="flex h-12 flex-none items-center justify-center gap-1 border-t px-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={iconButton}
+            disabled={index <= 0}
+            aria-label={t("wallpaper.prevImage")}
+            onClick={onPrev}
+          >
+            <ChevronLeftIcon />
+          </Button>
+          <span className="min-w-[64px] text-center text-xs tabular-nums text-muted-foreground">
+            {Math.max(index, 0) + 1} / {total}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={iconButton}
+            disabled={index >= total - 1}
+            aria-label={t("wallpaper.nextImage")}
+            onClick={onNext}
+          >
+            <ChevronRightIcon />
+          </Button>
 
-        {status === "error" ? (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="flex flex-col items-center gap-2 text-white/70">
-              <WarningIcon className="h-7 w-7" />
-              <span className="text-sm">{t("wallpaper.imageFailed")}</span>
-            </div>
-          </div>
-        ) : null}
+          <span className="mx-2 h-4 w-px bg-border" aria-hidden="true" />
+
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={iconButton}
+            disabled={zoomIndex <= 0}
+            aria-label={t("wallpaper.zoomOut")}
+            onClick={() => zoomBy(-1)}
+          >
+            <MinusIcon />
+          </Button>
+          <span className="w-12 select-none text-center text-xs tabular-nums text-muted-foreground">
+            {Math.round(zoom * 100)}%
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={iconButton}
+            disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
+            aria-label={t("wallpaper.zoomIn")}
+            onClick={() => zoomBy(1)}
+          >
+            <PlusIcon />
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={resetView}>
+            {t("wallpaper.fit")}
+          </Button>
+        </footer>
       </div>
 
-      <footer className="flex flex-none flex-wrap items-center justify-center gap-2 px-5 py-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={footerButton}
-          disabled={index <= 0}
-          onClick={() => onIndexChange(index - 1)}
-        >
-          {t("wallpaper.prevImage")}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={footerButton}
-          disabled={index >= items.length - 1}
-          onClick={() => onIndexChange(index + 1)}
-        >
-          {t("wallpaper.nextImage")}
-        </Button>
-        <span className="mx-1 h-5 w-px bg-white/15" aria-hidden="true" />
-        <Button variant="ghost" size="sm" className={footerButton} onClick={resetView}>
-          {t("wallpaper.fit")}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={footerButton}
-          disabled={zoomIndex <= 0}
-          aria-label={t("wallpaper.zoomOut")}
-          onClick={() => zoomBy(-1)}
-        >
-          -
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={footerButton}
-          disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-          aria-label={t("wallpaper.zoomIn")}
-          onClick={() => zoomBy(1)}
-        >
-          +
-        </Button>
-        <span className="mx-1 h-5 w-px bg-white/15" aria-hidden="true" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className={footerButton}
-          disabled={dynamic || saving || applying}
-          title={dynamic ? t("wallpaper.dynamicUnsupported") : undefined}
-          onClick={() => onDownload(item)}
-        >
-          {t("wallpaper.download")}
-        </Button>
-        <Button
-          size="sm"
-          disabled={applying || saving}
-          title={dynamic && !dynamicEnabled ? t("wallpaper.dynamicLogin") : undefined}
-          onClick={() => onApply(item)}
-        >
-          {applying ? t("wallpaper.setting") : t("wallpaper.setWallpaper")}
-        </Button>
-      </footer>
+      <aside className="ui-scroll-auto flex w-[280px] flex-none flex-col gap-5 overflow-y-auto border-l p-4">
+        <div className="space-y-1.5">
+          <div className="flex items-start gap-2">
+            <h2 className="min-w-0 text-base font-semibold leading-snug">{item.title}</h2>
+            {dynamic ? (
+              <span className="mt-0.5 flex-none rounded bg-primary/90 px-1.5 py-0.5 text-[10px] leading-none text-primary-foreground">
+                {t("wallpaper.dynamicBadge")}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">{item.resolution}</p>
+        </div>
+
+        <div className="grid gap-2">
+          <Button type="button" className="w-full" disabled={saving} onClick={onApply}>
+            {t("wallpaper.setWallpaper")}
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={dynamic || saving}
+                  onClick={onDownload}
+                >
+                  {t("wallpaper.download")}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {dynamic ? t("wallpaper.dynamicUnsupported") : t("wallpaper.download")}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </aside>
     </div>
   );
 }
