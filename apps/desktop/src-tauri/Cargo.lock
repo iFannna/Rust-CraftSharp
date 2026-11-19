@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "craftsharp-desktop"
-version = "26.11.19"
+version = "26.11.20"
 dependencies = [
  "fontdue",
  "image",

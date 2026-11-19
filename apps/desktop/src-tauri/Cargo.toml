@@ -1,7 +1,9 @@
 [package]
 name = "craftsharp-desktop"
-version = "26.11.19"
+version = "26.11.20"
 description = "CraftSharp desktop shell"
+license = "MIT"
+repository = "https://github.com/iFannna/Rust-CraftSharp"
 edition = "2021"
 rust-version = "1.77"
 
