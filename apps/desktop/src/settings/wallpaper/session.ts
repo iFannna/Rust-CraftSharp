@@ -1,35 +1,43 @@
-/** mcblock.top 登录态：登录窗口、抓取登录信息与退出，供设置页和壁纸窗口共用 */
+/** mcblock.top 登录态：登录窗口、自动抓取与退出，供设置页和壁纸窗口共用 */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@/lib/runtime";
-import { captureSession, logout, sessionStatus } from "./api";
+import { logout, sessionStatus } from "./api";
 import { openWallpaperLogin } from "./windows";
 
 const SESSION_EVENT = "wallpaper:session";
 
-export function useWallpaperSession(onResult?: (loggedIn: boolean) => void) {
+export function useWallpaperSession(onLogin?: () => void) {
   const [session, setSession] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const resultRef = useRef(onResult);
-  resultRef.current = onResult;
+  const loginRef = useRef(onLogin);
+  loginRef.current = onLogin;
 
   useEffect(() => {
     if (!isTauri()) return;
     let cancelled = false;
     let dispose: (() => void) | null = null;
+    let attempt = 0;
 
-    void sessionStatus()
-      .then((value) => {
-        if (!cancelled) setSession(value);
-      })
-      .catch(() => undefined);
+    // 窗口早于 Rust 初始化创建，登录态可能还没解密完，未命中时短暂重试
+    const read = () => {
+      void sessionStatus()
+        .then((value) => {
+          if (cancelled) return;
+          setSession((current) => current || value);
+          if (!value && attempt < 3) {
+            attempt += 1;
+            window.setTimeout(read, 400);
+          }
+        })
+        .catch(() => undefined);
+    };
+    read();
 
     void listen<boolean>(SESSION_EVENT, (event) => {
       if (cancelled) return;
       setSession(event.payload);
-      setCapturing(false);
-      resultRef.current?.(event.payload);
+      if (event.payload) loginRef.current?.();
     }).then((off) => {
       if (cancelled) off();
       else dispose = off;
@@ -46,23 +54,10 @@ export function useWallpaperSession(onResult?: (loggedIn: boolean) => void) {
     await openWallpaperLogin(title);
   }, []);
 
-  const finishLogin = useCallback(async () => {
-    if (!isTauri()) return;
-    setCapturing(true);
-    const timer = window.setTimeout(() => setCapturing(false), 6000);
-    try {
-      await captureSession();
-    } catch (reason) {
-      window.clearTimeout(timer);
-      setCapturing(false);
-      throw reason;
-    }
-  }, []);
-
   const signOut = useCallback(async () => {
     await logout().catch(() => undefined);
     setSession(false);
   }, []);
 
-  return { session, capturing, openLogin, finishLogin, signOut };
+  return { session, openLogin, signOut };
 }

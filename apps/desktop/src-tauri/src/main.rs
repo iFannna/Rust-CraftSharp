@@ -530,8 +530,8 @@ fn wallpaper_open_storage(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn wallpaper_capture_session(app: tauri::AppHandle) -> Result<(), String> {
-    wallpaper::capture_session(&app)
+fn wallpaper_watch_login(app: tauri::AppHandle) {
+    wallpaper::watch_login(&app);
 }
 
 #[tauri::command]
@@ -795,7 +795,7 @@ fn main() {
             wallpaper_pick_folder,
             wallpaper_reset_storage,
             wallpaper_open_storage,
-            wallpaper_capture_session,
+            wallpaper_watch_login,
             wallpaper_logout,
             install_caption_hook
         ])

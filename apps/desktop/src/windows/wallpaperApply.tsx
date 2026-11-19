@@ -43,9 +43,9 @@ function WallpaperApplyWindow() {
   useRevealWindow();
   const t = tOf(getConfig().system.language);
   const { message, show } = useToast();
-  const { session, capturing, openLogin, finishLogin } = useWallpaperSession((loggedIn) => {
-    show(t(loggedIn ? "wallpaper.loginSuccess" : "wallpaper.loginFailed"));
-  });
+  const { session, openLogin } = useWallpaperSession(() =>
+    show(t("wallpaper.loginSuccess"))
+  );
   const [item, setItem] = useState<WallpaperItem>(initialItem);
   const [monitors, setMonitors] = useState<WallpaperMonitor[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,12 +97,6 @@ function WallpaperApplyWindow() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const captureLogin = () => {
-    void finishLogin().catch((reason) =>
-      show(t("wallpaper.applyFailed", { reason: String(reason) }))
-    );
-  };
-
   const apply = async (mode: WallpaperMode, selected: string[], transform: SpanTransform) => {
     if (busyRef.current) return;
     if (item.kind === "dynamic" && !session) {
@@ -140,17 +134,16 @@ function WallpaperApplyWindow() {
     <ThemeRoot>
       <WindowFrame title={t("wallpaper.setWallpaper")} controls="full" resizable onClose={close}>
         {item.kind === "dynamic" && !session ? (
-          <div className="flex flex-none items-center gap-2.5 border-b bg-muted/40 px-5 py-2.5 text-xs">
+          <div className="flex flex-none items-center gap-2.5 bg-muted/40 px-5 py-2.5 text-xs">
             <InfoIcon className="size-4 flex-none text-muted-foreground" />
             <span className="text-muted-foreground">{t("wallpaper.dynamicLogin")}</span>
-            <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => void openLogin(t("wallpaper.loginTitle"))}>
-                {t("wallpaper.login")}
-              </Button>
-              <Button variant="outline" size="sm" disabled={capturing} onClick={captureLogin}>
-                {capturing ? t("wallpaper.capturing") : t("wallpaper.loginDone")}
-              </Button>
-            </div>
+            <Button
+              className="ml-auto"
+              size="sm"
+              onClick={() => void openLogin(t("wallpaper.loginTitle"))}
+            >
+              {t("wallpaper.login")}
+            </Button>
           </div>
         ) : null}
 

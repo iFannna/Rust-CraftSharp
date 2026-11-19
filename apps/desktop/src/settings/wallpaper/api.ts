@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-export const LOGIN_URL = "https://mcblock.top/wallpapers";
+export const LOGIN_URL = "https://mcblock.top/login";
 
 export type WallpaperKind = "all" | "static" | "dynamic";
 export type WallpaperSort = "latest" | "popular" | "downloads";
@@ -107,8 +107,9 @@ export function pickFolder(title: string) {
   return invoke<string | null>("wallpaper_pick_folder", { title });
 }
 
-export function captureSession() {
-  return invoke<void>("wallpaper_capture_session");
+/** 登录窗口打开后开始轮询抓取登录态 */
+export function watchLogin() {
+  return invoke<void>("wallpaper_watch_login");
 }
 
 export function logout() {

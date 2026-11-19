@@ -6,7 +6,7 @@ import { tOf, type MessageKey } from "@/i18n";
 import { isTauri } from "@/lib/runtime";
 import { Button } from "@/ui/components/button";
 import { cn } from "@/ui/lib/utils";
-import { Card, SectionHead, Select, type Option } from "@/settings/components/controls";
+import { SectionHead, Select, type Option } from "@/settings/components/controls";
 import {
   listWallpapers,
   type WallpaperKind,
@@ -34,8 +34,8 @@ export function WallpaperSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
   const { message: toastMessage, show: showToast } = useToast();
-  const { session, capturing, openLogin, finishLogin, signOut } = useWallpaperSession(
-    (loggedIn) => showToast(t(loggedIn ? "wallpaper.loginSuccess" : "wallpaper.loginFailed"))
+  const { session, openLogin, signOut } = useWallpaperSession(() =>
+    showToast(t("wallpaper.loginSuccess"))
   );
 
   const [kind, setKind] = useState<WallpaperKind>("all");
@@ -79,12 +79,6 @@ export function WallpaperSection() {
     setPage(1);
   };
 
-  const finish = () => {
-    void finishLogin().catch((reason) =>
-      showToast(t("wallpaper.applyFailed", { reason: String(reason) }))
-    );
-  };
-
   const sortOptions: Option<WallpaperSort>[] = SORTS.map((item) => ({
     value: item.value,
     label: t(item.key)
@@ -94,7 +88,7 @@ export function WallpaperSection() {
     <div className="flex h-full min-h-0 flex-col">
       <SectionHead title={t("wallpaper.title")} />
 
-      <div className="mb-2 flex flex-none items-center gap-3">
+      <div className="mb-2 flex flex-none flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
           {KINDS.map((item) => (
             <button
@@ -119,33 +113,22 @@ export function WallpaperSection() {
           ariaLabel={t("wallpaper.sort")}
           onChange={changeSort}
         />
-      </div>
-
-      <div className="mb-3 flex flex-none flex-wrap items-center gap-2 text-xs">
         {isTauri() ? (
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-muted-foreground">
-              {session ? t("wallpaper.loggedIn") : t("wallpaper.loggedOut")}
-            </span>
+          <div className="ml-auto flex flex-none items-center">
             {session ? (
               <Button variant="ghost" size="sm" onClick={() => void signOut()}>
                 {t("wallpaper.logout")}
               </Button>
             ) : (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => void openLogin(t("wallpaper.loginTitle"))}>
-                  {t("wallpaper.login")}
-                </Button>
-                <Button variant="outline" size="sm" disabled={capturing} onClick={finish}>
-                  {capturing ? t("wallpaper.capturing") : t("wallpaper.loginDone")}
-                </Button>
-              </>
+              <Button size="sm" onClick={() => void openLogin(t("wallpaper.loginTitle"))}>
+                {t("wallpaper.login")}
+              </Button>
             )}
           </div>
         ) : null}
       </div>
 
-      <Card className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="relative mb-2 min-h-0 flex-1 overflow-hidden">
         <WallpaperGrid
           key={session ? "clean" : "public"}
           items={data?.items ?? []}
@@ -160,7 +143,7 @@ export function WallpaperSection() {
           }}
           onApply={(item) => void openWallpaperApply(item)}
         />
-      </Card>
+      </div>
 
       <div className="mt-3 flex flex-none items-center justify-center gap-2">
         <Button

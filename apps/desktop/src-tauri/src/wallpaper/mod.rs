@@ -10,11 +10,16 @@ pub(crate) mod layout;
 mod storage;
 mod store;
 
-use tauri::{AppHandle, Manager};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
+use tauri::{AppHandle, Emitter, Manager};
 
 pub use client::Page;
 pub use desktop::MonitorInfo;
 pub use layout::ApplyResult;
+
+static WATCHING: AtomicBool = AtomicBool::new(false);
 
 pub fn init(app: &AppHandle) {
     storage::init(app);
@@ -49,6 +54,36 @@ pub fn session() -> bool {
 
 pub fn logout(app: &AppHandle) {
     auth::clear(app);
+    #[cfg(windows)]
+    forget_cookies(app);
+    if let Some(window) = app.get_window("wallpaper-login") {
+        let _ = window.close();
+    }
+    let _ = app.emit("wallpaper:session", false);
+}
+
+/// 登录窗口打开期间轮询抓取，窗口关闭即结束
+pub fn watch_login(app: &AppHandle) {
+    if WATCHING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // 窗口由前端异步创建，先等它出现
+        let deadline = std::time::Instant::now() + Duration::from_secs(8);
+        while handle.get_webview("wallpaper-login").is_none() {
+            if std::time::Instant::now() > deadline {
+                WATCHING.store(false, Ordering::SeqCst);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        while handle.get_webview("wallpaper-login").is_some() {
+            let _ = capture_session(&handle);
+            std::thread::sleep(Duration::from_millis(800));
+        }
+        WATCHING.store(false, Ordering::SeqCst);
+    });
 }
 
 pub fn storage_path(app: &AppHandle) -> String {
@@ -84,32 +119,35 @@ fn owner(app: &AppHandle) -> isize {
         .unwrap_or(0)
 }
 
-/// 从登录窗口读取会话 Cookie，成功后关闭窗口并发事件
+/// 从登录窗口读取会话 Cookie；登录页轮询调用，未登录时静默返回
 pub fn capture_session(app: &AppHandle) -> Result<(), String> {
     #[cfg(windows)]
     {
-        let handle = app.clone();
-        if let Some(site) = app.get_webview("wallpaper-login-site") {
-            return site
-                .with_webview(move |webview| {
-                    cookie::capture(&handle, &webview.controller());
-                })
-                .map_err(|error| error.to_string());
+        // 登录窗口挂着站点子 WebView，按 label 取根 WebView 才拿得到
+        for label in ["wallpaper-login-site", "wallpaper-login", "settings"] {
+            if let Some(webview) = app.get_webview(label) {
+                let handle = app.clone();
+                return webview
+                    .with_webview(move |webview| cookie::capture(&handle, &webview.controller()))
+                    .map_err(|error| error.to_string());
+            }
         }
-        let window = app
-            .get_webview_window("wallpaper-login")
-            .ok_or_else(|| "登录窗口未打开".to_string())?;
-        let handle = app.clone();
-        window
-            .with_webview(move |webview| {
-                cookie::capture(&handle, &webview.controller());
-            })
-            .map_err(|error| error.to_string())
+        Ok(())
     }
     #[cfg(not(windows))]
     {
         let _ = app;
         Err("当前平台未实现".into())
+    }
+}
+
+/// 删除站点 Cookie，登录窗口与常驻窗口的 Cookie 库都尝试一次
+#[cfg(windows)]
+fn forget_cookies(app: &AppHandle) {
+    for label in ["wallpaper-login-site", "settings"] {
+        if let Some(webview) = app.get_webview(label) {
+            let _ = webview.with_webview(|webview| cookie::forget(&webview.controller()));
+        }
     }
 }
 
@@ -122,40 +160,89 @@ mod cookie {
 
     use super::auth;
 
+    const SITE: &str = "https://mcblock.top";
+
+    /// 登录页轮询：拿到会话 Cookie 才落盘并发事件，否则静默
     pub fn capture(app: &AppHandle, controller: &ICoreWebView2Controller) {
+        let Some(manager) = manager(controller) else {
+            return;
+        };
         let handle = app.clone();
-        // SAFETY: WebView2 接口在窗口存活期间有效，回调由 WebView2 消息循环驱动
+        let generation = auth::generation();
+        let uri = HSTRING::from(SITE);
+        let handler = GetCookiesCompletedHandler::create(Box::new(move |_result, list| {
+            let Some(value) = list.and_then(read_session) else {
+                return Ok(());
+            };
+            if auth::generation() != generation {
+                return Ok(());
+            }
+            if auth::cookie().as_deref() != Some(value.as_str()) {
+                if auth::save(&handle, &value).is_err() {
+                    return Ok(());
+                }
+                let _ = handle.emit("wallpaper:session", true);
+            }
+            close_login(&handle);
+            Ok(())
+        }));
+        // SAFETY: 管理器与回调在 WebView2 消息循环中有效
         unsafe {
-            let Ok(core) = controller.CoreWebView2() else {
-                return;
-            };
-            let Ok(core13) = core.cast::<ICoreWebView2_13>() else {
-                return;
-            };
-            let Ok(profile) = core13.Profile() else {
-                return;
-            };
-            let Ok(profile5) = profile.cast::<ICoreWebView2Profile5>() else {
-                return;
-            };
-            let Ok(manager) = profile5.CookieManager() else {
-                return;
-            };
-            let uri = HSTRING::from("https://mcblock.top");
-            let handler = GetCookiesCompletedHandler::create(Box::new(move |_result, list| {
-                let session = list.and_then(read_session);
-                let ok = session
-                    .as_deref()
-                    .is_some_and(|value| auth::save(&handle, value).is_ok());
-                let _ = handle.emit("wallpaper:session", ok);
-                if ok {
-                    if let Some(window) = handle.get_webview_window("wallpaper-login") {
-                        let _ = window.close();
+            let _ = manager.GetCookies(&uri, &handler);
+        }
+    }
+
+    /// 退出登录：删除站点会话 Cookie
+    pub fn forget(controller: &ICoreWebView2Controller) {
+        let Some(manager) = manager(controller) else {
+            return;
+        };
+        let cookies = manager.clone();
+        let uri = HSTRING::from(SITE);
+        let handler = GetCookiesCompletedHandler::create(Box::new(move |_result, list| {
+            if let Some(list) = list {
+                let mut count = 0u32;
+                // SAFETY: 只读 WebView2 返回的 Cookie 列表
+                if unsafe { list.Count(&mut count) }.is_ok() {
+                    for index in 0..count {
+                        let Ok(cookie) = (unsafe { list.GetValueAtIndex(index) }) else {
+                            continue;
+                        };
+                        let mut name = windows_core::PWSTR::null();
+                        if unsafe { cookie.Name(&mut name) }.is_err() {
+                            continue;
+                        }
+                        if take_pwstr(name).to_ascii_lowercase().contains("session-token") {
+                            // SAFETY: Cookie 管理器在浏览器进程内存活，删除立即入队
+                            unsafe {
+                                let _ = cookies.DeleteCookie(&cookie);
+                            }
+                        }
                     }
                 }
-                Ok(())
-            }));
+            }
+            Ok(())
+        }));
+        // SAFETY: 管理器与回调在 WebView2 消息循环中有效
+        unsafe {
             let _ = manager.GetCookies(&uri, &handler);
+        }
+    }
+
+    fn manager(controller: &ICoreWebView2Controller) -> Option<ICoreWebView2CookieManager> {
+        // SAFETY: WebView2 接口在窗口存活期间有效
+        unsafe {
+            let core = controller.CoreWebView2().ok()?;
+            let core13 = core.cast::<ICoreWebView2_13>().ok()?;
+            let profile = core13.Profile().ok()?;
+            let profile5 = profile.cast::<ICoreWebView2Profile5>().ok()?;
+            profile5.CookieManager().ok()
+        }
+    }
+
+    fn close_login(app: &AppHandle) {
+        if let Some(window) = app.get_window("wallpaper-login") {
+            let _ = window.close();
         }
     }
 

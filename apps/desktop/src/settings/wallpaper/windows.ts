@@ -5,7 +5,7 @@ import { getConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { findAppWindow, focusAppWindow, openAppWindow } from "@/lib/appWindow";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
-import type { WallpaperItem, WallpaperKind, WallpaperSort } from "./api";
+import { watchLogin, type WallpaperItem, type WallpaperKind, type WallpaperSort } from "./api";
 
 export const PREVIEW_EVENT = "wallpaper:preview";
 export const APPLY_EVENT = "wallpaper:apply";
@@ -56,20 +56,20 @@ export async function openWallpaperLogin(title: string): Promise<void> {
   const existing = await findAppWindow(WINDOW_LABEL.wallpaperLogin);
   if (existing) {
     await focusAppWindow(existing);
-    return;
+  } else {
+    await openAppWindow({
+      label: WINDOW_LABEL.wallpaperLogin,
+      title,
+      page: "wallpaper-login",
+      width: 1100,
+      height: 760,
+      minWidth: 720,
+      minHeight: 480,
+      resizable: true,
+      anchor: WINDOW_LABEL.settings
+    });
   }
-
-  await openAppWindow({
-    label: WINDOW_LABEL.wallpaperLogin,
-    title,
-    page: "wallpaper-login",
-    width: 1100,
-    height: 760,
-    minWidth: 720,
-    minHeight: 480,
-    resizable: true,
-    anchor: WINDOW_LABEL.settings
-  });
+  await watchLogin().catch(() => undefined);
 }
 
 export async function openWallpaperPreview(request: PreviewRequest): Promise<void> {

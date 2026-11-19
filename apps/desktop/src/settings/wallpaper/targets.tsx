@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Button } from "@/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { cn } from "@/ui/lib/utils";
-import { Card } from "@/settings/components/controls";
 import type { TFunction } from "@/i18n";
 import type {
   SpanTransform,
@@ -51,83 +50,76 @@ export function WallpaperApplyPanel({
       current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
     );
 
-  const modeLabel = t(MODES.find((option) => option.value === mode)!.key);
-  const targetCount = mode === "independent" ? selected.length : monitors.length;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="ui-scroll-auto min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col gap-4 p-5">
-          <Card className="flex-none p-4">
-            <div className="flex items-center gap-4">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" title={item.title}>
-                  {item.title}
-                </p>
-                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{item.resolution}</p>
-              </div>
-              <div className="flex w-[300px] flex-none gap-1 rounded-lg border bg-muted/40 p-1">
-                {MODES.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "h-8 flex-1 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-                      option.value === mode
-                        ? "bg-background font-medium text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    aria-pressed={option.value === mode}
-                    disabled={busy}
-                    onClick={() => setMode(option.value)}
-                  >
-                    {t(option.key)}
-                  </button>
-                ))}
-              </div>
+        <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col gap-6 p-5">
+          <div className="flex flex-none items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium" title={item.title}>
+                {item.title}
+              </p>
+              <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{item.resolution}</p>
             </div>
-          </Card>
+            <div className="flex w-[300px] flex-none gap-1 rounded-lg border bg-muted/40 p-1">
+              {MODES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    "h-8 flex-1 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+                    option.value === mode
+                      ? "bg-background font-medium text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  aria-pressed={option.value === mode}
+                  disabled={busy}
+                  onClick={() => setMode(option.value)}
+                >
+                  {t(option.key)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <Card className="flex min-h-[200px] flex-1 flex-col p-4">
-            <div className="mb-3 text-sm font-medium">{t("wallpaper.effect")}</div>
-            <div className="relative min-h-0 flex-1 rounded-lg bg-muted/20">
-              <MonitorStage
-                item={item}
-                monitors={monitors}
-                mode={mode}
-                selected={selected}
-                busy={busy}
-                transform={transform}
-                onToggle={toggle}
-                onTransform={setTransform}
-                t={t}
-              />
-            </div>
-          </Card>
+          <div className="relative min-h-[200px] flex-1">
+            <MonitorStage
+              item={item}
+              monitors={monitors}
+              mode={mode}
+              selected={selected}
+              busy={busy}
+              transform={transform}
+              onToggle={toggle}
+              onTransform={setTransform}
+              t={t}
+            />
+          </div>
         </div>
       </div>
 
-      <footer className="flex-none border-t">
-        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-3 px-5 py-3">
-          <span className="text-xs text-muted-foreground">
-            {modeLabel} · {t("wallpaper.monitorCount", { count: targetCount })}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              type="button"
-              className="min-w-[84px] gap-2"
-              disabled={busy || (mode === "independent" && selected.length === 0)}
-              onClick={() => onApply(mode, selected, transform)}
-            >
-              {busy ? (
-                <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-              ) : null}
-              {busy ? t("wallpaper.setting") : t("wallpaper.apply")}
-            </Button>
-          </div>
+      <footer className="flex-none">
+        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-end gap-2 px-5 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-[84px]"
+            disabled={busy}
+            onClick={onClose}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            className="min-w-[84px] gap-2"
+            disabled={busy || (mode === "independent" && selected.length === 0)}
+            onClick={() => onApply(mode, selected, transform)}
+          >
+            {busy ? (
+              <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+            ) : null}
+            {busy ? t("wallpaper.setting") : t("wallpaper.apply")}
+          </Button>
         </div>
       </footer>
     </div>
@@ -256,7 +248,7 @@ function MonitorStage({
             <div
               ref={spanRef}
               className={cn(
-                "absolute inset-0 touch-none overflow-hidden rounded-lg border bg-muted/20",
+                "absolute inset-0 touch-none overflow-hidden border bg-muted/20",
                 transform.zoom > 1 && !busy && "cursor-grab active:cursor-grabbing"
               )}
               onPointerDown={startDrag}
@@ -278,7 +270,7 @@ function MonitorStage({
             {monitors.map((monitor, index) => (
               <div
                 key={monitor.devicePath}
-                className="pointer-events-none absolute rounded-lg border border-dashed border-foreground/50"
+                className="pointer-events-none absolute border border-dashed border-foreground/50"
                 style={tileStyle(monitor)}
               >
                 <span className="absolute bottom-1.5 left-1.5 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground shadow-sm backdrop-blur">
@@ -304,7 +296,7 @@ function MonitorStage({
                 type="button"
                 disabled={mode === "sync" || busy}
                 className={cn(
-                  "absolute overflow-hidden rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default",
+                  "absolute overflow-hidden border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default",
                   active ? "border-primary/70" : "border-border",
                   mode === "independent" && !busy && "cursor-pointer hover:border-ring"
                 )}

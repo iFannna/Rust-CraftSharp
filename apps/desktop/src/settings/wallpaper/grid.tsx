@@ -102,7 +102,7 @@ function WallpaperCard({ item, index, dynamicEnabled, t, onPreview, onApply }: W
   const dynamic = item.kind === "dynamic";
 
   return (
-    <article className="group relative aspect-[16/10] overflow-hidden rounded-lg border bg-muted/30">
+    <article className="group relative aspect-[16/10] overflow-hidden border bg-muted/30">
       <button
         type="button"
         className="absolute inset-0 z-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"

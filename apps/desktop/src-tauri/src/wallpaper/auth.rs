@@ -1,6 +1,7 @@
 //! mcblock.top 登录态：只保存 NextAuth 会话 Cookie，DPAPI 加密落盘。
 
 use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{OnceLock, RwLock};
 
 use tauri::{AppHandle, Manager};
@@ -8,6 +9,8 @@ use tauri::{AppHandle, Manager};
 const FILE: &str = "wallpaper-session.bin";
 
 static SESSION: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+/// 每次退出登录自增，抓取结果回来时不匹配就丢弃
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn slot() -> &'static RwLock<Option<String>> {
     SESSION.get_or_init(|| RwLock::new(None))
@@ -15,6 +18,10 @@ fn slot() -> &'static RwLock<Option<String>> {
 
 pub fn cookie() -> Option<String> {
     slot().read().ok().and_then(|value| value.clone())
+}
+
+pub fn generation() -> u64 {
+    GENERATION.load(Ordering::Relaxed)
 }
 
 pub fn logged_in() -> bool {
@@ -54,6 +61,7 @@ pub fn save(app: &AppHandle, cookie: &str) -> Result<(), String> {
 }
 
 pub fn clear(app: &AppHandle) {
+    GENERATION.fetch_add(1, Ordering::Relaxed);
     if let Ok(file) = path(app) {
         let _ = fs::remove_file(file);
     }
