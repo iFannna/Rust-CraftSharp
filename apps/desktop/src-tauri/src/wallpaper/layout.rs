@@ -86,6 +86,7 @@ fn apply_sync(
                 id: entry.id.clone(),
                 device: Some(monitor.device_path.clone()),
                 transform: None,
+                span: false,
             })
             .collect();
         dynamic::remember(app, &saved);
@@ -125,6 +126,7 @@ fn apply_independent(app: &AppHandle, entries: Vec<MonitorPlan>) -> Result<Apply
                         id: item.entry.id.clone(),
                         device: Some(item.monitor.clone()),
                         transform: None,
+                        span: false,
                     });
                     dynamics.push((item.monitor, video));
                 }
@@ -180,14 +182,16 @@ fn apply_span(
     if span.entry.kind == "dynamic" {
         let video = store::prepare_video(app, &span.entry.id)?;
         dynamic::apply_span(&video, span.transform)?;
-        dynamic::remember(
-            app,
-            &[Saved {
+        let saved: Vec<Saved> = monitors
+            .iter()
+            .map(|monitor| Saved {
                 id: span.entry.id.clone(),
-                device: None,
+                device: Some(monitor.device_path.clone()),
                 transform: Some(span.transform),
-            }],
-        );
+                span: true,
+            })
+            .collect();
+        dynamic::remember(app, &saved);
         result
             .applied
             .extend(monitors.iter().map(|m| m.device_path.clone()));

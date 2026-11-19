@@ -53,6 +53,7 @@ pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
             },
             transform: None,
             device: Some(device.clone()),
+            span: None,
         });
     }
     if specs.is_empty() {
@@ -63,13 +64,23 @@ pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
 
 pub fn apply_span(video: &PathBuf, transform: Transform) -> Result<(), String> {
     let monitors = desktop::monitors();
-    let bounds = virtual_bounds(&monitors).ok_or_else(|| "没有可用显示器".to_string())?;
-    restart(vec![Spec {
-        video: video.clone(),
-        bounds,
-        transform: Some(transform),
-        device: None,
-    }])
+    let virtual_bounds = virtual_bounds(&monitors).ok_or_else(|| "没有可用显示器".to_string())?;
+    let specs = monitors
+        .iter()
+        .map(|monitor| Spec {
+            video: video.clone(),
+            bounds: Bounds {
+                left: monitor.left,
+                top: monitor.top,
+                right: monitor.right,
+                bottom: monitor.bottom,
+            },
+            transform: Some(transform),
+            device: Some(monitor.device_path.clone()),
+            span: Some(virtual_bounds),
+        })
+        .collect();
+    restart(specs)
 }
 
 pub fn stop_all() {
@@ -138,17 +149,15 @@ fn specs_from(app: &AppHandle, saved: &[Saved]) -> Option<Vec<Spec>> {
                         right: monitor.right,
                         bottom: monitor.bottom,
                     },
-                    transform: None,
+                    transform: if item.span { item.transform } else { None },
                     device: Some(device.clone()),
+                    span: if item.span {
+                        virtual_bounds(&monitors)
+                    } else {
+                        None
+                    },
                 });
             }
-        } else if let Some(bounds) = virtual_bounds(&monitors) {
-            specs.push(Spec {
-                video,
-                bounds,
-                transform: item.transform,
-                device: None,
-            });
         }
     }
     Some(specs)
@@ -302,8 +311,18 @@ fn ensure_watchdog() {
                 if bounds != spec.bounds {
                     changed = true;
                 }
+                let span = if spec.span.is_some() {
+                    let span = virtual_bounds(&monitors);
+                    if span != spec.span {
+                        changed = true;
+                    }
+                    span
+                } else {
+                    None
+                };
                 next.push(Spec {
                     bounds,
+                    span,
                     ..spec.clone()
                 });
             }

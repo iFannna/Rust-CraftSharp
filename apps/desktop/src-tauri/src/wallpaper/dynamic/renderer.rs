@@ -15,6 +15,7 @@ use windows::Win32::Graphics::Direct3D::{
 use windows::Win32::Graphics::Direct3D10::ID3D10Multithread;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dwm::DwmFlush;
 use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
@@ -51,6 +52,8 @@ pub struct Spec {
     pub bounds: Bounds,
     pub transform: Option<Transform>,
     pub device: Option<String>,
+    /// 拼接模式下整个虚拟桌面的范围，每块屏按自己的窗口裁取对应部分
+    pub span: Option<Bounds>,
 }
 
 impl Spec {
@@ -59,6 +62,7 @@ impl Spec {
             && self.bounds == other.bounds
             && self.transform == other.transform
             && self.device == other.device
+            && self.span == other.span
     }
 }
 
@@ -209,17 +213,27 @@ impl Feed {
                 .video_device
                 .CreateVideoProcessor(&enumerator, 0)
                 .map_err(|_| "视频处理器初始化失败".to_string())?;
-            Ok(Feed {
-                reader,
-                enumerator,
-                processor,
-                source: source_rect_for(
+            let source = match &spec.span {
+                Some(virtual_bounds) => span_source(
+                    frame_w,
+                    frame_h,
+                    spec.bounds,
+                    *virtual_bounds,
+                    spec.transform,
+                ),
+                None => source_rect_for(
                     frame_w,
                     frame_h,
                     surface.width,
                     surface.height,
                     spec.transform,
                 ),
+            };
+            Ok(Feed {
+                reader,
+                enumerator,
+                processor,
+                source,
                 dest: RECT {
                     left: 0,
                     top: 0,
@@ -438,8 +452,9 @@ impl Player {
                             | SWP_NOACTIVATE
                             | SWP_SHOWWINDOW,
                     );
-                }
-                if let Some(notify) = ready.take() {
+                } else if let Some(notify) = ready.take() {
+                    // 新窗口已合成后才允许关闭旧实例，跨模式切换也不会露底
+                    let _ = DwmFlush();
                     let _ = notify.send(Ok(()));
                 }
                 let mut message = MSG::default();
@@ -623,6 +638,38 @@ fn source_rect_for(
         top: rect.1.round().max(0.0) as i32,
         right: (rect.0 + rect.2).round().min(frame_w as f64) as i32,
         bottom: (rect.1 + rect.3).round().min(frame_h as f64) as i32,
+    }
+}
+
+/// 拼接模式：把虚拟桌面的可见区域映射到当前显示器对应的源像素
+fn span_source(
+    frame_w: u32,
+    frame_h: u32,
+    monitor: Bounds,
+    virtual_bounds: Bounds,
+    transform: Option<Transform>,
+) -> RECT {
+    let vw = virtual_bounds.width().max(1) as f64;
+    let vh = virtual_bounds.height().max(1) as f64;
+    let (rx, ry, rw, _) = source_rect(
+        frame_w as f64,
+        frame_h as f64,
+        vw,
+        vh,
+        transform.unwrap_or_default(),
+    );
+    let scale = (vw / rw.max(1.0)).max(f64::EPSILON);
+    let ox = (monitor.left - virtual_bounds.left) as f64;
+    let oy = (monitor.top - virtual_bounds.top) as f64;
+    RECT {
+        left: (rx + ox / scale).round().max(0.0) as i32,
+        top: (ry + oy / scale).round().max(0.0) as i32,
+        right: (rx + (ox + monitor.width() as f64) / scale)
+            .round()
+            .min(frame_w as f64) as i32,
+        bottom: (ry + (oy + monitor.height() as f64) / scale)
+            .round()
+            .min(frame_h as f64) as i32,
     }
 }
 

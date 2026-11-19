@@ -18,6 +18,8 @@ pub struct Saved {
     pub device: Option<String>,
     #[serde(default)]
     pub transform: Option<Transform>,
+    #[serde(default)]
+    pub span: bool,
 }
 
 fn path(app: &AppHandle) -> PathBuf {
@@ -60,15 +62,17 @@ mod tests {
                 id: "wp_1".into(),
                 device: Some(r"\\.\DISPLAY1".into()),
                 transform: None,
+                span: false,
             },
             Saved {
                 id: "wp_2".into(),
-                device: None,
+                device: Some(r"\\.\DISPLAY2".into()),
                 transform: Some(Transform {
                     zoom: 1.5,
                     offset_x: 0.2,
                     offset_y: -0.1,
                 }),
+                span: true,
             },
         ];
         let bytes = serde_json::to_vec(&items).unwrap();
@@ -76,5 +80,6 @@ mod tests {
         assert_eq!(restored.len(), 2);
         assert_eq!(restored[0].device.as_deref(), Some(r"\\.\DISPLAY1"));
         assert_eq!(restored[1].transform.unwrap().zoom, 1.5);
+        assert!(restored[1].span);
     }
 }
