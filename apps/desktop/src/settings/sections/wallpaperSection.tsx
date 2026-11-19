@@ -1,24 +1,37 @@
-/** 壁纸页：筛选、排序、分页、预览与应用，数据全部经由 Rust 命令 */
+/** 壁纸页：筛选、排序、分页、预览，以及同步/单独/拼接三种应用方式 */
 
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
+import { isTauri } from "@/lib/runtime";
+import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { Button } from "@/ui/components/button";
 import { cn } from "@/ui/lib/utils";
 import { Card, SectionHead, Select, type Option } from "@/settings/components/controls";
 import {
-  applyWallpaper,
+  applyLayout,
+  captureSession,
   exportWallpaper,
+  fetchMonitors,
   listWallpapers,
+  logout,
   pickSavePath,
+  sessionStatus,
+  type ApplyPlan,
+  type SpanTransform,
   type WallpaperItem,
   type WallpaperKind,
+  type WallpaperMode,
+  type WallpaperMonitor,
   type WallpaperPage,
   type WallpaperSort
 } from "@/settings/wallpaper/api";
 import { WallpaperGrid } from "@/settings/wallpaper/grid";
 import { WallpaperPreview } from "@/settings/wallpaper/preview";
+import { WallpaperTargets } from "@/settings/wallpaper/targets";
 import { Toast, useToast } from "@/settings/wallpaper/toast";
 
 const KINDS: { value: WallpaperKind; key: MessageKey }[] = [
@@ -29,14 +42,18 @@ const KINDS: { value: WallpaperKind; key: MessageKey }[] = [
 
 const SORTS: { value: WallpaperSort; key: MessageKey }[] = [
   { value: "latest", key: "wallpaper.sortLatest" },
-  { value: "hot", key: "wallpaper.sortHot" },
+  { value: "popular", key: "wallpaper.sortHot" },
   { value: "downloads", key: "wallpaper.sortDownloads" }
 ];
+
+
+
+const DEFAULT_SPAN: SpanTransform = { zoom: 1, offsetX: 0, offsetY: 0 };
 
 export function WallpaperSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
-  const toast = useToast();
+  const { message: toastMessage, show: showToast } = useToast();
 
   const [kind, setKind] = useState<WallpaperKind>("all");
   const [sort, setSort] = useState<WallpaperSort>("latest");
@@ -48,6 +65,11 @@ export function WallpaperSection() {
   const [preview, setPreview] = useState<number | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [monitors, setMonitors] = useState<WallpaperMonitor[]>([]);
+  const [session, setSession] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [targetsItem, setTargetsItem] = useState<WallpaperItem | null>(null);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -55,8 +77,7 @@ export function WallpaperSection() {
     setError(null);
     listWallpapers(page, kind, sort)
       .then((next) => {
-        if (cancelled) return;
-        setData(next);
+        if (!cancelled) setData(next);
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
@@ -70,6 +91,36 @@ export function WallpaperSection() {
       cancelled = true;
     };
   }, [page, kind, sort, reload]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    void fetchMonitors()
+      .then((list) => setMonitors(list))
+      .catch(() => setMonitors([]));
+    void sessionStatus()
+      .then(setSession)
+      .catch(() => setSession(false));
+  }, []);
+
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    let dispose: (() => void) | null = null;
+    void listen<boolean>("wallpaper:session", (event) => {
+      if (cancelled) return;
+      setSession(event.payload);
+      setCapturing(false);
+      showToast(t(event.payload ? "wallpaper.loginSuccess" : "wallpaper.loginFailed"));
+    }).then((off) => {
+      if (cancelled) off();
+      else dispose = off;
+    });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, [showToast, t]);
 
   const changeKind = (next: WallpaperKind) => {
     if (next === kind) return;
@@ -90,36 +141,168 @@ export function WallpaperSection() {
     setPreview(null);
   };
 
-  const apply = async (item: WallpaperItem) => {
-    if (item.kind !== "static" || applyingId !== null) return;
+  const initialSelected = () => {
+    const saved = Object.keys(config.wallpaper.monitors).filter((path) =>
+      monitors.some((monitor) => monitor.devicePath === path)
+    );
+    if (saved.length) return saved;
+    const primary = monitors.find((monitor) => monitor.primary) ?? monitors[0];
+    return primary ? [primary.devicePath] : [];
+  };
+
+  const applyWithTargets = async (
+    item: WallpaperItem,
+    mode: WallpaperMode,
+    selected: string[],
+    transform: SpanTransform
+  ) => {
+    if (applyingId) return;
+    if (item.kind === "dynamic" && !session) {
+      showToast(t("wallpaper.dynamicLogin"));
+      return;
+    }
+    if (mode === "independent" && !selected.length) {
+      showToast(t("wallpaper.noMonitor"));
+      return;
+    }
+
     setApplyingId(item.id);
     try {
-      const localPath = await applyWallpaper(item);
-      updateConfig({
-        wallpaper: { currentId: item.id, title: item.title, type: "static", localPath }
-      });
-      toast.show(t("wallpaper.setSuccess"));
+      const entry = { id: item.id, type: item.kind } as const;
+      let plan: ApplyPlan;
+      let commit: () => void;
+
+      if (mode === "span") {
+        plan = { mode, monitors: [], span: { entry, transform } };
+        commit = () =>
+          updateConfig({
+            wallpaper: {
+              mode,
+              span: {
+                id: item.id,
+                title: item.title,
+                type: item.kind,
+                localPath: "",
+                previewPath: item.previewUrl
+              },
+              transforms: { ...config.wallpaper.transforms, [item.id]: transform }
+            }
+          });
+      } else if (mode === "independent") {
+        const monitorsMap = { ...config.wallpaper.monitors };
+        for (const device of selected) {
+          monitorsMap[device] = {
+            id: item.id,
+            title: item.title,
+            type: item.kind,
+            localPath: "",
+            previewPath: item.previewUrl
+          };
+        }
+        const targets = Object.entries(monitorsMap)
+          .filter(([device]) => monitors.some((monitor) => monitor.devicePath === device))
+          .map(([monitor, entry]) => ({
+            monitor,
+            entry: { id: entry.id, type: entry.type }
+          }));
+        plan = { mode, monitors: targets };
+        commit = () => updateConfig({ wallpaper: { mode, monitors: monitorsMap } });
+      } else {
+        plan = { mode: "sync", sync: entry, monitors: [] };
+        commit = () =>
+          updateConfig({
+            wallpaper: {
+              mode: "sync",
+              currentId: item.id,
+              title: item.title,
+              type: item.kind,
+              localPath: ""
+            }
+          });
+      }
+
+      const result = await applyLayout(plan);
+      commit();
+      if (result.warnings.length) {
+        showToast(t("wallpaper.setPartial", { count: result.warnings.length }));
+      } else {
+        showToast(t("wallpaper.setSuccess"));
+      }
     } catch (reason) {
-      toast.show(t("wallpaper.applyFailed", { reason: String(reason) }));
+      showToast(t("wallpaper.applyFailed", { reason: String(reason) }));
     } finally {
       setApplyingId(null);
+      setTargetsItem(null);
     }
   };
 
+  const applyItem = async (item: WallpaperItem) => {
+    if (applyingId) return;
+    if (item.kind === "dynamic" && !session) {
+      showToast(t("wallpaper.dynamicLogin"));
+      return;
+    }
+    const list = monitors.length > 1 ? monitors : await fetchMonitors().catch(() => monitors);
+    if (list.length > 1) {
+      setMonitors(list);
+      setPreview(null);
+      setTargetsItem(item);
+      return;
+    }
+    void applyWithTargets(item, "sync", [], DEFAULT_SPAN);
+  };
+
   const download = async (item: WallpaperItem) => {
-    if (item.kind !== "static" || savingId !== null) return;
+    if (savingId !== null) return;
     setSavingId(item.id);
     try {
       const path = await pickSavePath(item.title);
       if (path) {
-        await exportWallpaper(item, path);
-        toast.show(t("wallpaper.downloadSuccess"));
+        await exportWallpaper(item.id, path);
+        showToast(t("wallpaper.downloadSuccess"));
       }
     } catch (reason) {
-      toast.show(t("wallpaper.downloadFailed", { reason: String(reason) }));
+      showToast(t("wallpaper.downloadFailed", { reason: String(reason) }));
     } finally {
       setSavingId(null);
     }
+  };
+
+  const openLogin = async () => {
+    if (!isTauri()) return;
+    const existing = await WebviewWindow.getByLabel(WINDOW_LABEL.wallpaperLogin).catch(() => null);
+    if (existing) {
+      await existing.show().catch(() => undefined);
+      await existing.setFocus().catch(() => undefined);
+      return;
+    }
+    const window = new WebviewWindow(WINDOW_LABEL.wallpaperLogin, {
+      url: "https://mcblock.top/wallpapers",
+      title: t("wallpaper.loginTitle"),
+      width: 1100,
+      height: 760,
+      center: true,
+      resizable: true
+    });
+    void window.once("tauri://error", () => showToast(t("wallpaper.loginFailed")));
+  };
+
+  const finishLogin = async () => {
+    if (!isTauri()) return;
+    setCapturing(true);
+    const timer = window.setTimeout(() => setCapturing(false), 6000);
+    try {
+      await captureSession();
+    } catch (reason) {
+      window.clearTimeout(timer);
+      setCapturing(false);
+      showToast(t("wallpaper.applyFailed", { reason: String(reason) }));
+    }
+  };
+
+  const signOut = async () => {
+    await logout().catch(() => undefined);
+    setSession(false);
   };
 
   const sortOptions: Option<WallpaperSort>[] = SORTS.map((item) => ({
@@ -131,7 +314,7 @@ export function WallpaperSection() {
     <div className="flex h-full min-h-0 flex-col">
       <SectionHead title={t("wallpaper.title")} />
 
-      <div className="mb-3 flex flex-none items-center gap-3">
+      <div className="mb-2 flex flex-none items-center gap-3">
         <div className="flex items-center gap-1">
           {KINDS.map((item) => (
             <button
@@ -158,16 +341,44 @@ export function WallpaperSection() {
         />
       </div>
 
+      <div className="mb-3 flex flex-none flex-wrap items-center gap-2 text-xs">
+        {monitors.length > 1 ? (
+          <span className="text-muted-foreground">{t("wallpaper.multiHint")}</span>
+        ) : null}
+        {isTauri() ? (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-muted-foreground">
+              {session ? t("wallpaper.loggedIn") : t("wallpaper.loggedOut")}
+            </span>
+            {session ? (
+              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+                {t("wallpaper.logout")}
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => void openLogin()}>
+                  {t("wallpaper.login")}
+                </Button>
+                <Button variant="outline" size="sm" disabled={capturing} onClick={() => void finishLogin()}>
+                  {capturing ? t("wallpaper.capturing") : t("wallpaper.loginDone")}
+                </Button>
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
+
       <Card className="relative min-h-0 flex-1 overflow-hidden">
         <WallpaperGrid
           items={data?.items ?? []}
           loading={loading}
           error={error}
           applyingId={applyingId}
+          dynamicEnabled={session}
           t={t}
           onRetry={() => setReload((value) => value + 1)}
           onPreview={setPreview}
-          onApply={(item) => void apply(item)}
+          onApply={(item) => void applyItem(item)}
         />
       </Card>
 
@@ -202,15 +413,31 @@ export function WallpaperSection() {
           index={preview}
           applyingId={applyingId}
           savingId={savingId}
+          dynamicEnabled={session}
           t={t}
           onClose={() => setPreview(null)}
           onIndexChange={setPreview}
-          onApply={(item) => void apply(item)}
+          onApply={(item) => void applyItem(item)}
           onDownload={(item) => void download(item)}
         />
       ) : null}
 
-      <Toast message={toast.message} />
+      {targetsItem ? (
+        <WallpaperTargets
+          item={targetsItem}
+          monitors={monitors}
+          initialMode={config.wallpaper.mode}
+          initialSelected={initialSelected()}
+          initialTransform={config.wallpaper.transforms[targetsItem.id] ?? DEFAULT_SPAN}
+          t={t}
+          onClose={() => setTargetsItem(null)}
+          onApply={(mode, selected, transform) =>
+            void applyWithTargets(targetsItem, mode, selected, transform)
+          }
+        />
+      ) : null}
+
+      <Toast message={toastMessage} />
     </div>
   );
 }

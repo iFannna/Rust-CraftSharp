@@ -15,6 +15,7 @@ interface WallpaperPreviewProps {
   index: number;
   applyingId: string | null;
   savingId: string | null;
+  dynamicEnabled: boolean;
   t: TFunction;
   onClose: () => void;
   onIndexChange: (index: number) => void;
@@ -27,6 +28,7 @@ export function WallpaperPreview({
   index,
   applyingId,
   savingId,
+  dynamicEnabled,
   t,
   onClose,
   onIndexChange,
@@ -242,8 +244,8 @@ export function WallpaperPreview({
         </Button>
         <Button
           size="sm"
-          disabled={dynamic || applying || saving}
-          title={dynamic ? t("wallpaper.dynamicUnsupported") : undefined}
+          disabled={applying || saving}
+          title={dynamic && !dynamicEnabled ? t("wallpaper.dynamicLogin") : undefined}
           onClick={() => onApply(item)}
         >
           {applying ? t("wallpaper.setting") : t("wallpaper.setWallpaper")}

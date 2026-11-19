@@ -21,7 +21,7 @@ const ABOUT_ROWS: { labelKey: MessageKey; value: string; url?: string }[] = [
   { labelKey: "about.copyright", value: "© 2025 iFannna" }
 ];
 
-const VERSION = "26.11.18";
+const VERSION = "26.11.19";
 
 function openExternal(url: string): void {
   if (isTauri()) {

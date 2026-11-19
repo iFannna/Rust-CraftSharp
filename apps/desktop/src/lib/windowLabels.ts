@@ -8,5 +8,6 @@ export const WINDOW_LABEL = {
   colorPicker: "color-picker",
   confirm: "confirm-dialog",
   rename: "rename-dialog",
-  entityPreview: "entity-preview"
+  entityPreview: "entity-preview",
+  wallpaperLogin: "wallpaper-login"
 } as const;

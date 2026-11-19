@@ -66,11 +66,21 @@ struct Pagination {
     has_next: bool,
 }
 
+/// 公共预览图，服务端上限 1920
+pub fn preview_url(id: &str) -> String {
+    format!("{API}/api/wallpapers/{id}/preview?size=1920")
+}
+
+/// 原图或视频，需要登录会话
+pub fn original_url(id: &str) -> String {
+    format!("{API}/api/wallpapers/{id}/download?resolution=original")
+}
+
 pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
     if !matches!(kind, "all" | "static" | "dynamic") {
         return Err("壁纸类型无效".into());
     }
-    if !matches!(sort, "latest" | "hot" | "downloads") {
+    if !matches!(sort, "latest" | "popular" | "downloads") {
         return Err("排序方式无效".into());
     }
 
@@ -83,7 +93,7 @@ pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
         url.push_str(kind);
     }
 
-    let body = download(&url, MAX_JSON)?;
+    let body = download(&url, MAX_JSON, None)?;
     let envelope: Envelope =
         serde_json::from_slice(&body).map_err(|_| "壁纸列表解析失败".to_string())?;
     if !envelope.success {
@@ -120,8 +130,8 @@ pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
     })
 }
 
-/// 下载图片字节，仅允许 mcblock.top，避免把接口当通用代理
-pub fn download(url: &str, limit: usize) -> Result<Vec<u8>, String> {
+/// 下载字节，仅允许 mcblock.top，避免把接口当通用代理
+pub fn download(url: &str, limit: usize, cookie: Option<&str>) -> Result<Vec<u8>, String> {
     let url = absolute(url);
     let parsed = parse_url(&url)?;
     if !is_wallpaper_host(parsed.host) {
@@ -129,11 +139,11 @@ pub fn download(url: &str, limit: usize) -> Result<Vec<u8>, String> {
     }
     #[cfg(windows)]
     {
-        winhttp::get(&parsed, limit)
+        winhttp::get(&parsed, limit, cookie)
     }
     #[cfg(not(windows))]
     {
-        let _ = (parsed, limit);
+        let _ = (parsed, limit, cookie);
         Err("当前平台未实现".into())
     }
 }
@@ -306,7 +316,7 @@ mod winhttp {
         format!("{step}失败（错误 {code}）")
     }
 
-    pub fn get(url: &ParsedUrl<'_>, limit: usize) -> Result<Vec<u8>, String> {
+    pub fn get(url: &ParsedUrl<'_>, limit: usize, cookie: Option<&str>) -> Result<Vec<u8>, String> {
         // SAFETY: 所有句柄都在 Handle 中统一关闭，缓冲区随调用栈存活
         unsafe {
             let agent = wide(concat!("CraftSharp/", env!("CARGO_PKG_VERSION")));
@@ -352,7 +362,26 @@ mod winhttp {
                 std::mem::size_of::<u32>() as u32,
             );
 
-            if WinHttpSendRequest(request.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0) == 0 {
+            let headers: Vec<u16> = match cookie {
+                Some(value) if !value.is_empty() => {
+                    format!("Cookie: {value}\r\n").encode_utf16().collect()
+                }
+                _ => Vec::new(),
+            };
+            let sent = if headers.is_empty() {
+                WinHttpSendRequest(request.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0)
+            } else {
+                WinHttpSendRequest(
+                    request.0,
+                    headers.as_ptr(),
+                    headers.len() as u32,
+                    std::ptr::null(),
+                    0,
+                    0,
+                    0,
+                )
+            };
+            if sent == 0 {
                 return Err(failed("发送请求"));
             }
             if WinHttpReceiveResponse(request.0, std::ptr::null_mut()) == 0 {
@@ -428,7 +457,7 @@ mod tests {
 
     #[test]
     fn rejects_foreign_hosts() {
-        assert!(download("https://example.com/a.jpg", 1024).is_err());
+        assert!(download("https://example.com/a.jpg", 1024, None).is_err());
     }
 
     #[test]

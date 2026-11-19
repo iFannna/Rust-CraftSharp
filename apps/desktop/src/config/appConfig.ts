@@ -200,12 +200,35 @@ export interface PlayerConfig {
   skinName: string;
 }
 
-/** 静态壁纸只记录当前应用项，动态与多屏字段后续按需扩展 */
+export type WallpaperMode = "sync" | "independent" | "span";
+export type WallpaperKind = "static" | "dynamic";
+
+export interface WallpaperEntry {
+  id: string;
+  title: string;
+  type: WallpaperKind;
+  localPath: string;
+  previewPath: string;
+}
+
+export interface SpanTransform {
+  /** 1 为 cover 基准，最大 3 */
+  zoom: number;
+  /** 相对源图宽高的中心偏移，范围 -1 到 1 */
+  offsetX: number;
+  offsetY: number;
+}
+
+/** 同步模式沿用顶层单图字段，多屏条目与拼接单独保存 */
 export interface WallpaperConfig {
+  mode: WallpaperMode;
   currentId: string;
   title: string;
-  type: "static" | "none";
+  type: WallpaperKind | "none";
   localPath: string;
+  monitors: Record<string, WallpaperEntry>;
+  span: WallpaperEntry | null;
+  transforms: Record<string, SpanTransform>;
 }
 
 export interface AppConfig {
@@ -335,7 +358,16 @@ const DEFAULTS: AppConfig = {
       { id: "desktopIcons", visible: false }
     ]
   },
-  wallpaper: { currentId: "", title: "", type: "none", localPath: "" },
+  wallpaper: {
+    mode: "sync",
+    currentId: "",
+    title: "",
+    type: "none",
+    localPath: "",
+    monitors: {},
+    span: null,
+    transforms: {}
+  },
   player: { skinPath: "", skinType: "wide", skinName: "steve" }
 };
 
@@ -465,6 +497,48 @@ function mergeTray(base: TrayConfig, raw?: Partial<TrayConfig>): TrayConfig {
   };
 }
 
+function normalizeWallpaperEntry(value: unknown): WallpaperEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const id = typeof raw.id === "string" ? raw.id : "";
+  const type = raw.type === "dynamic" ? "dynamic" : raw.type === "static" ? "static" : null;
+  if (!id || !type) return null;
+  return {
+    id,
+    title: typeof raw.title === "string" ? raw.title : "",
+    type,
+    localPath: typeof raw.localPath === "string" ? raw.localPath : "",
+    previewPath: typeof raw.previewPath === "string" ? raw.previewPath : ""
+  };
+}
+
+function normalizeWallpaperMonitors(value: unknown): Record<string, WallpaperEntry> {
+  if (!value || typeof value !== "object") return {};
+  const monitors: Record<string, WallpaperEntry> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const normalized = normalizeWallpaperEntry(entry);
+    if (normalized) monitors[key] = normalized;
+  }
+  return monitors;
+}
+
+function normalizeSpanTransforms(value: unknown): Record<string, SpanTransform> {
+  if (!value || typeof value !== "object") return {};
+  const transforms: Record<string, SpanTransform> = {};
+  const clamp = (input: unknown, min: number, max: number) =>
+    typeof input === "number" && Number.isFinite(input) ? Math.min(max, Math.max(min, input)) : 0;
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    transforms[key] = {
+      zoom: Math.min(3, Math.max(1, typeof raw.zoom === "number" ? raw.zoom : 1)),
+      offsetX: clamp(raw.offsetX, -1, 1),
+      offsetY: clamp(raw.offsetY, -1, 1)
+    };
+  }
+  return transforms;
+}
+
 function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
   const language = raw.system?.language;
   return {
@@ -488,9 +562,26 @@ function mergeConfig(base: AppConfig, raw: Partial<AppConfig>): AppConfig {
     hotkeys: { ...base.hotkeys, ...raw.hotkeys },
     tray: mergeTray(base.tray, raw.tray),
     wallpaper: {
-      ...base.wallpaper,
-      ...raw.wallpaper,
-      type: raw.wallpaper?.type === "static" ? "static" : base.wallpaper.type
+      mode:
+        raw.wallpaper?.mode === "independent" || raw.wallpaper?.mode === "span"
+          ? raw.wallpaper.mode
+          : base.wallpaper.mode,
+      currentId:
+        typeof raw.wallpaper?.currentId === "string"
+          ? raw.wallpaper.currentId
+          : base.wallpaper.currentId,
+      title: typeof raw.wallpaper?.title === "string" ? raw.wallpaper.title : base.wallpaper.title,
+      type:
+        raw.wallpaper?.type === "static" || raw.wallpaper?.type === "dynamic"
+          ? raw.wallpaper.type
+          : base.wallpaper.type,
+      localPath:
+        typeof raw.wallpaper?.localPath === "string"
+          ? raw.wallpaper.localPath
+          : base.wallpaper.localPath,
+      monitors: normalizeWallpaperMonitors(raw.wallpaper?.monitors),
+      span: normalizeWallpaperEntry(raw.wallpaper?.span),
+      transforms: normalizeSpanTransforms(raw.wallpaper?.transforms)
     },
     player: { ...base.player, ...raw.player }
   };

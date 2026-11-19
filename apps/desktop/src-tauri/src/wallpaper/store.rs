@@ -1,14 +1,38 @@
-//! 壁纸下载与本地缓存。统一转成 JPEG，兼容 IDesktopWallpaper 的格式要求。
+//! 壁纸下载、转码、缓存与拼接裁片。统一输出 JPEG，兼容 IDesktopWallpaper。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 
-use super::client;
+use super::desktop::MonitorInfo;
+use super::{auth, client};
 
-/// 原图接口需要登录，公共预览足够 1080p 与 2K 显示
-const PREVIEW_SIZE: u32 = 1920;
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Transform {
+    #[serde(default = "unit_zoom")]
+    pub zoom: f64,
+    #[serde(default)]
+    pub offset_x: f64,
+    #[serde(default)]
+    pub offset_y: f64,
+}
+
+fn unit_zoom() -> f64 {
+    1.0
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }
+    }
+}
 
 fn root(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
@@ -17,7 +41,14 @@ fn root(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| error.to_string())
 }
 
-/// 壁纸 id 直接参与文件名，只接受安全字符
+fn post_url(id: &str) -> String {
+    if auth::logged_in() {
+        client::original_url(id)
+    } else {
+        client::preview_url(id)
+    }
+}
+
 fn file_id(id: &str) -> Result<&str, String> {
     if id.is_empty()
         || id.len() > 64
@@ -30,28 +61,156 @@ fn file_id(id: &str) -> Result<&str, String> {
     Ok(id)
 }
 
-/// 下载并转码，返回本地缓存路径；已有文件时直接复用
-pub fn prepare(app: &AppHandle, id: &str, preview_url: &str) -> Result<PathBuf, String> {
+/// 下载静态壁纸并转成 JPEG；登录后取原图，未登录用 1920 预览
+pub fn prepare(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     let id = file_id(id)?;
     let dir = root(app)?;
     fs::create_dir_all(&dir).map_err(|error| format!("创建壁纸目录失败：{error}"))?;
 
-    let target = dir.join(format!("{id}.jpg"));
+    let suffix = if auth::logged_in() { "full" } else { "preview" };
+    let target = dir.join(format!("{id}-{suffix}.jpg"));
     if target.metadata().is_ok_and(|meta| meta.len() > 0) {
         return Ok(target);
     }
 
-    let url = client::with_size(preview_url, PREVIEW_SIZE);
-    let bytes = download_with_retry(&url)?;
+    let bytes = download_with_retry(&post_url(id))?;
     let jpeg = to_jpeg(&bytes)?;
     write_atomic(&target, &jpeg)?;
     Ok(target)
 }
 
-/// 另存到用户选择的位置，扩展名统一为 jpg，避免内容和后缀不一致
-pub fn export(preview_url: &str, path: &str) -> Result<(), String> {
-    let url = client::with_size(preview_url, PREVIEW_SIZE);
-    let bytes = download_with_retry(&url)?;
+/// 动态壁纸视频，必须登录后取原文件
+pub fn prepare_video(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    if !auth::logged_in() {
+        return Err("动态壁纸需要先登录 mcblock.top".into());
+    }
+    let id = file_id(id)?;
+    let dir = root(app)?.join("videos");
+    fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
+
+    let target = dir.join(format!("{id}.mp4"));
+    if target.metadata().is_ok_and(|meta| meta.len() > 0) {
+        return Ok(target);
+    }
+    let bytes = download_with_retry(&client::original_url(id))?;
+    write_atomic(&target, &bytes)?;
+    Ok(target)
+}
+
+/// 按显示器裁出拼接块，返回设备路径与图片路径；缓存键包含拓扑和变换
+pub fn span_crops(
+    app: &AppHandle,
+    id: &str,
+    monitors: &[MonitorInfo],
+    transform: Transform,
+) -> Result<Vec<(String, PathBuf)>, String> {
+    if monitors.is_empty() {
+        return Err("没有可用显示器".into());
+    }
+    let source = prepare(app, id)?;
+    let id = file_id(id)?;
+    let dir = root(app)?.join("span").join(id);
+    fs::create_dir_all(&dir).map_err(|error| format!("创建拼接目录失败：{error}"))?;
+
+    let transform = Transform {
+        zoom: transform.zoom.clamp(1.0, 3.0),
+        offset_x: transform.offset_x.clamp(-1.0, 1.0),
+        offset_y: transform.offset_y.clamp(-1.0, 1.0),
+    };
+    let fingerprint = format!(
+        "{}|{}|{:.4}|{:.4}|{:.4}",
+        topology(monitors),
+        if auth::logged_in() { "full" } else { "preview" },
+        transform.zoom,
+        transform.offset_x,
+        transform.offset_y
+    );
+
+    let targets: Vec<(String, PathBuf)> = monitors
+        .iter()
+        .map(|monitor| {
+            (
+                monitor.device_path.clone(),
+                dir.join(format!("{}.jpg", sanitize(&monitor.device_path))),
+            )
+        })
+        .collect();
+    let manifest = dir.join("manifest");
+    if fs::read_to_string(&manifest).is_ok_and(|value| value.trim() == fingerprint)
+        && targets.iter().all(|(_, path)| path.exists())
+    {
+        return Ok(targets);
+    }
+
+    let image = image::open(&source).map_err(|_| "拼接源图无法解析".to_string())?;
+    let (img_w, img_h) = (image.width() as f64, image.height() as f64);
+    let (virtual_x, virtual_y, virtual_w, virtual_h) = virtual_bounds(monitors);
+    let rect = source_rect(img_w, img_h, virtual_w, virtual_h, transform);
+    let scale = virtual_w / rect.2;
+    if scale <= 0.0 {
+        return Err("拼接缩放无效".into());
+    }
+
+    for (monitor, (_, target)) in monitors.iter().zip(&targets) {
+        let rx = (monitor.left - virtual_x) as f64;
+        let ry = (monitor.top - virtual_y) as f64;
+        let rw = monitor.width().max(1) as f64;
+        let rh = monitor.height().max(1) as f64;
+
+        let crop_x = (rect.0 + rx / scale).round().max(0.0) as u32;
+        let crop_y = (rect.1 + ry / scale).round().max(0.0) as u32;
+        let crop_w = (rw / scale).round().max(1.0) as u32;
+        let crop_h = (rh / scale).round().max(1.0) as u32;
+        let crop_w = crop_w.min(image.width().saturating_sub(crop_x)).max(1);
+        let crop_h = crop_h.min(image.height().saturating_sub(crop_y)).max(1);
+
+        let crop = image.crop_imm(crop_x, crop_y, crop_w, crop_h);
+        let resized = crop.resize_exact(
+            monitor.width().max(1) as u32,
+            monitor.height().max(1) as u32,
+            image::imageops::FilterType::Lanczos3,
+        );
+        let jpeg = to_jpeg_from(&resized)?;
+        write_atomic(target, &jpeg)?;
+    }
+
+    fs::write(&manifest, fingerprint).map_err(|error| format!("写入拼接清单失败：{error}"))?;
+    sweep_span(app, id);
+    Ok(targets)
+}
+
+/// 清理其他壁纸的拼接目录
+pub fn sweep_span(app: &AppHandle, keep: &str) {
+    let Ok(dir) = root(app) else { return };
+    let Ok(entries) = fs::read_dir(dir.join("span")) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy() == keep {
+            continue;
+        }
+        let _ = fs::remove_dir_all(entry.path());
+    }
+}
+
+/// 只保留给定文件，其他缓存与视频删除
+pub fn sweep(app: &AppHandle, keeps: &[PathBuf]) {
+    let Ok(dir) = root(app) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() || keeps.iter().any(|keep| keep == &path) {
+            continue;
+        }
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// 另存到用户选择的位置，扩展名统一为 jpg
+pub fn export(id: &str, path: &str) -> Result<(), String> {
+    let bytes = download_with_retry(&post_url(id))?;
     let jpeg = to_jpeg(&bytes)?;
 
     let mut target = PathBuf::from(path);
@@ -68,24 +227,6 @@ pub fn export(preview_url: &str, path: &str) -> Result<(), String> {
     fs::write(&target, jpeg).map_err(|error| format!("保存失败：{error}"))
 }
 
-/// 只保留当前壁纸，其他下载文件在应用成功后清理
-pub fn sweep(app: &AppHandle, keep: &Path) {
-    let Ok(dir) = root(app) else {
-        return;
-    };
-    let Ok(entries) = fs::read_dir(&dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path == keep {
-            continue;
-        }
-        let _ = fs::remove_file(path);
-    }
-}
-
-/// 另存为对话框的默认文件名，去掉 Windows 不允许的字符
 pub fn safe_name(title: &str) -> String {
     let name: String = title
         .chars()
@@ -110,10 +251,91 @@ pub fn safe_name(title: &str) -> String {
     }
 }
 
+pub fn source_rect(
+    img_w: f64,
+    img_h: f64,
+    virtual_w: f64,
+    virtual_h: f64,
+    transform: Transform,
+) -> (f64, f64, f64, f64) {
+    if img_w <= 0.0 || img_h <= 0.0 || virtual_w <= 0.0 || virtual_h <= 0.0 {
+        return (0.0, 0.0, img_w, img_h);
+    }
+    let zoom = transform.zoom.clamp(1.0, 3.0);
+    let scale = (virtual_w / img_w).max(virtual_h / img_h) * zoom;
+    let width = virtual_w / scale;
+    let height = virtual_h / scale;
+    let cx = clamp_center(
+        img_w / 2.0 + transform.offset_x.clamp(-1.0, 1.0) * img_w,
+        width / 2.0,
+        img_w - width / 2.0,
+    );
+    let cy = clamp_center(
+        img_h / 2.0 + transform.offset_y.clamp(-1.0, 1.0) * img_h,
+        height / 2.0,
+        img_h - height / 2.0,
+    );
+    (cx - width / 2.0, cy - height / 2.0, width, height)
+}
+
+fn clamp_center(value: f64, low: f64, high: f64) -> f64 {
+    if low <= high {
+        value.clamp(low, high)
+    } else {
+        (low + high) / 2.0
+    }
+}
+
+fn virtual_bounds(monitors: &[MonitorInfo]) -> (i32, i32, f64, f64) {
+    let left = monitors.iter().map(|m| m.left).min().unwrap_or(0);
+    let top = monitors.iter().map(|m| m.top).min().unwrap_or(0);
+    let right = monitors.iter().map(|m| m.right).max().unwrap_or(1);
+    let bottom = monitors.iter().map(|m| m.bottom).max().unwrap_or(1);
+    (
+        left,
+        top,
+        (right - left).max(1) as f64,
+        (bottom - top).max(1) as f64,
+    )
+}
+
+fn topology(monitors: &[MonitorInfo]) -> String {
+    let mut list: Vec<String> = monitors
+        .iter()
+        .map(|m| {
+            format!(
+                "{}|{},{},{},{}",
+                m.device_path, m.left, m.top, m.right, m.bottom
+            )
+        })
+        .collect();
+    list.sort();
+    let joined = list.join(";");
+    let mut hash = 17u32;
+    for byte in joined.bytes() {
+        hash = hash.wrapping_mul(31).wrapping_add(byte as u32);
+    }
+    format!("v1_{hash:08X}")
+}
+
+fn sanitize(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 fn download_with_retry(url: &str) -> Result<Vec<u8>, String> {
     let mut last = "下载失败".to_string();
+    let cookie = auth::cookie();
     for attempt in 0..3 {
-        match client::download(url, client::MAX_IMAGE_BYTES) {
+        match client::download(url, client::MAX_IMAGE_BYTES, cookie.as_deref()) {
             Ok(bytes) => return Ok(bytes),
             Err(error) => last = error,
         }
@@ -126,6 +348,10 @@ fn download_with_retry(url: &str) -> Result<Vec<u8>, String> {
 
 fn to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let image = image::load_from_memory(bytes).map_err(|_| "壁纸图片无法解析".to_string())?;
+    to_jpeg_from(&image)
+}
+
+fn to_jpeg_from(image: &image::DynamicImage) -> Result<Vec<u8>, String> {
     let rgb = image.to_rgb8();
     let mut out = Vec::new();
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 92);
@@ -136,7 +362,7 @@ fn to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
-    let temp = target.with_extension("jpg.tmp");
+    let temp = target.with_extension("tmp");
     fs::write(&temp, bytes).map_err(|error| format!("写入壁纸失败：{error}"))?;
     if fs::rename(&temp, target).is_err() {
         let _ = fs::remove_file(target);
@@ -163,5 +389,29 @@ mod tests {
     fn rejects_unsafe_ids() {
         assert!(file_id("../x").is_err());
         assert!(file_id("wp_1-2").is_ok());
+    }
+
+    #[test]
+    fn covers_virtual_screen_at_zoom_one() {
+        let rect = source_rect(1920.0, 1080.0, 1920.0, 1080.0, Transform::default());
+        assert!((rect.0 - 0.0).abs() < 0.01);
+        assert!((rect.2 - 1920.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn zooms_in_by_halving_visible_window() {
+        let rect = source_rect(
+            1920.0,
+            1080.0,
+            1920.0,
+            1080.0,
+            Transform {
+                zoom: 2.0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+            },
+        );
+        assert!((rect.2 - 960.0).abs() < 0.01);
+        assert!((rect.3 - 540.0).abs() < 0.01);
     }
 }

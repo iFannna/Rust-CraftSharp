@@ -12,6 +12,7 @@ interface WallpaperGridProps {
   loading: boolean;
   error: string | null;
   applyingId: string | null;
+  dynamicEnabled: boolean;
   t: TFunction;
   onRetry: () => void;
   onPreview: (index: number) => void;
@@ -23,6 +24,7 @@ export function WallpaperGrid({
   loading,
   error,
   applyingId,
+  dynamicEnabled,
   t,
   onRetry,
   onPreview,
@@ -70,6 +72,7 @@ export function WallpaperGrid({
             item={item}
             index={index}
             applying={applyingId === item.id}
+            dynamicEnabled={dynamicEnabled}
             t={t}
             onPreview={onPreview}
             onApply={onApply}
@@ -92,12 +95,13 @@ interface WallpaperCardProps {
   item: WallpaperItem;
   index: number;
   applying: boolean;
+  dynamicEnabled: boolean;
   t: TFunction;
   onPreview: (index: number) => void;
   onApply: (item: WallpaperItem) => void;
 }
 
-function WallpaperCard({ item, index, applying, t, onPreview, onApply }: WallpaperCardProps) {
+function WallpaperCard({ item, index, applying, dynamicEnabled, t, onPreview, onApply }: WallpaperCardProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const dynamic = item.kind === "dynamic";
 
@@ -154,8 +158,8 @@ function WallpaperCard({ item, index, applying, t, onPreview, onApply }: Wallpap
           </Button>
           <Button
             size="sm"
-            disabled={dynamic || applying}
-            title={dynamic ? t("wallpaper.dynamicUnsupported") : undefined}
+            disabled={applying}
+            title={dynamic && !dynamicEnabled ? t("wallpaper.dynamicLogin") : undefined}
             onClick={() => onApply(item)}
           >
             {applying ? t("wallpaper.setting") : t("wallpaper.setWallpaper")}

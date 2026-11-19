@@ -443,14 +443,22 @@ async fn wallpaper_list(page: u32, kind: String, sort: String) -> Result<wallpap
         .map_err(|error| error.to_string())?
 }
 
-/// 下载并应用静态壁纸，返回本地缓存路径
 #[tauri::command]
-async fn wallpaper_apply(
+async fn wallpaper_monitors() -> Vec<wallpaper::MonitorInfo> {
+    tauri::async_runtime::spawn_blocking(wallpaper::monitors)
+        .await
+        .unwrap_or_default()
+}
+
+/// 应用整套壁纸布局：同步、按屏独立或跨屏拼接
+#[tauri::command]
+async fn wallpaper_apply_layout(
     app: tauri::AppHandle,
-    id: String,
-    preview_url: String,
-) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || wallpaper::apply(&app, &id, &preview_url))
+    plan: serde_json::Value,
+) -> Result<wallpaper::ApplyResult, String> {
+    let plan: crate::wallpaper::layout::Plan =
+        serde_json::from_value(plan).map_err(|error| format!("壁纸参数无效：{error}"))?;
+    tauri::async_runtime::spawn_blocking(move || wallpaper::apply_plan(&app, plan))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -468,10 +476,25 @@ async fn wallpaper_pick_path(app: tauri::AppHandle, title: String) -> Option<Str
 }
 
 #[tauri::command]
-async fn wallpaper_export(preview_url: String, path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || wallpaper::export(&preview_url, &path))
+async fn wallpaper_export(id: String, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::export(&id, &path))
         .await
         .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn wallpaper_session() -> bool {
+    wallpaper::session()
+}
+
+#[tauri::command]
+fn wallpaper_capture_session(app: tauri::AppHandle) -> Result<(), String> {
+    wallpaper::capture_session(&app)
+}
+
+#[tauri::command]
+fn wallpaper_logout(app: tauri::AppHandle) {
+    wallpaper::logout(&app);
 }
 
 /// 调试页清除数据：删除应用文件、还原默认图标并移除开机自启
@@ -648,6 +671,7 @@ fn main() {
             }
 
             appicon::startup(app.handle());
+            wallpaper::init(app.handle());
             install_drag_hover(app.handle());
             // HUD、快捷栏、宿主窗口直接显隐；其余窗口保留系统过渡动画
             for window in app.webview_windows().values() {
@@ -712,9 +736,13 @@ fn main() {
             clear_app_data,
             reload_app_windows,
             wallpaper_list,
-            wallpaper_apply,
+            wallpaper_monitors,
+            wallpaper_apply_layout,
             wallpaper_pick_path,
             wallpaper_export,
+            wallpaper_session,
+            wallpaper_capture_session,
+            wallpaper_logout,
             install_caption_hook
         ])
         .run(tauri::generate_context!())

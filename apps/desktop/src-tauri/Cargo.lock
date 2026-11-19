@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "craftsharp-desktop"
-version = "26.11.18"
+version = "26.11.19"
 dependencies = [
  "fontdue",
  "image",
@@ -444,6 +444,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "webview2-com",
+ "windows",
  "windows-core",
 ]
 
