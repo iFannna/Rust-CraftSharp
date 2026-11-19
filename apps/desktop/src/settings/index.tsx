@@ -11,6 +11,7 @@ import { isTauri } from "@/lib/runtime";
 import { tOf, type MessageKey } from "@/i18n";
 import { setSettingsVisible } from "@/lib/windowControls";
 import { ThemeRoot } from "@/ui/theme-root";
+import { Toaster } from "@/ui/components/sonner";
 import { WindowFrame } from "@/ui/window-frame";
 import { BugIcon, DashboardIcon, InfoIcon, KeyboardIcon, MonitorIcon, PackageIcon, PaletteIcon, SettingsIcon, UserIcon, type IconProps } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
@@ -294,6 +295,7 @@ function SettingsApp() {
           </main>
         </div>
       </WindowFrame>
+      <Toaster />
     </ThemeRoot>
   );
 }

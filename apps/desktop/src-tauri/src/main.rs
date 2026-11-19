@@ -465,11 +465,14 @@ async fn wallpaper_apply_layout(
 
 /// 另存为对话框必须由主线程打开，异步命令里等待结果
 #[tauri::command]
-async fn wallpaper_pick_path(app: tauri::AppHandle, title: String) -> Option<String> {
+async fn wallpaper_pick_path(window: tauri::Window, title: String) -> Option<String> {
+    use tauri::Manager;
+
+    let owner = window.hwnd().ok().map(|handle| handle.0 as isize).unwrap_or(0);
+    let app = window.app_handle().clone();
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
-    let handle = app.clone();
     app.run_on_main_thread(move || {
-        let _ = sender.try_send(wallpaper::pick(&handle, &title));
+        let _ = sender.try_send(wallpaper::pick(&title, owner));
     })
     .ok()?;
     receiver.recv().await.flatten()
@@ -505,11 +508,14 @@ async fn wallpaper_migrate_storage(
 
 /// 文件夹选择器同样必须由主线程打开
 #[tauri::command]
-async fn wallpaper_pick_folder(app: tauri::AppHandle, title: String) -> Option<String> {
+async fn wallpaper_pick_folder(window: tauri::Window, title: String) -> Option<String> {
+    use tauri::Manager;
+
+    let owner = window.hwnd().ok().map(|handle| handle.0 as isize).unwrap_or(0);
+    let app = window.app_handle().clone();
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
-    let handle = app.clone();
     app.run_on_main_thread(move || {
-        let _ = sender.try_send(wallpaper::pick_folder(&handle, &title));
+        let _ = sender.try_send(wallpaper::pick_folder(&title, owner));
     })
     .ok()?;
     receiver.recv().await.flatten()

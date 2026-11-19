@@ -1,8 +1,8 @@
 /** 壁纸查看器：窗口内翻页、缩放拖拽与下载，列表与窗口生命周期由入口负责 */
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 import { ChevronLeftIcon, ChevronRightIcon, MinusIcon, PlusIcon, WarningIcon } from "@/ui/icons";
 import { cn } from "@/ui/lib/utils";
 import type { TFunction } from "@/i18n";
@@ -237,24 +237,21 @@ export function WallpaperViewer({
           <Button type="button" className="w-full" disabled={saving} onClick={onApply}>
             {t("wallpaper.setWallpaper")}
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex w-full">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={dynamic || saving}
-                  onClick={onDownload}
-                >
-                  {t("wallpaper.download")}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {dynamic ? t("wallpaper.dynamicUnsupported") : t("wallpaper.download")}
-            </TooltipContent>
-          </Tooltip>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={saving}
+            onClick={() => {
+              if (dynamic) {
+                toast.info(t("wallpaper.dynamicLogin"));
+                return;
+              }
+              onDownload();
+            }}
+          >
+            {t("wallpaper.download")}
+          </Button>
         </div>
       </aside>
     </div>

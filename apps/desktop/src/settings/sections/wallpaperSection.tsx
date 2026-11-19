@@ -1,6 +1,7 @@
 /** 壁纸页：筛选、排序与分页；查看和设置分别交给独立窗口 */
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
 import { isTauri } from "@/lib/runtime";
@@ -15,7 +16,6 @@ import {
 } from "@/settings/wallpaper/api";
 import { WallpaperGrid } from "@/settings/wallpaper/grid";
 import { useWallpaperSession } from "@/settings/wallpaper/session";
-import { Toast, useToast } from "@/settings/wallpaper/toast";
 import { openWallpaperApply, openWallpaperPreview } from "@/settings/wallpaper/windows";
 
 const KINDS: { value: WallpaperKind; key: MessageKey }[] = [
@@ -33,9 +33,8 @@ const SORTS: { value: WallpaperSort; key: MessageKey }[] = [
 export function WallpaperSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
-  const { message: toastMessage, show: showToast } = useToast();
   const { session, openLogin, signOut } = useWallpaperSession(() =>
-    showToast(t("wallpaper.loginSuccess"))
+    toast.success(t("wallpaper.loginSuccess"))
   );
 
   const [kind, setKind] = useState<WallpaperKind>("all");
@@ -84,6 +83,11 @@ export function WallpaperSection() {
     label: t(item.key)
   }));
 
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success(t("wallpaper.logoutSuccess"));
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHead title={t("wallpaper.title")} />
@@ -116,7 +120,7 @@ export function WallpaperSection() {
         {isTauri() ? (
           <div className="ml-auto flex flex-none items-center">
             {session ? (
-              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <Button variant="ghost" size="sm" onClick={() => void handleSignOut()}>
                 {t("wallpaper.logout")}
               </Button>
             ) : (
@@ -134,7 +138,6 @@ export function WallpaperSection() {
           items={data?.items ?? []}
           loading={loading}
           error={error}
-          dynamicEnabled={session}
           t={t}
           onRetry={() => setReload((value) => value + 1)}
           onPreview={(index) => {
@@ -169,8 +172,6 @@ export function WallpaperSection() {
           {t("wallpaper.next")}
         </Button>
       </div>
-
-      <Toast message={toastMessage} />
     </div>
   );
 }

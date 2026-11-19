@@ -1,4 +1,4 @@
-/** mcblock.top 登录态：登录窗口、自动抓取与退出，供设置页和壁纸窗口共用 */
+/** MCBlock 登录态：登录窗口、自动抓取与退出，供设置页和壁纸窗口共用 */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";

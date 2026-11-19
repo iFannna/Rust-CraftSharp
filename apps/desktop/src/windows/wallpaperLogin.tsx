@@ -1,4 +1,4 @@
-/** mcblock.top 登录窗口：本地外壳提供与设置面板一致的外框，站点在子 WebView 中保持第一方 Cookie */
+/** MCBlock 登录窗口：本地外壳提供与设置面板一致的外框，站点在子 WebView 中保持第一方 Cookie */
 
 import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";

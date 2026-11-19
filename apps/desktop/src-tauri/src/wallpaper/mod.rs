@@ -102,21 +102,14 @@ pub fn open_storage(app: &AppHandle) -> Result<(), String> {
     storage::open(app)
 }
 
-/// 以设置窗口为 owner 打开另存为对话框，必须在主线程调用
-pub fn pick(app: &AppHandle, title: &str) -> Option<String> {
-    dialog::pick(title, owner(app))
+/// 以调用窗口为 owner 打开另存为对话框，必须在主线程调用
+pub fn pick(title: &str, owner: isize) -> Option<String> {
+    dialog::pick(title, owner)
 }
 
-/// 选择文件夹，必须在主线程调用
-pub fn pick_folder(app: &AppHandle, title: &str) -> Option<String> {
-    dialog::pick_folder(title, owner(app))
-}
-
-fn owner(app: &AppHandle) -> isize {
-    app.get_webview_window("settings")
-        .and_then(|window| window.hwnd().ok())
-        .map(|handle| handle.0 as isize)
-        .unwrap_or(0)
+/// 选择文件夹，同样以调用窗口为 owner，必须在主线程调用
+pub fn pick_folder(title: &str, owner: isize) -> Option<String> {
+    dialog::pick_folder(title, owner)
 }
 
 /// 从登录窗口读取会话 Cookie；登录页轮询调用，未登录时静默返回

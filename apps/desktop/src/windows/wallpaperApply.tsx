@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig, type WallpaperEntry } from "@/config/appConfig";
 import { tOf } from "@/i18n";
@@ -19,10 +20,8 @@ import {
 import { applyWallpaper, DEFAULT_SPAN } from "@/settings/wallpaper/apply";
 import { useWallpaperSession } from "@/settings/wallpaper/session";
 import { WallpaperApplyPanel } from "@/settings/wallpaper/targets";
-import { Toast, useToast } from "@/settings/wallpaper/toast";
 import { APPLY_EVENT, itemFromParams } from "@/settings/wallpaper/windows";
-import { Button } from "@/ui/components/button";
-import { InfoIcon } from "@/ui/icons";
+import { Toaster } from "@/ui/components/sonner";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
 import "@/ui/styles.css";
@@ -42,9 +41,8 @@ function initialSelection(monitors: WallpaperMonitor[], saved: Record<string, Wa
 function WallpaperApplyWindow() {
   useRevealWindow();
   const t = tOf(getConfig().system.language);
-  const { message, show } = useToast();
-  const { session, openLogin } = useWallpaperSession(() =>
-    show(t("wallpaper.loginSuccess"))
+  const { session } = useWallpaperSession(() =>
+    toast.success(t("wallpaper.loginSuccess"))
   );
   const [item, setItem] = useState<WallpaperItem>(initialItem);
   const [monitors, setMonitors] = useState<WallpaperMonitor[] | null>(null);
@@ -100,11 +98,11 @@ function WallpaperApplyWindow() {
   const apply = async (mode: WallpaperMode, selected: string[], transform: SpanTransform) => {
     if (busyRef.current) return;
     if (item.kind === "dynamic" && !session) {
-      show(t("wallpaper.dynamicLogin"));
+      toast.info(t("wallpaper.dynamicLogin"));
       return;
     }
     if (mode === "independent" && !selected.length) {
-      show(t("wallpaper.noMonitor"));
+      toast.info(t("wallpaper.noMonitor"));
       return;
     }
 
@@ -113,9 +111,9 @@ function WallpaperApplyWindow() {
     try {
       const result = await applyWallpaper(item, mode, selected, transform, monitors ?? []);
       if (result.warnings.length) {
-        show(t("wallpaper.setPartial", { count: result.warnings.length }));
+        toast.info(t("wallpaper.setPartial", { count: result.warnings.length }));
       } else {
-        show(t("wallpaper.setSuccess"));
+        toast.success(t("wallpaper.setSuccess"));
       }
       closeTimer.current = window.setTimeout(
         () => void getCurrentWindow().close().catch(() => undefined),
@@ -124,7 +122,7 @@ function WallpaperApplyWindow() {
     } catch (reason) {
       busyRef.current = false;
       setBusy(false);
-      show(t("wallpaper.applyFailed", { reason: String(reason) }));
+      toast.error(t("wallpaper.applyFailed", { reason: String(reason) }));
     }
   };
 
@@ -133,20 +131,6 @@ function WallpaperApplyWindow() {
   return (
     <ThemeRoot>
       <WindowFrame title={t("wallpaper.setWallpaper")} controls="full" resizable onClose={close}>
-        {item.kind === "dynamic" && !session ? (
-          <div className="flex flex-none items-center gap-2.5 bg-muted/40 px-5 py-2.5 text-xs">
-            <InfoIcon className="size-4 flex-none text-muted-foreground" />
-            <span className="text-muted-foreground">{t("wallpaper.dynamicLogin")}</span>
-            <Button
-              className="ml-auto"
-              size="sm"
-              onClick={() => void openLogin(t("wallpaper.loginTitle"))}
-            >
-              {t("wallpaper.login")}
-            </Button>
-          </div>
-        ) : null}
-
         {monitors ? (
           <WallpaperApplyPanel
             key={item.id}
@@ -169,7 +153,7 @@ function WallpaperApplyWindow() {
           </div>
         )}
 
-        <Toast message={message} />
+        <Toaster />
       </WindowFrame>
     </ThemeRoot>
   );

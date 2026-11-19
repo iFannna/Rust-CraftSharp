@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
@@ -12,13 +13,13 @@ import { WINDOW_LABEL } from "@/lib/windowLabels";
 import { applyWindowTitle } from "@/lib/windowTitle";
 import { exportWallpaper, listWallpapers, pickSavePath, type WallpaperItem } from "@/settings/wallpaper/api";
 import { WallpaperViewer } from "@/settings/wallpaper/preview";
-import { Toast, useToast } from "@/settings/wallpaper/toast";
 import {
   PREVIEW_EVENT,
   openWallpaperApply,
   previewRequestFromParams,
   type PreviewRequest
 } from "@/settings/wallpaper/windows";
+import { Toaster } from "@/ui/components/sonner";
 import { ThemeRoot } from "@/ui/theme-root";
 import { WindowFrame } from "@/ui/window-frame";
 import "@/ui/styles.css";
@@ -28,7 +29,6 @@ const initial = previewRequestFromParams(new URLSearchParams(location.search));
 function WallpaperPreviewWindow() {
   useRevealWindow();
   const t = tOf(getConfig().system.language);
-  const { message, show } = useToast();
   const [request, setRequest] = useState<PreviewRequest>(initial);
   const [items, setItems] = useState<WallpaperItem[]>(() => (initial.item.id ? [initial.item] : []));
   const [currentId, setCurrentId] = useState(initial.item.id);
@@ -94,10 +94,10 @@ function WallpaperPreviewWindow() {
       const path = await pickSavePath(current.title);
       if (path) {
         await exportWallpaper(current.id, path);
-        show(t("wallpaper.downloadSuccess"));
+        toast.success(t("wallpaper.downloadSuccess"));
       }
     } catch (reason) {
-      show(t("wallpaper.downloadFailed", { reason: String(reason) }));
+      toast.error(t("wallpaper.downloadFailed", { reason: String(reason) }));
     } finally {
       setSaving(false);
     }
@@ -127,7 +127,7 @@ function WallpaperPreviewWindow() {
           onDownload={() => void download()}
           onApply={() => void openWallpaperApply(current, WINDOW_LABEL.wallpaperPreview)}
         />
-        <Toast message={message} />
+        <Toaster />
       </WindowFrame>
     </ThemeRoot>
   );

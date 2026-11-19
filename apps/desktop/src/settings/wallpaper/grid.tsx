@@ -11,7 +11,6 @@ interface WallpaperGridProps {
   items: WallpaperItem[];
   loading: boolean;
   error: string | null;
-  dynamicEnabled: boolean;
   t: TFunction;
   onRetry: () => void;
   onPreview: (index: number) => void;
@@ -22,7 +21,6 @@ export function WallpaperGrid({
   items,
   loading,
   error,
-  dynamicEnabled,
   t,
   onRetry,
   onPreview,
@@ -69,7 +67,6 @@ export function WallpaperGrid({
             key={item.id}
             item={item}
             index={index}
-            dynamicEnabled={dynamicEnabled}
             t={t}
             onPreview={onPreview}
             onApply={onApply}
@@ -91,13 +88,12 @@ function CenteredState({ children }: { children: ReactNode }) {
 interface WallpaperCardProps {
   item: WallpaperItem;
   index: number;
-  dynamicEnabled: boolean;
   t: TFunction;
   onPreview: (index: number) => void;
   onApply: (item: WallpaperItem) => void;
 }
 
-function WallpaperCard({ item, index, dynamicEnabled, t, onPreview, onApply }: WallpaperCardProps) {
+function WallpaperCard({ item, index, t, onPreview, onApply }: WallpaperCardProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const dynamic = item.kind === "dynamic";
 
@@ -152,11 +148,7 @@ function WallpaperCard({ item, index, dynamicEnabled, t, onPreview, onApply }: W
           <Button size="sm" variant="secondary" onClick={() => onPreview(index)}>
             {t("wallpaper.viewImage")}
           </Button>
-          <Button
-            size="sm"
-            title={dynamic && !dynamicEnabled ? t("wallpaper.dynamicLogin") : undefined}
-            onClick={() => onApply(item)}
-          >
+          <Button size="sm" onClick={() => onApply(item)}>
             {t("wallpaper.setWallpaper")}
           </Button>
         </div>
