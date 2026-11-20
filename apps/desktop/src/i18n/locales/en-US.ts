@@ -2,6 +2,7 @@ import type { Messages } from "./zh-CN";
 
 export const enUS: Messages = {
   "common.restoreDefaults": "Restore Default Settings",
+  "common.restoreDone": "Default settings restored",
   "common.restoreConfirmText": "This will reset all settings on this page to their default values. Continue?",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import type { HotkeysConfig } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
@@ -80,6 +81,7 @@ export function HotkeysSection() {
         openInventory: defaults.openInventory
       }
     });
+    toast.success(t("common.restoreDone"));
   };
 
   return (

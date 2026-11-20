@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { getConfig, updateConfig, defaultConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { openDialogWindow } from "@/lib/dialogWindow";
@@ -29,6 +30,7 @@ export function AppearanceSection() {
     const defaults = defaultConfig().appearance;
     updateConfig({ appearance: defaults });
     void applyAppIcon(defaults.appIcon).then(reportIconError);
+    toast.success(t("common.restoreDone"));
   };
 
   const openIconPicker = async () => {

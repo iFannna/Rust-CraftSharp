@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
@@ -21,6 +22,7 @@ export function SystemSection() {
     const defaults = defaultConfig();
     updateConfig({ system: defaults.system, tray: defaults.tray });
     setStorageReset((value) => value + 1);
+    toast.success(t("common.restoreDone"));
     // 配置里关闭自启还不够，注册表项也要一起移除
     if ("__TAURI_INTERNALS__" in window) {
       void invoke("set_autostart", { enabled: false })

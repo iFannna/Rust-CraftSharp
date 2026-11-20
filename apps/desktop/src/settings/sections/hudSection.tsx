@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
@@ -35,6 +36,7 @@ export function HudSection() {
       statusBar: defaults.statusBar,
       bossBars: defaults.bossBars
     });
+    toast.success(t("common.restoreDone"));
   };
 
   return (

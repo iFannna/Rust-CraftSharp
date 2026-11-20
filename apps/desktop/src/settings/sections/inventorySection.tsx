@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import type { InventoryConfig } from "@/config/appConfig";
 import { defaultConfig, updateConfig } from "@/config/appConfig";
 import { useAppConfig } from "@/config/useAppConfig";
@@ -202,6 +203,7 @@ export function InventorySection() {
   const restoreDefaults = async () => {
     if (!(await confirmRestoreDefaults(t))) return;
     updateConfig({ inventory: defaultConfig().inventory });
+    toast.success(t("common.restoreDone"));
   };
 
   return (
