@@ -176,7 +176,7 @@ function handleLeftClick(position: TrayPointer): void {
   }, doubleClickMs);
 }
 
-/** 主窗口启动时调用，返回取消订阅函数 */
+/** 控制页启动时调用，返回取消订阅函数 */
 export function initializeTray(): () => void {
   if (!isTauri() || initialized) return () => undefined;
   initialized = true;

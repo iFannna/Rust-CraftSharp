@@ -8,7 +8,6 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 /** 每个桌面窗口一个 HTML 入口，统一放在 pages/ */
 const pages = [
-  "index",
   "hud",
   "menu",
   "rename",
@@ -43,7 +42,7 @@ export default defineConfig({
     },
     // HMR 模式启动时先编译入口，首个窗口不用等现场转换
     warmup: {
-      clientFiles: ["./src/settings/index.tsx", "./src/windows/hud.ts", "./src/App.tsx"]
+      clientFiles: ["./src/settings/index.tsx", "./src/windows/hud.ts"]
     }
   },
   envPrefix: ["VITE_", "TAURI_"],
@@ -78,7 +77,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1024,
     rollupOptions: {
       input: Object.fromEntries(
-        pages.map((page) => [page === "index" ? "main" : page, resolve(rootDir, `pages/${page}.html`)])
+        pages.map((page) => [page, resolve(rootDir, `pages/${page}.html`)])
       )
     }
   }

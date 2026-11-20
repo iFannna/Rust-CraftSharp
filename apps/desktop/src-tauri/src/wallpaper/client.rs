@@ -6,6 +6,8 @@ const API: &str = "https://mcblock.top";
 const PAGE_SIZE: u32 = 20;
 const MAX_JSON: usize = 4 * 1024 * 1024;
 pub const MAX_IMAGE_BYTES: usize = 24 * 1024 * 1024;
+/// 动态壁纸视频，4K 片源常见几十到上百 MB
+pub const MAX_VIDEO_BYTES: usize = 256 * 1024 * 1024;
 
 /// 列表卡片数据，URL 已补全为绝对地址
 #[derive(Serialize, Clone, Debug)]

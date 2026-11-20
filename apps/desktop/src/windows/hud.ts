@@ -1,4 +1,5 @@
-// 状态栏由 Rust 原生绘制，这里只负责配置、格子数据与菜单联动。
+// 常驻控制页：状态栏与物品栏由 Rust 原生绘制，这里负责配置、格子数据、
+// 托盘手势与启动恢复。
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getConfig, subscribeConfig, updateConfig, type BossBarConfig } from "@/config/appConfig";
@@ -14,7 +15,11 @@ import {
 import { SHARED_SCOPE, getClipboard, openItem, sameSlotScope, subscribeClipboard } from "@/hud/slots/actions";
 import { buildSlotMenuItems, runSlotMenuAction } from "@/hud/slots/menuActions";
 import { showSlotMenuAt } from "@/hud/slots/menu";
-import { toggleInventory } from "@/lib/windowControls";
+import { initializeHotkeys } from "@/lib/hotkeys";
+import { installProductionGuards } from "@/lib/productionGuards";
+import { initializeTray } from "@/lib/tray";
+import { reapplyStaticWallpaper } from "@/lib/wallpaperRestore";
+import { applyConfiguredVisibility, ensureEntityOverlay, setSettingsVisible, toggleInventory } from "@/lib/windowControls";
 
 const params = new URLSearchParams(location.search);
 const forcedScale = Number(params.get("scale"));
@@ -245,7 +250,24 @@ void listen<{ x: number; y: number; height: number }>("hud-moved", (event) => {
   updateConfig({ statusBar: { position: { x, y }, positionHeight: height } });
 });
 
+void listen("entity-view-warm", () => {
+  void ensureEntityOverlay();
+});
+
 void invoke("slots_register_scope", { label: "hud", style: "inventory.png", shared: true }).catch(() => undefined);
 
 push();
 document.body.dataset.ready = "true";
+
+initializeHotkeys();
+installProductionGuards();
+initializeTray();
+
+void (async () => {
+  await applyConfiguredVisibility().catch(() => undefined);
+  if (getConfig().system.defaultOpenSettings) {
+    await setSettingsVisible(true).catch(() => undefined);
+  }
+  // 动态壁纸由原生侧恢复；静态壁纸跟随当前存储路径重设
+  await reapplyStaticWallpaper().catch(() => undefined);
+})();

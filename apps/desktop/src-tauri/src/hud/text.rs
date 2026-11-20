@@ -2,15 +2,18 @@
 
 use std::cell::RefCell;
 
-use fontdue::{Font, FontSettings};
+use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 
 use crate::hud::layout::Layout;
 use crate::hud::sprite::Frame;
 
 const FONT_BYTES: &[u8] = include_bytes!("../../../../../assets/fonts/unifont-16.0.04.ttf");
 
+/// 字体借用嵌入字节，解析时不复制、不建全量索引
+type LoadedFont = FontRef<'static>;
+
 thread_local! {
-    static FONT: RefCell<Option<Font>> = const { RefCell::new(None) };
+    static FONT: RefCell<Option<LoadedFont>> = const { RefCell::new(None) };
 }
 
 /// 把 #RRGGBB 变暗一半，作为阴影色。
@@ -41,23 +44,23 @@ pub fn auto_color(name: &str) -> u32 {
     PRESET[(hash % PRESET.len() as u32) as usize]
 }
 
-fn with_font<T>(f: impl FnOnce(&Font) -> T) -> Option<T> {
+fn with_font<T>(f: impl FnOnce(&LoadedFont) -> T) -> Option<T> {
     FONT.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            *slot = Font::from_bytes(FONT_BYTES, FontSettings::default()).ok();
+            *slot = FontRef::try_from_slice(FONT_BYTES).ok();
         }
         slot.as_ref().map(f)
     })
 }
 
 /// 在后台线程解析字体，避免第一次显示文件名时卡一下。
-pub fn parse() -> Option<Font> {
-    Font::from_bytes(FONT_BYTES, FontSettings::default()).ok()
+pub fn parse() -> Option<LoadedFont> {
+    FontRef::try_from_slice(FONT_BYTES).ok()
 }
 
 /// 把后台解析好的字体交给窗口线程。
-pub fn install(font: Font) {
+pub fn install(font: LoadedFont) {
     FONT.with(|cell| *cell.borrow_mut() = Some(font));
 }
 
@@ -107,11 +110,12 @@ pub fn draw_line(frame: &mut Frame, x: f32, top: f32, text: &str, px: f32, color
 /// 逐字符测量整行宽度，BOSS 条名称居中用。
 pub fn spaced_width(text: &str, px: f32, spacing: f32) -> f32 {
     with_font(|font| {
+        let scale = PxScale::from(px.max(1.0));
+        let scaled = font.as_scaled(scale);
         let mut width = 0.0;
         let mut count = 0;
         for ch in text.chars() {
-            let metrics = font.rasterize(ch, px).0;
-            width += metrics.advance_width;
+            width += scaled.h_advance(font.glyph_id(ch));
             count += 1;
         }
         if count > 1 {
@@ -138,16 +142,17 @@ pub fn draw_centered(
     let total = spaced_width(text, px, spacing);
     let start = center_x - total / 2.0;
     let Some(glyphs) = with_font(|font| {
-        let ascent = font.horizontal_line_metrics(px).map(|metrics| metrics.ascent).unwrap_or(px * 0.8);
+        let scale = PxScale::from(px.max(1.0));
+        let scaled = font.as_scaled(scale);
+        let ascent = scaled.ascent();
         let mut glyphs = Vec::new();
         let mut pen = start;
         for ch in text.chars() {
-            let (metrics, bitmap) = font.rasterize(ch, px);
-            if metrics.width > 0 && metrics.height > 0 {
-                let ink_top = top + ascent - (metrics.height as f32 + metrics.ymin as f32);
-                glyphs.push((pen + metrics.xmin as f32, ink_top, metrics.width, metrics.height, bitmap));
+            let id = font.glyph_id(ch);
+            if let Some(glyph) = glyph_of(font, id, scale, pen, ascent) {
+                glyphs.push((glyph.x, top + glyph.top, glyph.width, glyph.height, glyph.bitmap));
             }
-            pen += metrics.advance_width + spacing;
+            pen += scaled.h_advance(id) + spacing;
         }
         glyphs
     }) else {
@@ -171,27 +176,47 @@ struct Glyph {
     top: f32,
 }
 
-fn rasterize(font: &Font, text: &str, px: f32) -> Vec<Glyph> {
+/// 光栅化单个字形；位置与行顶对齐都按同一基线换算。
+fn glyph_of(
+    font: &LoadedFont,
+    id: ab_glyph::GlyphId,
+    scale: PxScale,
+    pen: f32,
+    ascent: f32,
+) -> Option<Glyph> {
+    let outlined = font.outline_glyph(id.with_scale_and_position(scale, point(pen, 0.0)))?;
+    let bounds = outlined.px_bounds();
+    let width = bounds.width() as usize;
+    let height = bounds.height() as usize;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let mut bitmap = vec![0u8; width * height];
+    outlined.draw(|x, y, coverage| {
+        let index = y as usize * width + x as usize;
+        bitmap[index] = (coverage * 255.0).round().min(255.0) as u8;
+    });
+    Some(Glyph {
+        bitmap,
+        width,
+        height,
+        x: bounds.min.x,
+        top: ascent + bounds.min.y,
+    })
+}
+
+fn rasterize(font: &LoadedFont, text: &str, px: f32) -> Vec<Glyph> {
+    let scale = PxScale::from(px.max(1.0));
+    let scaled = font.as_scaled(scale);
+    let ascent = scaled.ascent();
     let mut out = Vec::new();
     let mut pen = 0.0;
-    let mut baseline: Option<f32> = None;
     for ch in text.chars() {
-        let (metrics, bitmap) = font.rasterize(ch, px);
-        if baseline.is_none() {
-            let metrics = font.horizontal_line_metrics(px);
-            baseline = Some(metrics.map(|m| m.ascent).unwrap_or(px * 0.8));
+        let id = font.glyph_id(ch);
+        if let Some(glyph) = glyph_of(font, id, scale, pen, ascent) {
+            out.push(glyph);
         }
-        let ascent = baseline.unwrap_or(px * 0.8);
-        if metrics.width > 0 && metrics.height > 0 {
-            out.push(Glyph {
-                bitmap,
-                width: metrics.width,
-                height: metrics.height,
-                x: pen + metrics.xmin as f32,
-                top: ascent - (metrics.height as f32 + metrics.ymin as f32),
-            });
-        }
-        pen += metrics.advance_width;
+        pen += scaled.h_advance(id);
     }
     out
 }

@@ -1,4 +1,4 @@
-/** 窗口显隐统一入口，主界面、设置面板、全局热键共用 */
+/** 窗口显隐统一入口，控制页、设置面板、全局热键共用 */
 
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -6,7 +6,7 @@ import { getConfig, updateConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
 
-export type WindowLabel = "main" | "settings" | "entity-preview";
+export type WindowLabel = "settings" | "entity-view" | "entity-preview";
 
 async function windowOf(label: WindowLabel): Promise<WebviewWindow | null> {
   return WebviewWindow.getByLabel(label);
@@ -75,6 +75,36 @@ export async function toggleSettings() {
 
 export async function setCrosshairVisible(visible: boolean) {
   updateConfig({ hudElements: { crosshairVisible: visible } });
+}
+
+let overlayRequest: Promise<void> | null = null;
+
+/** 物品栏第一次打开时创建 3D 覆盖层；之后复用，关闭物品栏不销毁 */
+export function ensureEntityOverlay(): Promise<void> {
+  overlayRequest ??= createEntityOverlay().catch(() => {
+    overlayRequest = null;
+  });
+  return overlayRequest;
+}
+
+async function createEntityOverlay() {
+  if (await windowOf("entity-view")) return;
+  // 透明覆盖层贴住玩家区域，原生侧登记句柄后再显示
+  new WebviewWindow(WINDOW_LABEL.entityView, {
+    url: "pages/entity-view.html",
+    title: "CraftSharp Entity View",
+    width: 360,
+    height: 360,
+    x: -32000,
+    y: -32000,
+    transparent: true,
+    decorations: false,
+    skipTaskbar: true,
+    resizable: false,
+    focus: false,
+    visible: false,
+    shadow: false
+  });
 }
 
 export async function toggleEntityPreview() {

@@ -567,9 +567,9 @@ pub fn entity_ready() {
     with_state(|state| {
         use tauri::Manager;
 
-        state.entity_hwnd = state
-            .app
-            .get_webview_window("entity-view")
+        let window = state.app.get_webview_window("entity-view");
+        state.entity_hwnd = window
+            .as_ref()
             .and_then(|window| window.hwnd().ok())
             .map(|hwnd| hwnd.0 as isize)
             .unwrap_or(0);
@@ -579,6 +579,13 @@ pub fn entity_ready() {
         state.entity_meta = None;
         sync_entity_setup(state);
         place_entity(state);
+        // 页面挂载完成后再显示，位置由 place_entity 决定，不抢物品栏焦点
+        if state.entity_hwnd != 0 {
+            // SAFETY: 只显示自己创建的覆盖层窗口
+            unsafe {
+                w::ShowWindow(state.entity_hwnd, w::SW_SHOWNOACTIVATE);
+            }
+        }
     });
 }
 
@@ -838,6 +845,10 @@ fn hover_green(state: &State, index: usize) -> bool {
 pub fn set_visible_inner(state: &mut State) {
     let visible = state.config.visible;
     state.visible = visible;
+    if visible {
+        // 控制页按需创建 3D 覆盖层，未打开物品栏不占渲染进程
+        let _ = state.app.emit("entity-view-warm", ());
+    }
     let active = visible && state.layout.player.is_some();
     let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": active }));
 

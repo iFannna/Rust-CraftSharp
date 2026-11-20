@@ -1,7 +1,7 @@
 // 物品栏玩家预览：透明覆盖层直接渲染，像素不再回读到原生层
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { EntityView, loadTextures } from "@/entity3d";
+import { EntityView } from "@/entity3d";
 
 interface EntitySetup {
   skin: string;
@@ -49,8 +49,7 @@ async function setup(payload: EntitySetup) {
 }
 
 async function boot() {
-  // 贴图就绪后再注册监听，避免首批事件落在加载过程中
-  await loadTextures();
+  // 只渲染玩家，皮肤贴图由 setup 按需加载，不预载其他实体
   if (inTauri) {
     await Promise.all([
       listen<EntitySetup>("entity-setup", ({ payload }) => void setup(payload)),

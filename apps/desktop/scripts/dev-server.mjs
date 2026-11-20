@@ -95,7 +95,7 @@ function handle(request, response) {
     return;
   }
 
-  if (pathname === "/") pathname = "/pages/index.html";
+  if (pathname === "/") pathname = "/pages/settings.html";
   const path = resolve(outDir, `.${pathname}`);
   if (path !== outDir && !path.startsWith(outDir + sep)) {
     response.writeHead(403).end();

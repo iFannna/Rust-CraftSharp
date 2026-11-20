@@ -70,7 +70,7 @@ pub fn prepare(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
         return Ok(target);
     }
 
-    let bytes = download_with_retry(&post_url(id))?;
+    let bytes = download_with_retry(&post_url(id), client::MAX_IMAGE_BYTES)?;
     let jpeg = to_jpeg(&bytes)?;
     // 下载耗时较长，期间可能已切换存储目录
     let dir = root(app);
@@ -92,7 +92,7 @@ pub fn prepare_video(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
         return Err("动态壁纸需要先登录 mcblock.top".into());
     }
     fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
-    let bytes = download_with_retry(&client::original_url(id))?;
+    let bytes = download_with_retry(&client::original_url(id), client::MAX_VIDEO_BYTES)?;
     let dir = root(app).join("videos");
     fs::create_dir_all(&dir).map_err(|error| format!("创建视频目录失败：{error}"))?;
     let target = dir.join(format!("{id}.mp4"));
@@ -225,7 +225,7 @@ pub fn sweep(app: &AppHandle, keeps: &[PathBuf]) {
 
 /// 另存到用户选择的位置，扩展名统一为 jpg
 pub fn export(id: &str, path: &str) -> Result<(), String> {
-    let bytes = download_with_retry(&post_url(id))?;
+    let bytes = download_with_retry(&post_url(id), client::MAX_IMAGE_BYTES)?;
     let jpeg = to_jpeg(&bytes)?;
 
     let mut target = PathBuf::from(path);
@@ -346,11 +346,11 @@ fn sanitize(value: &str) -> String {
         .collect()
 }
 
-fn download_with_retry(url: &str) -> Result<Vec<u8>, String> {
+fn download_with_retry(url: &str, limit: usize) -> Result<Vec<u8>, String> {
     let mut last = "下载失败".to_string();
     let cookie = auth::cookie();
     for attempt in 0..3 {
-        match client::download(url, client::MAX_IMAGE_BYTES, cookie.as_deref()) {
+        match client::download(url, limit, cookie.as_deref()) {
             Ok(bytes) => return Ok(bytes),
             Err(error) => last = error,
         }

@@ -559,7 +559,7 @@ fn reload_app_windows(app: tauri::AppHandle) {
     use tauri::Manager;
 
     slots::reset();
-    for label in ["main", "hud", "entity-view", "entity-preview"] {
+    for label in ["hud", "entity-view", "entity-preview"] {
         if let Some(window) = app.get_webview_window(label) {
             let _ = window.reload();
         }
@@ -711,7 +711,8 @@ fn main() {
             hud::cache::restore(app.handle());
             slots::on_changed(hud::inventory::slots_changed);
 
-            // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序
+            // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序；
+            // 3D 覆盖层与各类弹窗由页面按需创建
             for config in app.config().app.windows.iter() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
@@ -719,19 +720,13 @@ fn main() {
             #[cfg(all(windows, not(debug_assertions)))]
             harden_webviews(app.handle());
 
-            // tao 只采用落在显示器内的初始坐标，离屏窗口建好后移出屏幕再显示
-            if let Some(view) = app.get_webview_window("entity-view") {
-                let _ = view.set_position(tauri::LogicalPosition::new(-32000.0, -32000.0));
-                let _ = view.show();
-            }
-
             appicon::startup(app.handle());
             wallpaper::init(app.handle());
             install_drag_hover(app.handle());
-            // HUD、快捷栏、宿主窗口直接显隐；其余窗口保留系统过渡动画
+            // HUD 控制页直接显隐；其余窗口保留系统过渡动画
             for window in app.webview_windows().values() {
                 if let Ok(hwnd) = window.hwnd() {
-                    let instant = matches!(window.label(), "main" | "hud" | "entity-view");
+                    let instant = window.label() == "hud";
                     if instant {
                         platform::disable_transitions(hwnd.0 as isize);
                     } else {

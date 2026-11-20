@@ -3,7 +3,6 @@
   "identifier": "default",
   "description": "Default permissions for the main window",
   "windows": [
-    "main",
     "hud",
     "slot-menu",
     "tray-menu",

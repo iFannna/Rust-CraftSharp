@@ -51,7 +51,7 @@ export function isHotkeyRecording(): boolean {
   return recording;
 }
 
-/** 主窗口启动时调用一次 */
+/** 控制页启动时调用一次 */
 export function initializeHotkeys() {
   if (started || !("__TAURI_INTERNALS__" in window)) return;
   started = true;
