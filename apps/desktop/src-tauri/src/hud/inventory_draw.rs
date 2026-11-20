@@ -146,6 +146,8 @@ pub struct Model<'a> {
     pub icons: &'a [Option<SlotIcon>],
     pub hover: Option<usize>,
     pub hover_green: bool,
+    /// 关闭 3D 模型时不挖透明洞，玩家区域保留背景
+    pub show_player: bool,
     pub drag_source: Option<usize>,
     pub dimmed: Option<usize>,
 }
@@ -175,7 +177,9 @@ pub fn draw(frame: &mut Frame, model: &Model) {
     }
 
     // 玩家区域留出透明洞，3D 覆盖层不论在物品栏上下都能透出
-    if let Some(player) = &model.layout.player {
-        frame.clear_rect(player.left, player.top, player.width, player.height);
+    if model.show_player {
+        if let Some(player) = &model.layout.player {
+            frame.clear_rect(player.left, player.top, player.width, player.height);
+        }
     }
 }

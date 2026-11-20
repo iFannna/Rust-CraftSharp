@@ -421,6 +421,8 @@ export const enUS: Messages = {
   "inventory.rememberDesc": "Restore inventory window position on next launch",
   "inventory.hover": "Hover Effect",
   "inventory.hoverDesc": "Show white overlay when hovering over slots",
+  "inventory.showModel": "Show 3D Model",
+  "inventory.showModelDesc": "Render the player model in the survival inventory",
   "inventory.grayOverlay": "Gray Overlay",
   "inventory.grayOverlayDesc": "Show fullscreen gray overlay when inventory is open",
   "inventory.opacity": "Opacity",

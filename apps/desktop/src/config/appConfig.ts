@@ -81,6 +81,8 @@ export interface InventoryConfig {
   style: string;
   sharedData: boolean;
   hoverEffect: boolean;
+  /** 生存物品栏玩家区域渲染 3D 模型 */
+  showModel: boolean;
   showTooltip: boolean;
   tooltipShowFileName: boolean;
   tooltipShowOriginalName: boolean;
@@ -319,6 +321,7 @@ const DEFAULTS: AppConfig = {
     style: "inventory.png",
     sharedData: true,
     hoverEffect: true,
+    showModel: true,
     showTooltip: false,
     tooltipShowFileName: true,
     tooltipShowOriginalName: false,

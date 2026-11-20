@@ -419,6 +419,8 @@ export const zhCN = {
   "inventory.rememberDesc": "下次启动时恢复物品栏窗口位置",
   "inventory.hover": "悬浮效果",
   "inventory.hoverDesc": "鼠标悬浮在格子时显示白色蒙版",
+  "inventory.showModel": "显示3D模型",
+  "inventory.showModelDesc": "在生存物品栏的玩家区域渲染玩家模型",
   "inventory.grayOverlay": "灰色蒙版",
   "inventory.grayOverlayDesc": "打开物品栏时显示全屏灰色遮罩",
   "inventory.opacity": "不透明度",

@@ -198,6 +198,7 @@ function TooltipCardContent() {
 export function InventorySection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
+  const inventory = config.inventory;
   const empty = <Note>{t("inventory.emptyCard")}</Note>;
 
   const restoreDefaults = async () => {
@@ -220,7 +221,13 @@ export function InventorySection() {
 
       <SectionSubhead>{t("inventory.sectionPlayerInventory")}</SectionSubhead>
       <CardBlock id="SurvivalInventoryTitle" title={t("inventory.cardSurvival")}>
-        {empty}
+        <Row plain label={t("inventory.showModel")} description={t("inventory.showModelDesc")}>
+          <Toggle
+            checked={inventory.showModel}
+            label={t("inventory.showModel")}
+            onChange={(showModel) => updateConfig({ inventory: { showModel } })}
+          />
+        </Row>
       </CardBlock>
       <CardBlock id="CreativeInventoryTitle" title={t("inventory.cardCreative")}>
         {empty}

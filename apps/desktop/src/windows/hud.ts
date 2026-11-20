@@ -141,6 +141,7 @@ function inventoryConfig() {
     style: inventory.style,
     sharedData: inventory.sharedData,
     hoverEffect: inventory.hoverEffect,
+    showModel: inventory.showModel,
     showTooltip: inventory.showTooltip,
     tooltipShowFileName: inventory.tooltipShowFileName,
     tooltipShowOriginalName: inventory.tooltipShowOriginalName,

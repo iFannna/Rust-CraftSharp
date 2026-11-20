@@ -131,6 +131,7 @@ pub struct InventoryCfg {
     pub style: String,
     pub shared_data: bool,
     pub hover_effect: bool,
+    pub show_model: bool,
     pub show_tooltip: bool,
     pub tooltip_show_file_name: bool,
     pub tooltip_show_original_name: bool,
@@ -157,6 +158,7 @@ impl Default for InventoryCfg {
             style: "inventory.png".into(),
             shared_data: true,
             hover_effect: true,
+            show_model: true,
             show_tooltip: false,
             tooltip_show_file_name: true,
             tooltip_show_original_name: false,
@@ -335,6 +337,7 @@ pub fn apply(config: InventoryCfg) {
         let hide_changed = config.hide_status_bar != state.config.hide_status_bar;
         let overlay_changed = config.gray_overlay != state.config.gray_overlay
             || (config.gray_overlay_opacity - state.config.gray_overlay_opacity).abs() > f64::EPSILON;
+        let model_changed = config.show_model != state.config.show_model;
         state.config = config;
         state.configured = true;
         let scope = state.config.scope();
@@ -369,7 +372,7 @@ pub fn apply(config: InventoryCfg) {
         if state.config.visible {
             refresh_icons(state);
         }
-        if visible_changed || (state.visible && (overlay_changed || hide_changed)) {
+        if visible_changed || model_changed || (state.visible && (overlay_changed || hide_changed)) {
             set_visible_inner(state);
         }
         refresh_tooltip(state);
@@ -594,7 +597,7 @@ fn place_entity(state: &mut State) {
     if state.entity_hwnd == 0 {
         return;
     }
-    let target = if state.visible {
+    let target = if state.visible && state.config.show_model {
         state.rect.zip(state.layout.player.as_ref()).map(|((x, y, _, _), player)| {
             (
                 x + player.left.round() as i32,
@@ -647,8 +650,8 @@ pub fn focus_now(hwnd: w::Hwnd) {
 
 /// 玩家预览尺寸或皮肤变化时下发一次重建
 fn sync_entity_setup(state: &mut State) {
-    if state.layout.player.is_none() {
-        // 当前容器没有玩家区域，覆盖层留在屏幕外并停止渲染
+    if state.layout.player.is_none() || !state.config.show_model {
+        // 当前容器没有玩家区域或已关闭 3D 模型，覆盖层留在屏幕外并停止渲染
         state.entity_meta = None;
         let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": false }));
         return;
@@ -709,9 +712,9 @@ fn track_cursor(state: &mut State) {
     state.look_cursor = anchor;
 }
 
-/// 物品栏可见且当前容器有玩家区域时，按刷新率轮询光标。
+/// 物品栏可见、开启 3D 模型且当前容器有玩家区域时，按刷新率轮询光标。
 fn sync_look_timer(state: &mut State) {
-    let wanted = state.visible && state.layout.player.is_some();
+    let wanted = state.visible && state.config.show_model && state.layout.player.is_some();
     if wanted == state.look_timer {
         return;
     }
@@ -797,6 +800,7 @@ fn render(state: &mut State) {
         icons: &state.icons,
         hover,
         hover_green,
+        show_player: state.config.show_model,
         drag_source: if state.distribute.is_some() {
             None
         } else {
@@ -845,11 +849,12 @@ fn hover_green(state: &State, index: usize) -> bool {
 pub fn set_visible_inner(state: &mut State) {
     let visible = state.config.visible;
     state.visible = visible;
-    if visible {
-        // 控制页按需创建 3D 覆盖层，未打开物品栏不占渲染进程
+    let show_model = state.config.show_model;
+    if visible && show_model {
+        // 控制页按需创建 3D 覆盖层，未打开物品栏或关闭模型时不占渲染进程
         let _ = state.app.emit("entity-view-warm", ());
     }
-    let active = visible && state.layout.player.is_some();
+    let active = visible && show_model && state.layout.player.is_some();
     let _ = state.app.emit_to("entity-view", "entity-active", serde_json::json!({ "visible": active }));
 
     crate::hud::overlay::set_visible(visible && state.config.gray_overlay, state.config.gray_overlay_opacity);
