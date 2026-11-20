@@ -11,8 +11,8 @@ use x11rb::connection::Connection;
 use x11rb::protocol::shape::{ConnectionExt as ShapeExt, SK, SO};
 use x11rb::protocol::xproto::{
     AtomEnum, ClipOrdering, ColormapAlloc, ConfigureWindowAux, ConnectionExt, CreateGCAux, CreateWindowAux,
-    EventMask, GrabMode, ImageFormat, PropMode, Rectangle, StackMode, VisualClass, Window,
-    WindowClass,
+    EventMask, GrabMode, ImageFormat, InputFocus, PropMode, Rectangle, StackMode, VisualClass,
+    Window, WindowClass,
 };
 use x11rb::protocol::Event as XEvent;
 use x11rb::rust_connection::RustConnection;
@@ -360,7 +360,9 @@ impl Host {
             | EventMask::BUTTON_PRESS
             | EventMask::BUTTON_RELEASE
             | EventMask::ENTER_WINDOW
-            | EventMask::LEAVE_WINDOW;
+            | EventMask::LEAVE_WINDOW
+            | EventMask::KEY_PRESS
+            | EventMask::KEY_RELEASE;
         let _ = event_conn.change_window_attributes(
             self.win,
             &x11rb::protocol::xproto::ChangeWindowAttributesAux::new().event_mask(mask),
@@ -368,16 +370,70 @@ impl Host {
         let _ = event_conn.flush();
         let app = self.app.clone();
         let dispatch = self.dispatch;
+        let win = self.win;
+        let keys = key_map(&event_conn);
         std::thread::spawn(move || loop {
             let Ok(event) = event_conn.wait_for_event() else { break };
-            let Some(event) = translate(event) else { continue };
+            if let XEvent::ButtonPress(event) = &event {
+                if event.detail == 1 {
+                    // 点击状态栏取得键盘焦点，Esc 或点击别处由窗口管理器收回
+                    let _ = event_conn.set_input_focus(InputFocus::PARENT, win, 0u32);
+                    let _ = event_conn.flush();
+                }
+            }
+            let Some(event) = translate(event, &keys) else { continue };
             let app = app.clone();
             let _ = app.run_on_main_thread(move || dispatch(event));
         });
     }
 }
 
-fn translate(event: XEvent) -> Option<Event> {
+fn key_map(conn: &RustConnection) -> std::collections::HashMap<u8, u32> {
+    let setup = conn.setup();
+    let min = setup.min_keycode;
+    let count = setup.max_keycode.saturating_sub(min).saturating_add(1);
+    let Some(reply) = conn
+        .get_keyboard_mapping(min, count)
+        .ok()
+        .and_then(|cookie| cookie.reply().ok())
+    else {
+        return std::collections::HashMap::new();
+    };
+    let per = reply.keysyms_per_keycode.max(1) as usize;
+    let mut keys = std::collections::HashMap::new();
+    for index in 0..count as usize {
+        let keysym = reply.keysyms.get(index * per).copied().unwrap_or(0);
+        let vk = keysym_to_vk(keysym);
+        if vk != 0 {
+            keys.insert(min.wrapping_add(index as u8), vk);
+        }
+    }
+    keys
+}
+
+fn keysym_to_vk(keysym: u32) -> u32 {
+    match keysym {
+        0x30..=0x39 => keysym,
+        0x61..=0x7a => keysym - 0x20,
+        0x20 => 0x20,
+        0xff0d | 0xff8d => 0x0d,
+        0xff1b => 0x1b,
+        0xffe1 | 0xffe2 => 0xa0,
+        0xffe3 | 0xffe4 => 0xa2,
+        0xffe9 | 0xffea => 0xa4,
+        0xffe7 | 0xffe8 => 0x5b,
+        0xffbe..=0xffc9 => 0x70 + (keysym - 0xffbe),
+        0xff51..=0xff54 => 0x25 + (keysym - 0xff51),
+        0xff50 => 0x24,
+        0xff57 => 0x23,
+        _ => 0,
+    }
+}
+
+fn translate(
+    event: XEvent,
+    keys: &std::collections::HashMap<u8, u32>,
+) -> Option<Event> {
     match event {
         XEvent::MotionNotify(event) => {
             Some(Event::Move(event.event_x as f32, event.event_y as f32))
@@ -394,6 +450,8 @@ fn translate(event: XEvent) -> Option<Event> {
             3 => Some(Event::Menu(event.event_x as f32, event.event_y as f32)),
             _ => None,
         },
+        XEvent::KeyPress(event) => keys.get(&event.detail).map(|key| Event::KeyDown(*key)),
+        XEvent::KeyRelease(event) => keys.get(&event.detail).map(|key| Event::KeyUp(*key)),
         _ => None,
     }
 }
