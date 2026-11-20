@@ -15,14 +15,39 @@ mod layout;
 mod sprite;
 mod embedded;
 mod text;
+#[cfg(windows)]
 mod win32;
 mod window;
 
 pub mod bossbar;
 pub mod cache;
 pub mod crosshair;
+#[cfg(windows)]
 pub mod inventory;
+#[cfg(windows)]
 mod inventory_draw;
+#[cfg(not(windows))]
+pub mod inventory {
+    use serde::Deserialize;
+    use tauri::AppHandle;
+
+    #[derive(Deserialize, Default)]
+    pub struct InventoryCfg {}
+
+    pub fn apply(_: InventoryCfg) {}
+
+    pub fn init(_: &AppHandle) {}
+
+    pub fn set_visible(_: bool) {}
+
+    pub fn set_drop_hover(_: Option<&str>) {}
+
+    pub fn entity_ready() {}
+
+    pub fn is_visible() -> bool {
+        false
+    }
+}
 pub mod overlay;
 pub mod tooltip;
 

@@ -4,7 +4,49 @@ mod appdata;
 mod appicon;
 mod autostart;
 mod desktop;
+#[cfg(windows)]
 mod dragdrop;
+#[cfg(not(windows))]
+mod dragdrop {
+    use tauri::AppHandle;
+
+    #[derive(Clone, serde::Deserialize)]
+    pub struct Zone {
+        pub id: String,
+        pub left: f64,
+        pub top: f64,
+        pub width: f64,
+        pub height: f64,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DragResult {
+        pub dropped: bool,
+        pub window: Option<String>,
+        pub zone: Option<String>,
+        pub same_source: bool,
+        pub handled: bool,
+    }
+
+    pub fn install(_: &AppHandle, _: &str, _: isize) {}
+
+    pub fn install_all(_: &AppHandle) {}
+
+    pub fn set_zones(_: &str, _: Vec<Zone>) {}
+
+    pub fn set_hover_handler(_: impl Fn(&str, Option<&str>) + Send + Sync + 'static) {}
+
+    pub fn begin_file_drag(_: String, _: u32, _: Option<(String, String)>) -> DragResult {
+        DragResult {
+            dropped: false,
+            window: None,
+            zone: None,
+            same_source: false,
+            handled: false,
+        }
+    }
+}
 mod hud;
 mod icons;
 mod metrics;
@@ -393,6 +435,7 @@ pub(crate) fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
 /// 离屏窗口完成贴图加载并注册监听后调用，登记预览覆盖层并补发参数
 #[tauri::command]
 fn entity_view_ready() {
+    #[cfg(windows)]
     hud::inventory::entity_ready();
 }
 
@@ -712,8 +755,10 @@ fn main() {
 
             // 原生状态栏先于 WebView 建好，启动就能按上次的参数出画面
             hud::init(app.handle());
+            #[cfg(windows)]
             hud::inventory::init(app.handle());
             hud::cache::restore(app.handle());
+            #[cfg(windows)]
             slots::on_changed(hud::inventory::slots_changed);
 
             // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序；
