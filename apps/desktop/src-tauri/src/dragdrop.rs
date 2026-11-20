@@ -384,6 +384,8 @@ fn register(context: &InstallContext, hwnd: isize) {
 
 /// 把所有应用窗口接上拖放目标，落点为空即只显示缩略图。
 pub fn install_all(app: &AppHandle) {
+    #[cfg(windows)]
+    {
     use tauri::Manager;
 
     for (label, window) in app.webview_windows() {
@@ -394,6 +396,9 @@ pub fn install_all(app: &AppHandle) {
             install(app, &label, hwnd.0 as isize);
         }
     }
+    }
+    #[cfg(not(windows))]
+    let _ = app;
 }
 
 static DROP_TARGET_VTBL: DropTargetVtbl = DropTargetVtbl {

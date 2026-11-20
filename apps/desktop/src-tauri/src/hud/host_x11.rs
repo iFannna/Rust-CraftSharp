@@ -1,0 +1,494 @@
+//! X11 后端：ARGB 覆盖窗口、位图提交、输入形状与鼠标事件。
+//! 首版覆盖 HUD 的显示、置底与指针交互，键盘与全局钩子后续接入。
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use tauri::AppHandle;
+use x11rb::connection::Connection;
+use x11rb::protocol::shape::{ConnectionExt as ShapeExt, SK, SO};
+use x11rb::protocol::xproto::{
+    AtomEnum, ClipOrdering, ColormapAlloc, ConfigureWindowAux, ConnectionExt, CreateGCAux, CreateWindowAux,
+    EventMask, GrabMode, ImageFormat, PropMode, Rectangle, StackMode, VisualClass, Window,
+    WindowClass,
+};
+use x11rb::protocol::Event as XEvent;
+use x11rb::rust_connection::RustConnection;
+
+use crate::hud::host::{Area, Event, Options, Point};
+use crate::hud::sprite::Frame;
+
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+pub fn attach_app(app: &AppHandle) {
+    let _ = APP.set(app.clone());
+}
+
+pub fn ticks() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+pub struct Host {
+    conn: RustConnection,
+    win: Window,
+    gc: u32,
+    screen: usize,
+    dispatch: fn(Event),
+    app: AppHandle,
+    click_through: bool,
+    band: f32,
+    size: (u16, u16),
+    root: Window,
+    timers: Mutex<HashMap<usize, Arc<AtomicBool>>>,
+}
+
+impl Host {
+    pub fn create(
+        class: &str,
+        title: &str,
+        options: Options,
+        dispatch: fn(Event),
+    ) -> Option<Self> {
+        let app = APP.get()?.clone();
+        let (conn, screen) = x11rb::connect(None).ok()?;
+        let root = conn.setup().roots[screen].root;
+        let depth = conn.setup().roots[screen]
+            .allowed_depths
+            .iter()
+            .find(|depth| depth.depth == 32)?;
+        let visual = depth
+            .visuals
+            .iter()
+            .find(|visual| visual.class == VisualClass::TRUE_COLOR)?
+            .visual_id;
+
+        let win = conn.generate_id().ok()?;
+        let colormap = conn.generate_id().ok()?;
+        conn.create_colormap(ColormapAlloc::NONE, colormap, root, visual).ok()?.check().ok()?;
+        let aux = CreateWindowAux::new()
+            .background_pixel(0)
+            .border_pixel(0)
+            .colormap(colormap)
+            .override_redirect(1);
+        conn.create_window(
+            32,
+            win,
+            root,
+            0,
+            0,
+            1,
+            1,
+            0,
+            WindowClass::INPUT_OUTPUT,
+            visual,
+            &aux,
+        )
+        .ok()?
+        .check()
+        .ok()?;
+
+        let gc = conn.generate_id().ok()?;
+        conn.create_gc(gc, win, &CreateGCAux::new()).ok()?.check().ok()?;
+
+        set_atoms(&conn, win, class, title, options.desktop);
+        let host = Self {
+            conn,
+            win,
+            gc,
+            screen,
+            dispatch,
+            app,
+            click_through: options.click_through,
+            band: 0.0,
+            size: (1, 1),
+            root,
+            timers: Mutex::new(HashMap::new()),
+        };
+        host.apply_input_shape();
+        if options.desktop {
+            host.park();
+        } else {
+            host.raise();
+        }
+        host.spawn_events();
+        host.conn.flush().ok()?;
+        Some(host)
+    }
+
+    pub fn install_drop(&self, _app: &AppHandle, _label: &str) {}
+
+    pub fn install_input(&self) {}
+
+    pub fn dpi(&self) -> f32 {
+        xft_dpi(&self.conn, self.root).unwrap_or(1.0).max(1.0)
+    }
+
+    pub fn work_area(&self) -> Area {
+        let screen = &self.conn.setup().roots[self.screen];
+        if let Some((left, top, width, height)) = net_workarea(&self.conn, self.root) {
+            return Area {
+                left,
+                top,
+                right: left + width as i32,
+                bottom: top + height as i32,
+            };
+        }
+        Area {
+            left: 0,
+            top: 0,
+            right: screen.width_in_pixels as i32,
+            bottom: screen.height_in_pixels as i32,
+        }
+    }
+
+    pub fn primary_area(&self) -> Area {
+        let screen = &self.conn.setup().roots[self.screen];
+        Area {
+            left: 0,
+            top: 0,
+            right: screen.width_in_pixels as i32,
+            bottom: screen.height_in_pixels as i32,
+        }
+    }
+
+    pub fn cursor(&self) -> Point {
+        self.conn
+            .query_pointer(self.root)
+            .ok()
+            .and_then(|cookie| cookie.reply().ok())
+            .map(|reply| Point { x: reply.root_x as i32, y: reply.root_y as i32 })
+            .unwrap_or_default()
+    }
+
+    pub fn present(&mut self, frame: &Frame, x: i32, y: i32) {
+        self.present_pixels(frame.width, frame.height, &frame.pixels, x, y);
+    }
+
+    pub fn present_pixels(&mut self, width: u32, height: u32, pixels: &[u32], x: i32, y: i32) {
+        if width == 0 || height == 0 || pixels.len() < (width * height) as usize {
+            return;
+        }
+        let width = width as u16;
+        let height = height as u16;
+        if self.size != (width, height) {
+            self.size = (width, height);
+            self.apply_input_shape();
+        }
+        let aux = ConfigureWindowAux::new()
+            .x(x)
+            .y(y)
+            .width(width as u32)
+            .height(height as u32);
+        let _ = self.conn.configure_window(self.win, &aux);
+        // SAFETY: 预乘 ARGB 的 u32 与 X11 32 位像素内存布局一致，长度已核对
+        let bytes = unsafe {
+            std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)
+        };
+        let _ = self.conn.put_image(
+            ImageFormat::Z_PIXMAP,
+            self.win,
+            self.gc,
+            width,
+            height,
+            0,
+            0,
+            0,
+            32,
+            bytes,
+        );
+        let _ = self.conn.flush();
+    }
+
+    pub fn set_band(&mut self, band: f32) {
+        self.band = band;
+        self.apply_input_shape();
+    }
+
+    pub fn show(&self) {
+        let _ = self.conn.map_window(self.win);
+        let _ = self.conn.flush();
+    }
+
+    pub fn hide(&self) {
+        let _ = self.conn.unmap_window(self.win);
+        let _ = self.conn.flush();
+    }
+
+    pub fn park(&self) {
+        let aux = ConfigureWindowAux::new().stack_mode(StackMode::BELOW);
+        let _ = self.conn.configure_window(self.win, &aux);
+        set_below(&self.conn, self.win, true);
+        let _ = self.conn.flush();
+    }
+
+    pub fn raise(&self) {
+        let aux = ConfigureWindowAux::new().stack_mode(StackMode::ABOVE);
+        let _ = self.conn.configure_window(self.win, &aux);
+        set_below(&self.conn, self.win, false);
+        let _ = self.conn.flush();
+    }
+
+    pub fn set_layer(&self, desktop: bool) {
+        if desktop {
+            self.park();
+        } else {
+            self.raise();
+        }
+    }
+
+    pub fn drop_topmost(&self) {
+        self.park();
+    }
+
+    pub fn capture(&self) {
+        let _ = self.conn.grab_pointer(
+            false,
+            self.win,
+            EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE | EventMask::POINTER_MOTION,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+            0u32,
+            0u32,
+            0u32,
+        );
+        let _ = self.conn.flush();
+    }
+
+    pub fn release(&self) {
+        let _ = self.conn.ungrab_pointer(0u32);
+        let _ = self.conn.flush();
+    }
+
+    pub fn track_leave(&self) {}
+
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        let Some(reply) = self
+            .conn
+            .translate_coordinates(self.win, self.root, 0, 0)
+            .ok()
+            .and_then(|cookie| cookie.reply().ok())
+        else {
+            return false;
+        };
+        x >= reply.dst_x as i32
+            && y >= reply.dst_y as i32
+            && x < reply.dst_x as i32 + self.size.0 as i32
+            && y < reply.dst_y as i32 + self.size.1 as i32
+    }
+
+    pub fn to_client(&self, x: i32, y: i32) -> Point {
+        self.conn
+            .translate_coordinates(self.root, self.win, x as i16, y as i16)
+            .ok()
+            .and_then(|cookie| cookie.reply().ok())
+            .map(|reply| Point { x: reply.dst_x as i32, y: reply.dst_y as i32 })
+            .unwrap_or_default()
+    }
+
+    pub fn to_screen(&self, x: i32, y: i32) -> Point {
+        self.conn
+            .translate_coordinates(self.win, self.root, x as i16, y as i16)
+            .ok()
+            .and_then(|cookie| cookie.reply().ok())
+            .map(|reply| Point { x: reply.dst_x as i32, y: reply.dst_y as i32 })
+            .unwrap_or_default()
+    }
+
+    pub fn timer(&self, id: usize, interval: u32, active: bool) {
+        let mut timers = self.timers.lock().unwrap_or_else(|error| error.into_inner());
+        if !active {
+            if let Some(flag) = timers.remove(&id) {
+                flag.store(true, Ordering::Relaxed);
+            }
+            return;
+        }
+        if timers.contains_key(&id) {
+            return;
+        }
+        let flag = Arc::new(AtomicBool::new(false));
+        timers.insert(id, flag.clone());
+        let app = self.app.clone();
+        let dispatch = self.dispatch;
+        std::thread::spawn(move || {
+            while !flag.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(interval as u64));
+                if flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                let app = app.clone();
+                let _ = app.run_on_main_thread(move || dispatch(Event::Timer(id)));
+            }
+        });
+    }
+
+    fn apply_input_shape(&self) {
+        let rects = if self.click_through {
+            Vec::new()
+        } else if self.band > 0.0 {
+            vec![Rectangle {
+                x: 0,
+                y: self.band.round() as i16,
+                width: self.size.0,
+                height: self.size.1.saturating_sub(self.band.round() as u16),
+            }]
+        } else {
+            vec![Rectangle { x: 0, y: 0, width: self.size.0, height: self.size.1 }]
+        };
+        let _ = self.conn.shape_rectangles(
+            SO::SET,
+            SK::INPUT,
+            ClipOrdering::UNSORTED,
+            self.win,
+            0,
+            0,
+            &rects,
+        );
+        let _ = self.conn.flush();
+    }
+
+    fn spawn_events(&self) {
+        if self.click_through {
+            return;
+        }
+        let Ok((event_conn, _)) = x11rb::connect(None) else { return };
+        let mask = EventMask::POINTER_MOTION
+            | EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
+            | EventMask::ENTER_WINDOW
+            | EventMask::LEAVE_WINDOW;
+        let _ = event_conn.change_window_attributes(
+            self.win,
+            &x11rb::protocol::xproto::ChangeWindowAttributesAux::new().event_mask(mask),
+        );
+        let _ = event_conn.flush();
+        let app = self.app.clone();
+        let dispatch = self.dispatch;
+        std::thread::spawn(move || loop {
+            let Ok(event) = event_conn.wait_for_event() else { break };
+            let Some(event) = translate(event) else { continue };
+            let app = app.clone();
+            let _ = app.run_on_main_thread(move || dispatch(event));
+        });
+    }
+}
+
+fn translate(event: XEvent) -> Option<Event> {
+    match event {
+        XEvent::MotionNotify(event) => {
+            Some(Event::Move(event.event_x as f32, event.event_y as f32))
+        }
+        XEvent::LeaveNotify(_) => Some(Event::Leave),
+        XEvent::ButtonPress(event) => match event.detail {
+            1 => Some(Event::Down(event.event_x as f32, event.event_y as f32)),
+            4 => Some(Event::Wheel(120)),
+            5 => Some(Event::Wheel(-120)),
+            _ => None,
+        },
+        XEvent::ButtonRelease(event) => match event.detail {
+            1 => Some(Event::Up(event.event_x as f32, event.event_y as f32)),
+            3 => Some(Event::Menu(event.event_x as f32, event.event_y as f32)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn intern(conn: &RustConnection, name: &str) -> Option<u32> {
+    conn.intern_atom(false, name.as_bytes()).ok()?.reply().ok().map(|reply| reply.atom)
+}
+
+fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, desktop: bool) {
+    let utf8 = intern(conn, "UTF8_STRING").unwrap_or(AtomEnum::STRING.into());
+    if let Some(atom) = intern(conn, "_NET_WM_NAME") {
+        let _ = conn.change_property(
+            PropMode::REPLACE,
+            win,
+            atom,
+            utf8,
+            8,
+            title.len() as u32,
+            title.as_bytes(),
+        );
+    }
+    if let Some(atom) = intern(conn, "WM_CLASS") {
+        let value = format!("{class}\0{class}\0");
+        let _ = conn.change_property(
+            PropMode::REPLACE,
+            win,
+            atom,
+            AtomEnum::STRING,
+            8,
+            value.len() as u32,
+            value.as_bytes(),
+        );
+    }
+    if let (Some(prop), Some(kind)) = (
+        intern(conn, "_NET_WM_WINDOW_TYPE"),
+        intern(conn, if desktop { "_NET_WM_WINDOW_TYPE_DESKTOP" } else { "_NET_WM_WINDOW_TYPE_UTILITY" }),
+    ) {
+        let _ = conn.change_property(
+            PropMode::REPLACE,
+            win,
+            prop,
+            AtomEnum::ATOM,
+            32,
+            1,
+            &kind.to_ne_bytes(),
+        );
+    }
+}
+
+fn set_below(conn: &RustConnection, win: Window, below: bool) {
+    let Some(prop) = intern(conn, "_NET_WM_STATE") else { return };
+    let Some(atom) = intern(conn, if below { "_NET_WM_STATE_BELOW" } else { "_NET_WM_STATE_ABOVE" }) else {
+        return;
+    };
+    let _ = conn.change_property(
+        PropMode::REPLACE,
+        win,
+        prop,
+        AtomEnum::ATOM,
+        32,
+        1,
+        &atom.to_ne_bytes(),
+    );
+}
+
+fn net_workarea(conn: &RustConnection, root: Window) -> Option<(i32, i32, u32, u32)> {
+    let atom = intern(conn, "_NET_WORKAREA")?;
+    let reply = conn
+        .get_property(false, root, atom, AtomEnum::CARDINAL, 0, 4)
+        .ok()?
+        .reply()
+        .ok()?;
+    let values: Vec<u32> = reply.value32()?.collect();
+    if values.len() < 4 {
+        return None;
+    }
+    Some((values[0] as i32, values[1] as i32, values[2], values[3]))
+}
+
+fn xft_dpi(conn: &RustConnection, root: Window) -> Option<f32> {
+    let screen = &conn.setup().roots[0];
+    let atom = intern(conn, "RESOURCE_MANAGER")?;
+    let reply = conn
+        .get_property(false, root, atom, AtomEnum::STRING, 0, 4096)
+        .ok()?
+        .reply()
+        .ok()?;
+    let text = String::from_utf8_lossy(&reply.value);
+    for line in text.lines() {
+        if let Some(value) = line.trim().strip_prefix("Xft.dpi:") {
+            if let Ok(dpi) = value.trim().parse::<f32>() {
+                return Some(dpi / 96.0);
+            }
+        }
+    }
+    let mm = screen.width_in_millimeters.max(1) as f32;
+    Some(screen.width_in_pixels as f32 / mm * 25.4 / 96.0)
+}

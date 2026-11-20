@@ -1,7 +1,7 @@
 //! 状态栏平台宿主：窗口、呈现、几何与计时。
 //! 业务层只处理 Event，不接触平台句柄。
 
-pub use imp::{ticks, Host};
+pub use imp::{attach_app, ticks, Host};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -45,5 +45,10 @@ pub struct Options {
 
 #[cfg(windows)]
 mod imp {
-    pub use crate::hud::host_win32::{ticks, Host};
+    pub use crate::hud::host_win32::{attach_app, ticks, Host};
+}
+
+#[cfg(target_os = "linux")]
+mod imp {
+    pub use crate::hud::host_x11::{attach_app, ticks, Host};
 }

@@ -571,11 +571,19 @@ pub fn entity_ready() {
         use tauri::Manager;
 
         let window = state.app.get_webview_window("entity-view");
-        state.entity_hwnd = window
-            .as_ref()
-            .and_then(|window| window.hwnd().ok())
-            .map(|hwnd| hwnd.0 as isize)
-            .unwrap_or(0);
+        #[cfg(windows)]
+        {
+            state.entity_hwnd = window
+                .as_ref()
+                .and_then(|window| window.hwnd().ok())
+                .map(|hwnd| hwnd.0 as isize)
+                .unwrap_or(0);
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = &window;
+            state.entity_hwnd = 0;
+        }
         if state.entity_hwnd != 0 {
             w::set_overlay_style(state.entity_hwnd);
         }

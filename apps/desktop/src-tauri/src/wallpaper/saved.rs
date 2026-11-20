@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use super::super::store::Transform;
+use super::store::Transform;
 
 const FILE: &str = "wallpaper-dynamic.json";
 

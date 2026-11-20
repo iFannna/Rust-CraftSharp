@@ -5,8 +5,38 @@ mod client;
 mod desktop;
 mod dialog;
 mod display;
+#[cfg(windows)]
 mod dynamic;
+#[cfg(not(windows))]
+mod dynamic {
+    use std::path::PathBuf;
+
+    use tauri::AppHandle;
+
+    use super::store::Transform;
+
+    pub use super::saved::Saved;
+
+    pub fn apply_monitors(_: &[(String, PathBuf)]) -> Result<(), String> {
+        Err("当前平台暂不支持动态壁纸".into())
+    }
+
+    pub fn apply_span(_: &PathBuf, _: Transform) -> Result<(), String> {
+        Err("当前平台暂不支持动态壁纸".into())
+    }
+
+    pub fn stop_all() {}
+
+    pub fn remember(_: &AppHandle, _: &[Saved]) {}
+
+    pub fn forget(_: &AppHandle) {}
+
+    pub fn restore(_: &AppHandle) {}
+
+    pub fn stop_devices(_: &[String]) {}
+}
 pub(crate) mod layout;
+mod saved;
 mod storage;
 mod store;
 

@@ -3,6 +3,7 @@
 
 #![allow(non_snake_case)]
 
+#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -20,6 +21,7 @@ const WH_KEYBOARD_LL: i32 = 13;
 /// KBDLLHOOKSTRUCT.flags 的扩展键位，用于区分右侧 Ctrl/Alt
 pub(crate) const LLKHF_EXTENDED: u32 = 0x01;
 
+#[cfg(windows)]
 #[repr(C)]
 #[allow(dead_code)]
 struct KeyboardHookData {
@@ -56,6 +58,7 @@ struct HookBinding {
     keys: Vec<HookKey>,
 }
 
+#[cfg(windows)]
 #[link(name = "user32")]
 extern "system" {
     fn SetWindowsHookExW(
@@ -70,28 +73,37 @@ extern "system" {
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
+#[cfg(windows)]
 #[link(name = "kernel32")]
 extern "system" {
     fn GetCurrentProcessId() -> u32;
 }
 
+#[cfg(windows)]
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// 每个动作下标当前生效的组合，未设置或解析失败时为 None
 static REGISTERED: Mutex<Vec<Option<String>>> = Mutex::new(Vec::new());
+#[cfg(windows)]
 static FAILURES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
 /// 录制暂停时清空，匹配不到任何序列
 static HOOK_BINDINGS: Mutex<Vec<HookBinding>> = Mutex::new(Vec::new());
+#[cfg(windows)]
 static HOOK_ACTIVE: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
 static HOOK: AtomicIsize = AtomicIsize::new(0);
 /// 当前按住的虚拟键，用于自动重复抑制与松开判定
+#[cfg(windows)]
 static HOOK_DOWN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 /// 本次按下的顺序序列，最多三键
+#[cfg(windows)]
 static HOOK_SEQUENCE: Mutex<Vec<HookKey>> = Mutex::new(Vec::new());
+#[cfg(windows)]
 static HOOK_OVERFLOW: AtomicBool = AtomicBool::new(false);
 
 /// 注册一批热键，下标即热键 id；失败项通过事件和查询命令回传。
+#[cfg(windows)]
 pub fn register(app: &AppHandle, actions: Vec<String>) {
     let _ = APP.set(app.clone());
 
@@ -122,6 +134,7 @@ pub fn register(app: &AppHandle, actions: Vec<String>) {
 }
 
 /// 最近一次解析失败的组合，供快捷键页初始化。
+#[cfg(windows)]
 pub fn failures() -> Vec<String> {
     FAILURES.lock().map(|list| list.clone()).unwrap_or_default()
 }
@@ -137,6 +150,7 @@ fn emit_spec(spec: &str) {
 }
 
 /// 前台窗口属于本进程时由窗口自己的输入路径处理，钩子让路，避免重复触发
+#[cfg(windows)]
 fn foreground_is_app() -> bool {
     let hwnd = unsafe { GetForegroundWindow() };
     if hwnd == 0 {
@@ -203,6 +217,7 @@ pub(crate) fn dispatch(tap: &[u32], overflow: bool) {
     }
 }
 
+#[cfg(windows)]
 unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
     if code >= 0 && !foreground_is_app() && HOOK_ACTIVE.load(Ordering::Relaxed) {
         let data = &*(lparam as *const KeyboardHookData);
@@ -217,6 +232,7 @@ unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize)
     CallNextHookEx(HOOK.load(Ordering::SeqCst), code, wparam, lparam)
 }
 
+#[cfg(windows)]
 fn on_hook_down(vk: u32) {
     let fresh = {
         let Ok(mut down) = HOOK_DOWN.lock() else { return };
@@ -243,6 +259,7 @@ fn on_hook_down(vk: u32) {
     sequence.push(hook_key_of(vk));
 }
 
+#[cfg(windows)]
 fn on_hook_up(vk: u32) {
     let released = {
         let Ok(mut down) = HOOK_DOWN.lock() else { return };
@@ -320,6 +337,7 @@ fn binding_matches(binding: &HookBinding, sequence: &[HookKey]) -> bool {
             .all(|(target, actual)| key_matches(target, actual))
 }
 
+#[cfg(windows)]
 fn apply_hotkeys(app: &AppHandle) {
     let actions = PENDING.lock().map(|pending| pending.clone()).unwrap_or_default();
     let hook_ready = HOOK.load(Ordering::SeqCst) != 0;
@@ -369,6 +387,7 @@ fn apply_hotkeys(app: &AppHandle) {
 }
 
 /// 配置重载时清空序列，并按物理按键重建修饰键，避免录制留下脏状态
+#[cfg(windows)]
 fn reset_hook_state() {
     if let Ok(mut sequence) = HOOK_SEQUENCE.lock() {
         sequence.clear();
@@ -626,4 +645,12 @@ pub(crate) fn virtual_key(key: &str) -> Option<u32> {
         "WAKEUP" => Some(0x5F),
         _ => None,
     }
+}
+
+#[cfg(not(windows))]
+pub fn register(_app: &AppHandle, _actions: Vec<String>) {}
+
+#[cfg(not(windows))]
+pub fn failures() -> Vec<String> {
+    Vec::new()
 }

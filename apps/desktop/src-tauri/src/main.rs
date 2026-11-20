@@ -18,7 +18,6 @@ mod windowdrag;
 #[cfg(windows)]
 mod hitmask;
 
-#[cfg(windows)]
 mod hotkeys;
 
 /// 给自定义标题栏安装最大化按钮分屏命中。
@@ -468,7 +467,10 @@ async fn wallpaper_apply_layout(
 async fn wallpaper_pick_path(window: tauri::Window, title: String) -> Option<String> {
     use tauri::Manager;
 
+    #[cfg(windows)]
     let owner = window.hwnd().ok().map(|handle| handle.0 as isize).unwrap_or(0);
+    #[cfg(not(windows))]
+    let owner = 0;
     let app = window.app_handle().clone();
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
     app.run_on_main_thread(move || {
@@ -511,7 +513,10 @@ async fn wallpaper_migrate_storage(
 async fn wallpaper_pick_folder(window: tauri::Window, title: String) -> Option<String> {
     use tauri::Manager;
 
+    #[cfg(windows)]
     let owner = window.hwnd().ok().map(|handle| handle.0 as isize).unwrap_or(0);
+    #[cfg(not(windows))]
+    let owner = 0;
     let app = window.app_handle().clone();
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
     app.run_on_main_thread(move || {
@@ -724,6 +729,7 @@ fn main() {
             wallpaper::init(app.handle());
             install_drag_hover(app.handle());
             // HUD 控制页直接显隐；其余窗口保留系统过渡动画
+            #[cfg(windows)]
             for window in app.webview_windows().values() {
                 if let Ok(hwnd) = window.hwnd() {
                     let instant = window.label() == "hud";

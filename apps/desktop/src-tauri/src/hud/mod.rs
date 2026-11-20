@@ -6,6 +6,8 @@ mod draw;
 mod host;
 #[cfg(windows)]
 mod host_win32;
+#[cfg(target_os = "linux")]
+mod host_x11;
 mod input;
 #[cfg(windows)]
 mod input_win32;

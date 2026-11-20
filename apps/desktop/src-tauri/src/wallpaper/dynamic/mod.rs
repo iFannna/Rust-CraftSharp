@@ -1,7 +1,6 @@
 //! 动态壁纸调度：多路实例、遮挡暂停、WorkerW 自愈与显示拓扑跟随。
 
 mod renderer;
-mod state;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,11 +11,11 @@ use tauri::AppHandle;
 use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, GetWindowRect};
 
-use super::{desktop, store};
+use super::{desktop, saved, store};
 use super::store::Transform;
 use renderer::{Bounds, Handle, Spec};
 
-pub use state::Saved;
+pub use super::saved::Saved;
 
 struct Engine {
     specs: Vec<Spec>,
@@ -93,16 +92,16 @@ pub fn stop_all() {
 
 /// 记录当前动态布局，供下次启动恢复
 pub fn remember(app: &AppHandle, items: &[Saved]) {
-    state::save(app, items);
+    saved::save(app, items);
 }
 
 pub fn forget(app: &AppHandle) {
-    state::save(app, &[]);
+    saved::save(app, &[]);
 }
 
 /// 启动时恢复动态壁纸；布局暂不可用时短间隔重试
 pub fn restore(app: &AppHandle) {
-    let saved = state::load(app);
+    let saved = saved::load(app);
     if saved.is_empty() {
         return;
     }

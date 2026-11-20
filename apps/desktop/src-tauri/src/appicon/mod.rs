@@ -1,7 +1,9 @@
 //! 应用图标：一处选择同步托盘、窗口、程序文件与快捷方式。
 
+#[cfg(windows)]
 mod exe;
 mod ico;
+#[cfg(windows)]
 mod shell;
 #[cfg(windows)]
 mod window_icon;
@@ -136,6 +138,7 @@ pub fn apply(app: &AppHandle, png: Option<String>) -> Result<(), String> {
 }
 
 /// 把图标写进程序文件与指向它的快捷方式
+#[cfg(windows)]
 fn apply_files(app: &AppHandle, entries: &[ico::Entry]) -> Result<(), String> {
     // 开发构建的 exe 会被 cargo 重建覆盖，不改程序文件
     if cfg!(debug_assertions) {
@@ -160,6 +163,7 @@ fn apply_files(app: &AppHandle, entries: &[ico::Entry]) -> Result<(), String> {
 
 /// 启动时清理替换备份，并按已保存图标同步窗口
 pub fn startup(app: &AppHandle) {
+    #[cfg(windows)]
     if let Ok(exe) = std::env::current_exe() {
         exe::cleanup(&exe);
     }
@@ -178,6 +182,7 @@ pub fn tray_icon(app: &AppHandle) -> Option<Image<'static>> {
 }
 
 /// 提权进程入口：--apply-icon <ico> <exe> <result>
+#[cfg(windows)]
 pub fn run_helper_if_requested() {
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() != Some(OsStr::new("--apply-icon")) {
@@ -187,6 +192,7 @@ pub fn run_helper_if_requested() {
     std::process::exit(code);
 }
 
+#[cfg(windows)]
 fn helper(mut args: impl Iterator<Item = std::ffi::OsString>) -> Result<i32, String> {
     let ico_path = args.next().ok_or("缺少图标文件")?;
     let exe_path = args.next().ok_or("缺少程序路径")?;
@@ -208,6 +214,14 @@ fn helper(mut args: impl Iterator<Item = std::ffi::OsString>) -> Result<i32, Str
     std::fs::write(&result_path, &text).map_err(|error| error.to_string())?;
     Ok(if outcome.is_ok() { 0 } else { 2 })
 }
+
+#[cfg(not(windows))]
+fn apply_files(_: &AppHandle, _: &[ico::Entry]) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn run_helper_if_requested() {}
 
 #[cfg(test)]
 mod tests {

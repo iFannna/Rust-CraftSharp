@@ -28,6 +28,8 @@ pub struct Host {
     dib: Option<Dib>,
 }
 
+pub fn attach_app(_app: &AppHandle) {}
+
 pub fn ticks() -> u64 {
     w::ticks()
 }
@@ -108,7 +110,7 @@ impl Host {
         }
     }
 
-    pub fn set_band(&self, band: f32) {
+    pub fn set_band(&mut self, band: f32) {
         META.with(|meta| {
             if let Some(entry) = meta.borrow_mut().get_mut(&self.hwnd) {
                 entry.band = band;
