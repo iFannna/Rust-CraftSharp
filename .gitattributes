@@ -1,0 +1,3 @@
+# Language stats: report the repo as Rust only, treat everything else as bundled assets
+* linguist-vendored
+*.rs -linguist-vendored
