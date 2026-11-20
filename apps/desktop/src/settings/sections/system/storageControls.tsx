@@ -7,7 +7,6 @@ import { isTauri } from "@/lib/runtime";
 import { reapplyStaticWallpaper } from "@/lib/wallpaperRestore";
 import { Button, Note, Row, SectionSubhead } from "@/settings/components/controls";
 import { migrateStorage, openStorage, pickFolder, resetStorage, storagePath } from "@/settings/wallpaper/api";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/tooltip";
 
 export function StorageControls({ resetSignal = 0 }: { resetSignal?: number }) {
   const config = useAppConfig();
@@ -61,20 +60,15 @@ export function StorageControls({ resetSignal = 0 }: { resetSignal?: number }) {
       <Row
         label={t("system.wallpaperPathLabel")}
         description={
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="block max-w-full break-all text-left transition-colors hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none disabled:no-underline"
-                onClick={openFolder}
-                disabled={!path}
-                aria-label={t("system.openFolder")}
-              >
-                {path || t("common.notSet")}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t("system.openFolder")}</TooltipContent>
-          </Tooltip>
+          <button
+            type="button"
+            className="block max-w-full break-all text-left transition-colors hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none disabled:no-underline"
+            onClick={openFolder}
+            disabled={!path}
+            aria-label={t("system.openFolder")}
+          >
+            {path || t("common.notSet")}
+          </button>
         }
         disabled={busy}
       >
