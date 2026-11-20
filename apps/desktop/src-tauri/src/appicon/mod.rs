@@ -3,6 +3,8 @@
 mod exe;
 mod ico;
 mod shell;
+#[cfg(windows)]
+mod window_icon;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -69,7 +71,11 @@ fn apply_tray(app: &AppHandle, rgba: &[u8]) {
     }
 }
 
-fn apply_windows(app: &AppHandle, rgba: &[u8]) {
+fn apply_windows(app: &AppHandle, rgba: &[u8], entries: &[ico::Entry]) {
+    #[cfg(windows)]
+    if window_icon::apply(app.webview_windows().values(), entries) {
+        return;
+    }
     for window in app.webview_windows().values() {
         let image = Image::new_owned(rgba.to_vec(), WINDOW_ICON_SIZE, WINDOW_ICON_SIZE);
         let _ = window.set_icon(image);
@@ -86,6 +92,10 @@ fn current_icon(app: &AppHandle) -> Result<Vec<u8>, String> {
 
 /// 运行期新建的窗口默认带打包图标，创建后同步一次当前选择
 pub fn apply_to_window(app: &AppHandle, window: &tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(windows)]
+    if window_icon::apply_to_window(window) {
+        return Ok(());
+    }
     let rgba = current_icon(app)?;
     window
         .set_icon(Image::new_owned(rgba, WINDOW_ICON_SIZE, WINDOW_ICON_SIZE))
@@ -109,35 +119,42 @@ pub fn apply(app: &AppHandle, png: Option<String>) -> Result<(), String> {
         }
     };
 
+    let entries = match &source {
+        Some(square) => ico::entries(square)?,
+        None => ico::parse(ORIGINAL_ICON)?,
+    };
     let icon32 = match &source {
         Some(square) => ico::resize(square, WINDOW_ICON_SIZE).into_raw(),
         None => ico::resize(&default_source()?, WINDOW_ICON_SIZE).into_raw(),
     };
-    apply_tray(app, &icon32);
-    apply_windows(app, &icon32);
 
+    // 文件与快捷方式先换，窗口图标最后写，避免 Shell 刷新把图标重置回旧值
+    let result = apply_files(app, &entries);
+    apply_tray(app, &icon32);
+    apply_windows(app, &icon32, &entries);
+    result
+}
+
+/// 把图标写进程序文件与指向它的快捷方式
+fn apply_files(app: &AppHandle, entries: &[ico::Entry]) -> Result<(), String> {
     // 开发构建的 exe 会被 cargo 重建覆盖，不改程序文件
     if cfg!(debug_assertions) {
         return Ok(());
     }
 
-    let entries = match &source {
-        Some(square) => ico::entries(square)?,
-        None => ico::parse(ORIGINAL_ICON)?,
-    };
     let exe = std::env::current_exe().map_err(|error| error.to_string())?;
 
-    match exe::replace(&exe, &entries) {
+    match exe::replace(&exe, entries) {
         Ok(()) => {
             shell::update_shortcuts(&exe);
+            Ok(())
         }
         Err(exe::PatchError::Permission) => {
             let dir = config_dir(app)?;
-            shell::apply_elevated(&ico::file(&entries), &dir, &exe)?;
+            shell::apply_elevated(&ico::file(entries), &dir, &exe)
         }
-        Err(exe::PatchError::Failed(message)) => return Err(message),
+        Err(exe::PatchError::Failed(message)) => Err(message),
     }
-    Ok(())
 }
 
 /// 启动时清理替换备份，并按已保存图标同步窗口
@@ -147,7 +164,8 @@ pub fn startup(app: &AppHandle) {
     }
     let Some(source) = load_source(app) else { return };
     let Ok(square) = ico::square_source(&source) else { return };
-    apply_windows(app, &ico::resize(&square, WINDOW_ICON_SIZE).into_raw());
+    let Ok(entries) = ico::entries(&square) else { return };
+    apply_windows(app, &ico::resize(&square, WINDOW_ICON_SIZE).into_raw(), &entries);
 }
 
 /// 创建托盘前读取保存的图标，避免先显示默认图标
