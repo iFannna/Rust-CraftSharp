@@ -58,7 +58,8 @@
     "homepage": "https://github.com/iFannna/Rust-CraftSharp",
     "category": "Utility",
     "icon": [
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.png"
     ],
     "windows": {
       "webviewInstallMode": {
