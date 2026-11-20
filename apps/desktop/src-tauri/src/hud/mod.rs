@@ -3,7 +3,12 @@
 mod config;
 mod dragicon;
 mod draw;
+mod host;
+#[cfg(windows)]
+mod host_win32;
 mod input;
+#[cfg(windows)]
+mod input_win32;
 mod layout;
 mod sprite;
 mod embedded;

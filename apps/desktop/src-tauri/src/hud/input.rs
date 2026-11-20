@@ -1,12 +1,11 @@
 //! 状态栏指针交互：悬停、选择、长按拖拽、滚轮、右键菜单、文件拖放。
+//! 平台事件由 host 归一成坐标和按键，本模块只维护交互状态。
 
-#![allow(non_snake_case)]
-
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::Emitter;
 
-use crate::hud::win32 as w;
+use crate::hud::host;
 use crate::hud::window::{self, Drag, Move, Press, State};
 
 const LONG_PRESS_MS: u64 = 150;
@@ -14,210 +13,64 @@ const DRAG_THRESHOLD: f32 = 10.0;
 /// 拖出窗口多少像素后转成系统拖放
 const DRAG_OUT_MARGIN: f32 = 2.0;
 
-/// 桌面层窗口不激活、拿不到焦点，点击快捷栏后由钩子接住窗口内输入。
-static KEY_HOOK: AtomicIsize = AtomicIsize::new(0);
-static MOUSE_HOOK: AtomicIsize = AtomicIsize::new(0);
-static FOREGROUND_HOOK: AtomicIsize = AtomicIsize::new(0);
-static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// 点击快捷栏视为取得键盘焦点，点击别处或切换前台窗口即失去。
 static HOTBAR_KEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 /// 状态栏内的局部快捷键序列
 static KEY_SEQUENCE: std::sync::Mutex<crate::hotkeys::SequenceState> =
     std::sync::Mutex::new(crate::hotkeys::SequenceState::new());
 
-#[repr(C)]
-#[allow(dead_code)]
-struct KeyboardHookData {
-    vk_code: u32,
-    scan_code: u32,
-    flags: u32,
-    time: u32,
-    extra_info: usize,
-}
-
-#[repr(C)]
-#[allow(dead_code)]
-struct MouseHookData {
-    pt: w::Point,
-    mouse_data: u32,
-    flags: u32,
-    time: u32,
-    extra_info: usize,
-}
-
-pub fn install_desktop_hooks() {
-    if HOOKS_INSTALLED.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    // SAFETY: 钩子过程在本进程内，hMod 必须为 0 才会回调
-    let key_hook = unsafe { w::SetWindowsHookExW(w::WH_KEYBOARD_LL, Some(keyboard_hook), 0, 0) };
-    if key_hook != 0 {
-        KEY_HOOK.store(key_hook, Ordering::SeqCst);
-    }
-    let mouse_hook = unsafe { w::SetWindowsHookExW(w::WH_MOUSE_LL, Some(mouse_hook), 0, 0) };
-    if mouse_hook != 0 {
-        MOUSE_HOOK.store(mouse_hook, Ordering::SeqCst);
-    }
-    // SAFETY: 前台变化事件用于收回快捷栏的键盘焦点
-    let foreground_hook = unsafe {
-        w::SetWinEventHook(
-            w::EVENT_SYSTEM_FOREGROUND,
-            w::EVENT_SYSTEM_FOREGROUND,
-            0,
-            Some(foreground_event),
-            0,
-            0,
-            w::WINEVENT_OUTOFCONTEXT | w::WINEVENT_SKIPOWNPROCESS,
-        )
-    };
-    if foreground_hook != 0 {
-        FOREGROUND_HOOK.store(foreground_hook, Ordering::SeqCst);
-    }
-    if key_hook == 0 || mouse_hook == 0 {
-        eprintln!("桌面输入钩子安装失败");
+pub(crate) fn set_hotbar_active(active: bool) {
+    HOTBAR_KEY_ACTIVE.store(active, Ordering::Relaxed);
+    if !active {
+        reset_sequence();
     }
 }
 
-unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize) -> isize {
-    // 只在点击快捷栏取得键盘焦点后接管，其他情况一律放过
-    if code >= 0 && HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed) {
-        let data = &*(lparam as *const KeyboardHookData);
-        let extended = data.flags & crate::hotkeys::LLKHF_EXTENDED != 0;
-        let vk = crate::hotkeys::normalized_key(data.vk_code, data.scan_code, extended);
-        match wparam as u32 {
-            w::WM_KEYUP | w::WM_SYSKEYUP => {
-                if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
-                    sequence.release(vk);
-                }
-            }
-            w::WM_KEYDOWN | w::WM_SYSKEYDOWN => {
-                let handled = window::with_state(|state| {
-                    if !state.visible || !state.shown || state.config.is_none() {
-                        return false;
-                    }
-                    on_key(state, vk)
-                })
-                .unwrap_or(false);
-                if handled {
-                    return 1;
-                }
-            }
-            _ => {}
-        }
-    }
-    w::CallNextHookEx(KEY_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
+pub(crate) fn hotbar_active() -> bool {
+    HOTBAR_KEY_ACTIVE.load(Ordering::Relaxed)
 }
 
-/// 光标是否落在快捷栏内容区，顶部文件名透明带不算。
-fn on_hotbar_at(state: &State, point: w::Point) -> bool {
-    if !state.visible || !state.shown || w::window_from_point(point) != state.hwnd {
-        return false;
-    }
-    let band = state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0);
-    (w::to_client(state.hwnd, point).y as f32) >= band
+/// 前台切到别的窗口，快捷栏不再持有键盘焦点。
+pub(crate) fn focus_lost() {
+    set_hotbar_active(false);
 }
 
-unsafe extern "system" fn mouse_hook(code: i32, wparam: usize, lparam: isize) -> isize {
-    if code >= 0 {
-        let data = &*(lparam as *const MouseHookData);
-        if wparam == w::WM_LBUTTONDOWN as usize {
-            // 点击快捷栏取得键盘焦点，点击别处失去
-            let on_hotbar = window::with_state(|state| on_hotbar_at(state, data.pt)).unwrap_or(false);
-            HOTBAR_KEY_ACTIVE.store(on_hotbar, Ordering::Relaxed);
-            if !on_hotbar {
-                if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
-                    sequence.reset();
-                }
-            }
-        } else if wparam == w::WM_MOUSEWHEEL as usize {
-            // 桌面层窗口没有焦点，滚轮消息不会直达，这里按命中补发
-            let handled = window::with_state(|state| {
-                if state.config.is_none() || !on_hotbar_at(state, data.pt) {
-                    return false;
-                }
-                on_wheel(state, data.mouse_data as usize);
-                true
-            })
-            .unwrap_or(false);
-            if handled {
-                return 1;
-            }
-        }
-    }
-    w::CallNextHookEx(MOUSE_HOOK.load(Ordering::Relaxed), code, wparam, lparam)
-}
-
-unsafe extern "system" fn foreground_event(
-    _hook: isize,
-    _event: u32,
-    _hwnd: isize,
-    _object: i32,
-    _child: i32,
-    _thread: u32,
-    _time: u32,
-) {
-    // 前台切到别的窗口，快捷栏不再持有键盘焦点
-    HOTBAR_KEY_ACTIVE.store(false, Ordering::Relaxed);
+fn reset_sequence() {
     if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
         sequence.reset();
     }
-    // 显示桌面恢复后窗口可能停在应用之上，前台回到外部窗口时重新置底归位
-    window::repark_desktop_windows();
 }
 
-pub fn handle(message: u32, wparam: usize, lparam: isize) -> Option<isize> {
-    match message {
-        w::WM_MOUSEMOVE
-        | w::WM_MOUSELEAVE
-        | w::WM_LBUTTONDOWN
-        | w::WM_LBUTTONUP
-        | w::WM_RBUTTONUP
-        | w::WM_MOUSEWHEEL
-        | w::WM_KEYDOWN
-        | w::WM_KEYUP
-        | w::WM_SYSKEYDOWN
-        | w::WM_SYSKEYUP
-        | w::WM_CAPTURECHANGED => {
-            window::with_state(|state| handle_message(state, message, wparam, lparam));
-            Some(0)
-        }
-        _ => None,
+/// 光标是否落在快捷栏内容区，顶部文件名透明带不算。
+pub(crate) fn hit_hotbar(state: &State, x: i32, y: i32) -> bool {
+    if !state.visible || !state.shown || !state.host.contains(x, y) {
+        return false;
     }
+    let band = state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0);
+    (state.host.to_client(x, y).y as f32) >= band
 }
 
-fn handle_message(state: &mut State, message: u32, wparam: usize, lparam: isize) {
-    match message {
-        w::WM_MOUSEMOVE => on_move(state, lparam),
-        w::WM_MOUSELEAVE => on_leave(state),
-        w::WM_LBUTTONDOWN => on_down(state, lparam),
-        w::WM_LBUTTONUP => on_up(state, wparam, lparam),
-        w::WM_RBUTTONUP => on_menu(state, lparam),
-        w::WM_MOUSEWHEEL => on_wheel(state, wparam),
-        w::WM_KEYDOWN | w::WM_SYSKEYDOWN => {
-            on_key(state, crate::hotkeys::key_from_message(wparam, lparam));
-        }
-        w::WM_KEYUP | w::WM_SYSKEYUP => on_key_up(crate::hotkeys::key_from_message(wparam, lparam)),
-        w::WM_CAPTURECHANGED => on_capture_lost(state),
-        _ => {}
+/// 快捷键入口：窗口消息只处理可见状态，全局钩子也走这里。
+pub(crate) fn global_key(state: &mut State, key: u32) -> bool {
+    if !state.visible || !state.shown || state.config.is_none() {
+        return false;
     }
+    on_key(state, key)
 }
 
-fn point_of(lparam: isize) -> (f32, f32) {
-    let x = (lparam & 0xffff) as i16 as f32;
-    let y = ((lparam >> 16) & 0xffff) as i16 as f32;
-    (x, y)
+/// 桌面层窗口没有焦点，滚轮消息不会直达，钩子按命中补发。
+pub(crate) fn wheel_at(state: &mut State, x: i32, y: i32, delta: i16) -> bool {
+    if state.config.is_none() || !hit_hotbar(state, x, y) {
+        return false;
+    }
+    on_wheel(state, delta);
+    true
 }
 
-fn slot_at(state: &State, x: f32, y: f32) -> i32 {
-    state.layout.as_ref().map(|layout| layout.slot_at(x, y)).unwrap_or(-1)
-}
-
-fn on_move(state: &mut State, lparam: isize) {
-    let (x, y) = point_of(lparam);
-
+pub(crate) fn on_move(state: &mut State, x: f32, y: f32) {
     if !state.tracked {
         state.tracked = true;
-        w::track_leave(state.hwnd);
+        state.host.track_leave();
     }
 
     if state.moving.is_some() {
@@ -243,7 +96,7 @@ fn on_move(state: &mut State, lparam: isize) {
     if let Some(press) = &state.press {
         // 早于长按的移动不取消，松开时没进入拖动就仍算点击
         let distance = ((x - press.x).powi(2) + (y - press.y).powi(2)).sqrt();
-        let ready = w::ticks().saturating_sub(press.at) >= LONG_PRESS_MS;
+        let ready = host::ticks().saturating_sub(press.at) >= LONG_PRESS_MS;
         if ready && distance > DRAG_THRESHOLD {
             start_drag(state, x, y);
         }
@@ -253,69 +106,7 @@ fn on_move(state: &mut State, lparam: isize) {
     update_hover(state, slot_at(state, x, y));
 }
 
-/// 离开格子行就转成系统拖放，不用把鼠标拖出整块状态栏窗口
-fn outside_hotbar(state: &State, x: f32, y: f32) -> bool {
-    state
-        .layout
-        .as_ref()
-        .map(|layout| {
-            let rect = layout.drag_out_rect();
-            let margin = DRAG_OUT_MARGIN * layout.scale;
-            x < rect.left - margin
-                || y < rect.top - margin
-                || x > rect.left + rect.width + margin
-                || y > rect.top + rect.height + margin
-        })
-        .unwrap_or(false)
-}
-
-/// 拖出窗口后交给系统拖放，只提供复制，格子数据保持不变。
-fn drag_out(state: &mut State) {
-    let Some(drag) = state.drag.take() else { return };
-    // SAFETY: 释放鼠标捕获，后续由 OLE 拖放接管
-    unsafe {
-        w::ReleaseCapture();
-    }
-
-    let missing = state.missing.get(drag.source as usize).copied().unwrap_or(false);
-    let path = state
-        .config
-        .as_ref()
-        .and_then(|config| config.slot(drag.source))
-        .and_then(|slot| slot.path.clone())
-        .filter(|path| !path.trim().is_empty() && !missing);
-    let size = state.layout.as_ref().map(|layout| layout.slot_size.round().max(1.0) as u32).unwrap_or(32);
-
-    let Some(path) = path else {
-        window::render(state);
-        return;
-    };
-
-    // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
-    // 同时固定源格，拖放期间任何图标刷新都不再命中它
-    state.drag_source = drag.source;
-    let hidden = state.icons.get_mut(drag.source as usize).and_then(Option::take);
-    window::render(state);
-
-    let source = ("hud".to_string(), crate::hud::layout::slot_id(drag.source));
-    let result = crate::dragdrop::begin_file_drag(path, size, Some(source));
-    if result.dropped && !result.same_source {
-        // 落点已由 Rust 原子搬移时不再二次清空；否则交给前端清空源格。
-        // 两种情况下源格都保持固定，直到新配置确认它已经为空。
-        if !result.handled {
-            let _ = state.app.emit("hud-drop", drag.source);
-        }
-    } else {
-        // 取消或落回原格子：图标还回去，格子数据本来就没动
-        if let Some(icon) = hidden {
-            state.icons[drag.source as usize] = Some(icon);
-        }
-        state.drag_source = -1;
-        window::render(state);
-    }
-}
-
-fn on_leave(state: &mut State) {
+pub(crate) fn on_leave(state: &mut State) {
     state.tracked = false;
     if state.hover != -1 {
         state.hover = -1;
@@ -323,19 +114,23 @@ fn on_leave(state: &mut State) {
     }
 }
 
-fn on_down(state: &mut State, lparam: isize) {
-    let (x, y) = point_of(lparam);
-    // 菜单是独立窗口且不会抢前台，点击快捷栏时先把它收起来，这次点击只用于关闭
+/// 顶部透明带不结束跟踪，只清掉悬停。
+pub(crate) fn clear_hover(state: &mut State) {
+    if state.hover != -1 {
+        state.hover = -1;
+        window::render(state);
+    }
+}
+
+pub(crate) fn on_down(state: &mut State, x: f32, y: f32) {
+    // 菜单是独立窗口且不会抢前台，点击快捷栏时先收起来，这次点击只用于关闭
     if close_slot_menu(state) {
         if slot_at(state, x, y) < 0 {
             select(state, -1);
         }
         return;
     }
-    // SAFETY: 捕获鼠标，保证拖出窗口后仍能收到移动
-    unsafe {
-        w::SetCapture(state.hwnd);
-    }
+    state.host.capture();
 
     let slot = slot_at(state, x, y);
     if slot < 0 {
@@ -344,7 +139,7 @@ fn on_down(state: &mut State, lparam: isize) {
         if !locked {
             if let Some(rect) = &state.rect {
                 state.moving = Some(Move {
-                    cursor: w::cursor_pos(),
+                    cursor: state.host.cursor(),
                     origin: (rect.x, rect.y),
                 });
             }
@@ -352,15 +147,11 @@ fn on_down(state: &mut State, lparam: isize) {
         return;
     }
 
-    state.press = Some(Press { slot, x, y, at: w::ticks() });
+    state.press = Some(Press { slot, x, y, at: host::ticks() });
 }
 
-fn on_up(state: &mut State, wparam: usize, lparam: isize) {
-    let _ = wparam;
-    // SAFETY: 释放捕获
-    unsafe {
-        w::ReleaseCapture();
-    }
+pub(crate) fn on_up(state: &mut State, x: f32, y: f32) {
+    state.host.release();
 
     if state.moving.is_some() {
         state.moving = None;
@@ -383,7 +174,6 @@ fn on_up(state: &mut State, wparam: usize, lparam: isize) {
     }
 
     let Some(press) = state.press.take() else { return };
-    let (x, y) = point_of(lparam);
     let distance = ((x - press.x).powi(2) + (y - press.y).powi(2)).sqrt();
     // 移动超过阈值的按下是没进入拖动的拖动，不当作点击
     if distance <= DRAG_THRESHOLD {
@@ -391,12 +181,26 @@ fn on_up(state: &mut State, wparam: usize, lparam: isize) {
     }
 }
 
-fn on_wheel(state: &mut State, wparam: usize) {
+pub(crate) fn on_menu(state: &mut State, x: f32, y: f32) {
+    let slot = slot_at(state, x, y);
+    if slot < 0 {
+        close_slot_menu(state);
+        return;
+    }
+    // 右键打开菜单时连同格子一起选中，和点击选中的高亮保持一致
+    select(state, slot);
+    let screen = state.host.to_screen(x as i32, y as i32);
+    let _ = state.app.emit(
+        "hud-menu",
+        serde_json::json!({ "index": slot, "x": screen.x, "y": screen.y }),
+    );
+}
+
+pub(crate) fn on_wheel(state: &mut State, delta: i16) {
     if state.selected < 2 {
         select(state, 2);
         return;
     }
-    let delta = ((wparam >> 16) & 0xffff) as i16;
     let current = state.selected;
     let next = if delta > 0 {
         if current == 2 { 10 } else { current - 1 }
@@ -409,7 +213,7 @@ fn on_wheel(state: &mut State, wparam: usize) {
 }
 
 /// 处理状态栏窗口内的快捷键，返回是否已经消费这个按键。
-fn on_key(state: &mut State, key: u32) -> bool {
+pub(crate) fn on_key(state: &mut State, key: u32) -> bool {
     if (0x31..=0x39).contains(&key) {
         select(state, (key - 0x30) as i32 + 1);
         return true;
@@ -463,26 +267,83 @@ fn on_key(state: &mut State, key: u32) -> bool {
     false
 }
 
-fn on_key_up(key: u32) {
+pub(crate) fn on_key_up(key: u32) {
     if let Ok(mut sequence) = KEY_SEQUENCE.lock() {
         sequence.release(key);
     }
 }
 
-fn on_menu(state: &mut State, lparam: isize) {
-    let (x, y) = point_of(lparam);
-    let slot = slot_at(state, x, y);
-    if slot < 0 {
-        close_slot_menu(state);
+/// 拖出窗口后交给系统拖放，只提供复制，格子数据保持不变。
+fn drag_out(state: &mut State) {
+    let Some(drag) = state.drag.take() else { return };
+    state.host.release();
+
+    let missing = state.missing.get(drag.source as usize).copied().unwrap_or(false);
+    let path = state
+        .config
+        .as_ref()
+        .and_then(|config| config.slot(drag.source))
+        .and_then(|slot| slot.path.clone())
+        .filter(|path| !path.trim().is_empty() && !missing);
+    let size = state.layout.as_ref().map(|layout| layout.slot_size.round().max(1.0) as u32).unwrap_or(32);
+
+    let Some(path) = path else {
+        window::render(state);
         return;
+    };
+
+    // 交接瞬间先把图标从格子里拿掉，系统拖放开始时格子已经是空的
+    // 同时固定源格，拖放期间任何图标刷新都不再命中它
+    state.drag_source = drag.source;
+    let hidden = state.icons.get_mut(drag.source as usize).and_then(Option::take);
+    window::render(state);
+
+    let source = ("hud".to_string(), crate::hud::layout::slot_id(drag.source));
+    let result = crate::dragdrop::begin_file_drag(path, size, Some(source));
+    if result.dropped && !result.same_source {
+        // 落点已由 Rust 原子搬移时不再二次清空；否则交给前端清空源格。
+        // 两种情况下源格都保持固定，直到新配置确认它已经为空。
+        if !result.handled {
+            let _ = state.app.emit("hud-drop", drag.source);
+        }
+    } else {
+        // 取消或落回原格子：图标还回去，格子数据本来就没动
+        if let Some(icon) = hidden {
+            state.icons[drag.source as usize] = Some(icon);
+        }
+        state.drag_source = -1;
+        window::render(state);
     }
-    // 右键打开菜单时连同格子一起选中，和点击选中的高亮保持一致
-    select(state, slot);
-    let screen = w::to_screen(state.hwnd, w::Point { x: x as i32, y: y as i32 });
-    let _ = state.app.emit(
-        "hud-menu",
-        serde_json::json!({ "index": slot, "x": screen.x, "y": screen.y }),
-    );
+}
+
+pub(crate) fn on_capture_lost(state: &mut State) {
+    state.press = None;
+    if state.drag.take().is_some() {
+        window::render(state);
+    }
+    if state.moving.take().is_some() {
+        window::persist_position(state);
+    }
+}
+
+fn slot_at(state: &State, x: f32, y: f32) -> i32 {
+    state.layout.as_ref().map(|layout| layout.slot_at(x, y)).unwrap_or(-1)
+}
+
+/// 离开格子行就转成系统拖放，不用把鼠标拖出整块状态栏窗口
+fn outside_hotbar(state: &State, x: f32, y: f32) -> bool {
+    state
+        .layout
+        .as_ref()
+        .map(|layout| {
+            let rect = layout.drag_out_rect();
+            let margin = DRAG_OUT_MARGIN * layout.scale;
+            x < rect.left - margin
+                || y < rect.top - margin
+                || x > rect.left + rect.width + margin
+                || y > rect.top + rect.height + margin
+        })
+        .unwrap_or(false)
 }
 
 /// 关闭快捷栏的右键菜单，返回关闭前是否打开着
@@ -494,16 +355,6 @@ fn close_slot_menu(state: &State) -> bool {
     };
     let _ = menu.close();
     true
-}
-
-fn on_capture_lost(state: &mut State) {
-    state.press = None;
-    if state.drag.take().is_some() {
-        window::render(state);
-    }
-    if state.moving.take().is_some() {
-        window::persist_position(state);
-    }
 }
 
 fn start_drag(state: &mut State, x: f32, y: f32) {

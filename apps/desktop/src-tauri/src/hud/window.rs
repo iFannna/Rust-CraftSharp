@@ -11,14 +11,14 @@ use tauri::{AppHandle, Emitter};
 
 use crate::hud::config::{HudConfig, Metrics};
 use crate::hud::draw::{self, FrameStyle, Overlay, SlotIcon};
+use crate::hud::host::{self, Event, Host, Point};
+use crate::hud::input;
 use crate::hud::layout::{self, Layout};
 use crate::hud::sprite::{self, Frame};
 use crate::hud::text;
 use crate::hud::dragicon;
-use crate::hud::win32 as w;
-use crate::hud::win32::Dib;
 
-pub const TIMER_ANIM: usize = 2;
+const TIMER_ANIM: usize = 2;
 
 pub struct Press {
     pub slot: i32,
@@ -36,7 +36,7 @@ pub struct Drag {
 
 /// 按住空白区域拖动整个状态栏
 pub struct Move {
-    pub cursor: w::Point,
+    pub cursor: Point,
     pub origin: (i32, i32),
 }
 
@@ -55,16 +55,14 @@ pub struct Rect {
 
 pub struct State {
     pub app: AppHandle,
-    pub hwnd: w::Hwnd,
+    pub host: Host,
     pub config: Option<HudConfig>,
     pub style: Option<FrameStyle>,
     pub icons: Vec<Option<SlotIcon>>,
     pub missing: Vec<bool>,
     pub icon_keys: Vec<String>,
     pub layout: Option<Layout>,
-    pub dpi: f32,
     pub rect: Option<Rect>,
-    pub dib: Option<Dib>,
     pub frame: Option<Frame>,
     pub selected: i32,
     pub hover: i32,
@@ -108,29 +106,25 @@ pub fn with_state<T>(f: impl FnOnce(&mut State) -> T) -> Option<T> {
 }
 
 pub fn init(app: &AppHandle) {
-    let hwnd = w::create_window(wndproc);
-    if hwnd == 0 {
-        return;
-    }
     // 状态栏属于桌面层：顶层窗口置底、点击不激活，所有者设为桌面以随显示桌面保留
-    w::set_desktop_style(hwnd);
-    w::set_desktop_owner(hwnd);
-    w::park_desktop(hwnd);
-    crate::dragdrop::install(app, "hud", hwnd);
-    crate::hud::input::install_desktop_hooks();
+    let options = host::Options { click_through: false, desktop: true };
+    let Some(host) = Host::create("CraftSharpHud", "CraftSharp HUD", options, dispatch)
+    else {
+        return;
+    };
+    host.install_drop(app, "hud");
+    host.install_input();
 
     let state = State {
         app: app.clone(),
-        hwnd,
+        host,
         config: None,
         style: None,
         icons: (0..11).map(|_| None).collect(),
         missing: vec![false; 11],
         icon_keys: vec![String::new(); 11],
         layout: None,
-        dpi: w::dpi_of(hwnd),
         rect: None,
-        dib: None,
         frame: None,
         selected: -1,
         hover: -1,
@@ -262,7 +256,7 @@ fn slots_key(config: &HudConfig) -> String {
 
 fn refresh_icons(state: &mut State) {
     let Some(config) = &state.config else { return };
-    let scale = config.scale * state.dpi;
+    let scale = config.scale * state.host.dpi();
     let size = (layout::SLOT * scale).round().max(1.0) as u32;
     let show_target = config.show_target_icon;
     let paths: Vec<Option<String>> =
@@ -361,7 +355,7 @@ fn barrier_icon(size: u32) -> Option<SlotIcon> {
 pub fn render(state: &mut State) {
     let Some(config) = state.config.clone() else { return };
 
-    let scale = config.scale * state.dpi;
+    let scale = config.scale * state.host.dpi();
     let layout = layout::compute(scale, config.offhand(), config.visibility(), config.elements.absorbing.max_i());
     update_drop_zones(state, &layout);
 
@@ -377,11 +371,11 @@ pub fn render(state: &mut State) {
         None => initial_position(state, &config, width, height, layout.content_top),
     };
     if let Some(moving) = &state.moving {
-        let cursor = w::cursor_pos();
+        let cursor = state.host.cursor();
         x = moving.origin.0 + cursor.x - moving.cursor.x;
         y = moving.origin.1 + cursor.y - moving.cursor.y;
     }
-    let work = w::work_area(state.hwnd);
+    let work = state.host.work_area();
     x = x.clamp(work.left, (work.right - width as i32).max(work.left));
     y = y.clamp(work.top, (work.bottom - height as i32).max(work.top));
 
@@ -392,11 +386,6 @@ pub fn render(state: &mut State) {
     if needs_frame {
         state.frame = Some(Frame::new(width, height));
     }
-    let needs_dib = state.dib.as_ref().map(|d| d.width != width || d.height != height).unwrap_or(true);
-    if needs_dib {
-        state.dib = Dib::new(width, height);
-    }
-
     let overlay = build_overlay(
         &model,
         &state.icons,
@@ -408,22 +397,18 @@ pub fn render(state: &mut State) {
         state.air_burst,
     );
 
-    let Some(dib) = &state.dib else { return };
     let Some(frame) = &mut state.frame else { return };
 
     draw::draw(frame, &layout, style, &model, &state.icons, &overlay);
     if let Some(label) = &state.label {
-        let alpha = label_alpha(label, w::ticks());
+        let alpha = label_alpha(label, host::ticks());
         if alpha > 0.0 {
             text::draw_label(frame, &layout, &label.text, label.color, (alpha * 255.0) as u8);
         }
     }
 
-    // SAFETY: 帧缓冲与 DIB 尺寸一致，目标指针由 DIB 持有
-    unsafe {
-        std::ptr::copy_nonoverlapping(frame.pixels.as_ptr(), dib.bits, (width * height) as usize);
-    }
-    w::update_layered(state.hwnd, dib, x, y);
+    state.host.set_band(layout.content_top);
+    state.host.present(frame, x, y);
 
     let previous = state.rect.take();
     let resized = previous
@@ -440,18 +425,12 @@ pub fn render(state: &mut State) {
     if state.visible {
         if !state.shown {
             state.shown = true;
-            // SAFETY: 只是显示窗口且不抢焦点
-            unsafe {
-                w::ShowWindow(state.hwnd, w::SW_SHOWNOACTIVATE);
-            }
-            w::park_desktop(state.hwnd);
+            state.host.show();
+            state.host.park();
         }
     } else if state.shown {
         state.shown = false;
-        // SAFETY: 只是隐藏窗口
-        unsafe {
-            w::ShowWindow(state.hwnd, 0);
-        }
+        state.host.hide();
         dragicon::hide("hud");
     }
     schedule_anim(state);
@@ -495,10 +474,7 @@ pub fn set_visible(value: bool) {
         } else if state.shown {
             state.shown = false;
             dragicon::hide("hud");
-            // SAFETY: 只是隐藏窗口
-            unsafe {
-                w::ShowWindow(state.hwnd, 0);
-            }
+            state.host.hide();
         }
     });
 }
@@ -520,10 +496,7 @@ pub fn set_hidden_by_inventory(hidden: bool) {
         } else if state.shown {
             state.shown = false;
             dragicon::hide("hud");
-            // SAFETY: 只是隐藏窗口
-            unsafe {
-                w::ShowWindow(state.hwnd, 0);
-            }
+            state.host.hide();
         }
     });
 }
@@ -537,7 +510,7 @@ pub fn hidden_by_inventory() -> bool {
 pub fn repark_desktop_windows() {
     with_state(|state| {
         if state.shown {
-            w::park_desktop(state.hwnd);
+            state.host.park();
         }
     });
     crate::hud::bossbar::repark_desktop();
@@ -545,7 +518,7 @@ pub fn repark_desktop_windows() {
 }
 
 fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32, band: f32) -> (i32, i32) {
-    let dpi = state.dpi;
+    let dpi = state.host.dpi();
     if config.remember_position {
         if let Some(position) = &config.position {
             // 记录的是内容高度，不含顶部透明带
@@ -558,7 +531,7 @@ fn initial_position(state: &State, config: &HudConfig, width: u32, height: u32, 
             );
         }
     }
-    let work = w::work_area(state.hwnd);
+    let work = state.host.work_area();
     (
         work.left + ((work.right - work.left) - width as i32) / 2,
         work.bottom - height as i32,
@@ -694,7 +667,7 @@ pub fn show_label(state: &mut State, slot: i32) {
         "auto" | "" => text::auto_color(&name),
         value => text::parse_color(value),
     };
-    state.label = Some(Label { text: name, color, shown_at: w::ticks() });
+    state.label = Some(Label { text: name, color, shown_at: host::ticks() });
 }
 
 /// 外部文件拖入悬停：只影响选中框，不改变鼠标悬停状态。
@@ -718,7 +691,7 @@ pub fn tick_metrics(state: &mut State, metrics: Metrics) {
     let Some(config) = state.config.clone() else { return };
     let health = config.elements.health.resolved(&state.metrics);
     let air = config.elements.air.resolved(&state.metrics);
-    let now = w::ticks();
+    let now = host::ticks();
 
     if let Some((previous_health, previous_air)) = state.previous {
         let health_element = &config.elements.health;
@@ -750,7 +723,7 @@ fn metrics_of() -> Metrics {
 
 /// 生命值闪烁 200/100/200，空气破裂持续 200ms。
 pub fn tick_anim(state: &mut State) {
-    let now = w::ticks();
+    let now = host::ticks();
     if state.heart_step > 0 && now >= state.heart_at {
         match state.heart_step {
             1 => {
@@ -777,21 +750,14 @@ pub fn tick_anim(state: &mut State) {
 
 fn schedule_anim(state: &mut State) {
     let needs = state.air_burst.is_some() || state.heart_step > 0 || label_active(state);
-    // SAFETY: 只增减自身定时器
-    unsafe {
-        if needs {
-            w::SetTimer(state.hwnd, TIMER_ANIM, 40, 0);
-        } else {
-            w::KillTimer(state.hwnd, TIMER_ANIM);
-        }
-    }
+    state.host.timer(TIMER_ANIM, 40, needs);
 }
 
 fn label_active(state: &State) -> bool {
     state
         .label
         .as_ref()
-        .map(|label| label_alpha(label, w::ticks()) > 0.0)
+        .map(|label| label_alpha(label, host::ticks()) > 0.0)
         .unwrap_or(false)
 }
 
@@ -802,7 +768,7 @@ pub fn persist_position(state: &State) {
     if !remember {
         return;
     }
-    let dpi = state.dpi;
+    let dpi = state.host.dpi();
     // 落盘内容顶与内容高，顶部透明带不计入，恢复时按同一口径换算
     let band = state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0);
     let _ = state.app.emit(
@@ -815,56 +781,28 @@ pub fn persist_position(state: &State) {
     );
 }
 
-unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lparam: isize) -> isize {
-    match message {
-        w::WM_MOUSEACTIVATE => return w::MA_NOACTIVATE,
-        w::WM_ERASEBKGND => return 1,
-        w::WM_PAINT => {
-            w::validate(hwnd);
-            return 0;
+fn dispatch(event: Event) {
+    with_state(|state| match event {
+        Event::Move(x, y) => input::on_move(state, x, y),
+        Event::Leave => input::on_leave(state),
+        Event::HoverClear => input::clear_hover(state),
+        Event::Down(x, y) => input::on_down(state, x, y),
+        Event::Up(x, y) => input::on_up(state, x, y),
+        Event::Menu(x, y) => input::on_menu(state, x, y),
+        Event::Wheel(delta) => input::on_wheel(state, delta),
+        Event::KeyDown(key) => {
+            input::on_key(state, key);
         }
-        w::WM_NCHITTEST => {
-            // 顶部透明带只承载文件名，点击与悬停都交给下层桌面
-            let band = with_state(|state| {
-                state.layout.as_ref().map(|layout| layout.content_top).unwrap_or(0.0)
-            })
-            .unwrap_or(0.0);
-            if band > 0.0 {
-                let point = w::Point {
-                    x: (lparam & 0xffff) as i16 as i32,
-                    y: ((lparam >> 16) & 0xffff) as i16 as i32,
-                };
-                if (w::to_client(hwnd, point).y as f32) < band {
-                    with_state(|state| {
-                        if state.hover != -1 {
-                            state.hover = -1;
-                            render(state);
-                        }
-                    });
-                    return w::HTTRANSPARENT;
-                }
+        Event::KeyUp(key) => input::on_key_up(key),
+        Event::CaptureLost => input::on_capture_lost(state),
+        Event::Timer(id) => {
+            if id == TIMER_ANIM {
+                tick_anim(state);
             }
-            return w::HTCLIENT;
         }
-        w::WM_TIMER => {
-            if wparam == TIMER_ANIM {
-                with_state(tick_anim);
-            }
-            return 0;
+        Event::DpiChanged => {
+            refresh_icons(state);
+            render(state);
         }
-        w::WM_DPICHANGED => {
-            with_state(|state| {
-                state.dpi = w::dpi_of(state.hwnd);
-                refresh_icons(state);
-                render(state);
-            });
-            return 0;
-        }
-        _ => {}
-    }
-
-    if let Some(result) = crate::hud::input::handle(message, wparam, lparam) {
-        return result;
-    }
-    w::DefWindowProcW(hwnd, message, wparam, lparam)
+    });
 }

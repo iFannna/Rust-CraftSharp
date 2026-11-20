@@ -4,10 +4,9 @@ use std::cell::RefCell;
 
 use serde::Deserialize;
 
+use crate::hud::host::{Event, Host, Options};
 use crate::hud::sprite::{self, Frame};
 use crate::hud::text;
-use crate::hud::win32 as w;
-use crate::hud::win32::Dib;
 
 pub const BORDER_PIXELS: f32 = 3.0;
 const PADDING_PIXELS: f32 = 3.0;
@@ -62,11 +61,12 @@ pub struct RectF {
 }
 
 struct TooltipWindow {
-    hwnd: w::Hwnd,
+    host: Host,
     frame: Option<Frame>,
-    dib: Option<Dib>,
     shown: bool,
 }
+
+fn ignore(_: Event) {}
 
 thread_local! {
     static WINDOW: RefCell<Option<TooltipWindow>> = const { RefCell::new(None) };
@@ -75,36 +75,17 @@ thread_local! {
 fn with_window<T>(f: impl FnOnce(&mut TooltipWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
-        let window = slot.get_or_insert_with(|| TooltipWindow {
-            hwnd: w::create_named_window(
-                "CraftSharpTooltip",
-                "CraftSharp Tooltip",
-                wndproc,
-                w::WS_EX_TRANSPARENT,
-            ),
-            frame: None,
-            dib: None,
-            shown: false,
-        });
-        if window.hwnd == 0 {
-            return None;
+        if slot.is_none() {
+            let options = Options { click_through: true, desktop: false };
+            let Some(host) =
+                Host::create("CraftSharpTooltip", "CraftSharp Tooltip", options, ignore)
+            else {
+                return None;
+            };
+            *slot = Some(TooltipWindow { host, frame: None, shown: false });
         }
-        Some(f(window))
+        Some(f(slot.as_mut()?))
     })
-}
-
-unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lparam: isize) -> isize {
-    match message {
-        w::WM_MOUSEACTIVATE => return 3,
-        w::WM_ERASEBKGND => return 1,
-        w::WM_PAINT => {
-            w::validate(hwnd);
-            return 0;
-        }
-        w::WM_NCHITTEST => return -1,
-        _ => {}
-    }
-    w::DefWindowProcW(hwnd, message, wparam, lparam)
 }
 
 pub fn hide() {
@@ -114,10 +95,7 @@ pub fn hide() {
         let Some(window) = slot.as_mut() else { return };
         if window.shown {
             window.shown = false;
-            // SAFETY: 只隐藏窗口
-            unsafe {
-                w::ShowWindow(window.hwnd, w::SW_HIDE);
-            }
+            window.host.hide();
         }
     });
 }
@@ -179,28 +157,13 @@ pub fn show(lines: &[TooltipLine], unit: f32, anchor: &RectF, work: &RectF) {
     });
 
     with_window(|window| {
-        // SAFETY: 只调整顶层窗口的位置与尺寸，不激活
-        unsafe {
-            w::SetWindowPos(
-                window.hwnd,
-                w::HWND_TOPMOST,
-                x.round() as i32,
-                y.round() as i32,
-                width as i32,
-                height as i32,
-                w::SWP_NOACTIVATE,
-            );
-        }
-        if let (Some(frame), Some(dib)) = (&window.frame, &window.dib) {
-            w::present(window.hwnd, frame, dib, x.round() as i32, y.round() as i32);
+        if let Some(frame) = &window.frame {
+            window.host.present(frame, x.round() as i32, y.round() as i32);
         }
         if !window.shown {
             window.shown = true;
-            // SAFETY: 只显示，不抢焦点
-            unsafe {
-                w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
-            }
-            w::raise_overlay(window.hwnd);
+            window.host.show();
+            window.host.raise();
         }
     });
 }
@@ -266,9 +229,6 @@ fn draw(
         .unwrap_or(true);
     if resized {
         window.frame = Some(Frame::new(width, height));
-    }
-    if window.dib.as_ref().map(|dib| dib.width != width || dib.height != height).unwrap_or(true) {
-        window.dib = Dib::new(width, height);
     }
     let Some(frame) = &mut window.frame else { return };
     frame.clear();

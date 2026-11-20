@@ -6,9 +6,8 @@ use std::rc::Rc;
 use serde::Deserialize;
 
 use crate::hud::config::Metrics;
+use crate::hud::host::{Event, Host, Options};
 use crate::hud::sprite::{self, Frame, Sprite};
-use crate::hud::win32 as w;
-use crate::hud::win32::Dib;
 
 /// 2560 逻辑像素宽下放大 6 倍
 const SCALE_BASE_WIDTH: f32 = 2560.0;
@@ -29,15 +28,16 @@ pub struct CrosshairCfg {
 }
 
 struct CrosshairWindow {
-    hwnd: w::Hwnd,
+    host: Host,
     config: Option<CrosshairCfg>,
     metrics: Metrics,
     frame: Option<Frame>,
-    dib: Option<Dib>,
     shown: bool,
     /// 窗口矩形，坐标全部换算到窗口客户区
     origin: (i32, i32),
 }
+
+fn ignore(_: Event) {}
 
 thread_local! {
     static WINDOW: RefCell<Option<CrosshairWindow>> = const { RefCell::new(None) };
@@ -46,52 +46,31 @@ thread_local! {
 fn with_window<T>(f: impl FnOnce(&mut CrosshairWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
-        let window = slot.get_or_insert_with(|| CrosshairWindow {
-            hwnd: w::create_named_window(
-                "CraftSharpCrosshair",
-                "CraftSharp Crosshair",
-                wndproc,
-                w::WS_EX_TRANSPARENT,
-            ),
-            config: None,
-            metrics: Metrics::default(),
-            frame: None,
-            dib: None,
-            shown: false,
-            origin: (0, 0),
-        });
-        if window.hwnd == 0 {
-            return None;
+        if slot.is_none() {
+            let options = Options { click_through: true, desktop: true };
+            let Some(host) =
+                Host::create("CraftSharpCrosshair", "CraftSharp Crosshair", options, ignore)
+            else {
+                return None;
+            };
+            *slot = Some(CrosshairWindow {
+                host,
+                config: None,
+                metrics: Metrics::default(),
+                frame: None,
+                shown: false,
+                origin: (0, 0),
+            });
         }
-        Some(f(window))
+        Some(f(slot.as_mut()?))
     })
-}
-
-unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lparam: isize) -> isize {
-    match message {
-        w::WM_MOUSEACTIVATE => return 3,
-        w::WM_ERASEBKGND => return 1,
-        w::WM_PAINT => {
-            w::validate(hwnd);
-            return 0;
-        }
-        w::WM_NCHITTEST => return -1,
-        _ => {}
-    }
-    w::DefWindowProcW(hwnd, message, wparam, lparam)
 }
 
 pub fn apply(config: CrosshairCfg) {
     with_window(|window| {
         window.config = Some(config);
         let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
-        w::set_desktop_owner(window.hwnd);
-        if topmost {
-            w::raise_overlay(window.hwnd);
-        } else {
-            w::set_desktop_style(window.hwnd);
-            w::park_desktop(window.hwnd);
-        }
+        window.host.set_layer(!topmost);
         render(window);
     });
 }
@@ -99,9 +78,9 @@ pub fn apply(config: CrosshairCfg) {
 /// 置顶时提到置顶层，桌面层时置底。
 fn raise_layer(window: &CrosshairWindow) {
     if window.config.as_ref().map(|config| config.top_most).unwrap_or(false) {
-        w::raise_overlay(window.hwnd);
+        window.host.raise();
     } else {
-        w::park_desktop(window.hwnd);
+        window.host.park();
     }
 }
 
@@ -111,7 +90,7 @@ pub fn repark_desktop() {
         if let Some(window) = cell.borrow_mut().as_mut() {
             let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
             if window.shown && !topmost {
-                w::park_desktop(window.hwnd);
+                window.host.park();
             }
         }
     });
@@ -165,8 +144,8 @@ fn textures() -> Textures {
 fn render(window: &mut CrosshairWindow) {
     let Some(config) = window.config.clone() else { return };
 
-    let monitor = w::primary_rect();
-    let dpi = w::dpi_of(window.hwnd).max(1.0);
+    let monitor = window.host.primary_area();
+    let dpi = window.host.dpi().max(1.0);
     let logical_width = (monitor.right - monitor.left) as f32 / dpi;
     let scale = (logical_width / SCALE_BASE_WIDTH * SCALE_MULTIPLIER).max(1.0);
     let unit = scale * dpi;
@@ -218,9 +197,6 @@ fn render(window: &mut CrosshairWindow) {
     if window.frame.as_ref().map(|frame| frame.width != width || frame.height != height).unwrap_or(true) {
         window.frame = Some(Frame::new(width, height));
     }
-    if window.dib.as_ref().map(|dib| dib.width != width || dib.height != height).unwrap_or(true) {
-        window.dib = Dib::new(width, height);
-    }
     let ratio = percent(window);
     let Some(frame) = &mut window.frame else { return };
     frame.clear();
@@ -251,17 +227,14 @@ fn render(window: &mut CrosshairWindow) {
     }
 
     window.origin = (left.round() as i32, top.round() as i32);
-    if let (Some(frame), Some(dib)) = (&window.frame, &window.dib) {
-        w::present(window.hwnd, frame, dib, window.origin.0, window.origin.1);
+    if let Some(frame) = &window.frame {
+        window.host.present(frame, window.origin.0, window.origin.1);
     }
 
     if config.visible {
         if !window.shown {
             window.shown = true;
-            // SAFETY: 只显示，不抢焦点
-            unsafe {
-                w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
-            }
+            window.host.show();
             raise_layer(window);
         }
     } else {
@@ -272,9 +245,6 @@ fn render(window: &mut CrosshairWindow) {
 fn hide(window: &mut CrosshairWindow) {
     if window.shown {
         window.shown = false;
-        // SAFETY: 只隐藏窗口
-        unsafe {
-            w::ShowWindow(window.hwnd, w::SW_HIDE);
-        }
+        window.host.hide();
     }
 }

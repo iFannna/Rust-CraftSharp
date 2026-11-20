@@ -6,10 +6,9 @@ use std::rc::Rc;
 use serde::Deserialize;
 
 use crate::hud::config::Metrics;
+use crate::hud::host::{Event, Host, Options};
 use crate::hud::sprite::{self, Frame, Sprite};
 use crate::hud::text;
-use crate::hud::win32 as w;
-use crate::hud::win32::Dib;
 
 const BAR_WIDTH: f32 = 182.0;
 const BAR_HEIGHT: f32 = 5.0;
@@ -37,13 +36,14 @@ pub struct BossBarCfg {
 }
 
 struct BossBarWindow {
-    hwnd: w::Hwnd,
+    host: Host,
     bars: Vec<BossBarCfg>,
     metrics: Metrics,
     frame: Option<Frame>,
-    dib: Option<Dib>,
     shown: bool,
 }
+
+fn ignore(_: Event) {}
 
 thread_local! {
     static WINDOW: RefCell<Option<BossBarWindow>> = const { RefCell::new(None) };
@@ -52,45 +52,24 @@ thread_local! {
 fn with_window<T>(f: impl FnOnce(&mut BossBarWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
-        let window = slot.get_or_insert_with(|| {
-            let hwnd = w::create_named_window(
-                "CraftSharpBossBar",
-                "CraftSharp Boss Bar",
-                wndproc,
-                w::WS_EX_TRANSPARENT,
-            );
-            // BOSS 条和状态栏一样属于桌面层
-            w::set_desktop_style(hwnd);
-            w::set_desktop_owner(hwnd);
-            w::park_desktop(hwnd);
-            BossBarWindow {
-                hwnd,
+        if slot.is_none() {
+            // BOSS 条和状态栏一样属于桌面层，整窗鼠标穿透
+            let options = Options { click_through: true, desktop: true };
+            let Some(host) =
+                Host::create("CraftSharpBossBar", "CraftSharp Boss Bar", options, ignore)
+            else {
+                return None;
+            };
+            *slot = Some(BossBarWindow {
+                host,
                 bars: Vec::new(),
                 metrics: Metrics::default(),
                 frame: None,
-                dib: None,
                 shown: false,
-            }
-        });
-        if window.hwnd == 0 {
-            return None;
+            });
         }
-        Some(f(window))
+        Some(f(slot.as_mut()?))
     })
-}
-
-unsafe extern "system" fn wndproc(hwnd: w::Hwnd, message: u32, wparam: usize, lparam: isize) -> isize {
-    match message {
-        w::WM_MOUSEACTIVATE => return 3,
-        w::WM_ERASEBKGND => return 1,
-        w::WM_PAINT => {
-            w::validate(hwnd);
-            return 0;
-        }
-        w::WM_NCHITTEST => return -1,
-        _ => {}
-    }
-    w::DefWindowProcW(hwnd, message, wparam, lparam)
 }
 
 pub fn apply(bars: Vec<BossBarCfg>) {
@@ -105,7 +84,7 @@ pub fn repark_desktop() {
     WINDOW.with(|cell| {
         if let Some(window) = cell.borrow_mut().as_mut() {
             if window.shown {
-                w::park_desktop(window.hwnd);
+                window.host.park();
             }
         }
     });
@@ -157,8 +136,8 @@ fn texture_pair(color: &str, notch: &Option<String>) -> (Option<Rc<Sprite>>, Opt
 }
 
 fn render(window: &mut BossBarWindow) {
-    let dpi = w::dpi_of(window.hwnd).max(1.0);
-    let monitor = w::primary_rect();
+    let dpi = window.host.dpi().max(1.0);
+    let monitor = window.host.primary_area();
     let logical_width = (monitor.right - monitor.left) as f32 / dpi;
     let scale = (logical_width / 2560.0 * 6.0).max(1.0);
     let unit = scale * dpi;
@@ -183,14 +162,6 @@ fn render(window: &mut BossBarWindow) {
         .unwrap_or(true)
     {
         window.frame = Some(Frame::new(width.ceil() as u32, height.ceil() as u32));
-    }
-    if window
-        .dib
-        .as_ref()
-        .map(|dib| dib.width != width.ceil() as u32 || dib.height != height.ceil() as u32)
-        .unwrap_or(true)
-    {
-        window.dib = Dib::new(width.ceil() as u32, height.ceil() as u32);
     }
     let bars = window.bars.clone();
     let percents: Vec<f32> = bars.iter().map(|bar| percent(window, bar)).collect();
@@ -225,26 +196,20 @@ fn render(window: &mut BossBarWindow) {
 
     let x = monitor.left + ((monitor.right - monitor.left) as f32 - width) as i32 / 2;
     let y = monitor.top;
-    if let (Some(frame), Some(dib)) = (&window.frame, &window.dib) {
-        w::present(window.hwnd, frame, dib, x, y);
+    if let Some(frame) = &window.frame {
+        window.host.present(frame, x, y);
     }
 
     if !window.shown {
         window.shown = true;
-        // SAFETY: 只显示，不抢焦点
-        unsafe {
-            w::ShowWindow(window.hwnd, w::SW_SHOWNOACTIVATE);
-        }
-        w::park_desktop(window.hwnd);
+        window.host.show();
+        window.host.park();
     }
 }
 
 fn hide(window: &mut BossBarWindow) {
     if window.shown {
         window.shown = false;
-        // SAFETY: 只隐藏窗口
-        unsafe {
-            w::ShowWindow(window.hwnd, w::SW_HIDE);
-        }
+        window.host.hide();
     }
 }

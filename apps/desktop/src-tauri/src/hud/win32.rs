@@ -344,16 +344,6 @@ pub fn raise_overlay(hwnd: Hwnd) {
     }
 }
 
-/// 拖动时跟随光标的浮层：置顶、鼠标穿透、不抢焦点。
-pub fn create_overlay() -> Hwnd {
-    create_named_window(
-        "CraftSharpDragIcon",
-        "CraftSharp Drag",
-        DefWindowProcW,
-        WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
-    )
-}
-
 unsafe fn register_class(
     class_name: &[u16],
     proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize,
@@ -404,10 +394,6 @@ pub fn create_named_window(
             ptr::null_mut(),
         )
     }
-}
-
-pub fn create_window(proc_: unsafe extern "system" fn(Hwnd, u32, usize, isize) -> isize) -> Hwnd {
-    create_named_window("CraftSharpHud", "CraftSharp HUD", proc_, 0)
 }
 
 /// 桌面窗口 Progman，用于判断桌面是否处于前台。
