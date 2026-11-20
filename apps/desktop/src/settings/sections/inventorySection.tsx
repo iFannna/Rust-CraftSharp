@@ -80,13 +80,6 @@ function InventoryCardContent() {
           }}
         />
       </Row>
-      <Row plain label={t("inventory.sharedData")} description={t("inventory.sharedDataDesc")}>
-        <Toggle
-          checked={inventory.sharedData}
-          label={t("inventory.sharedData")}
-          onChange={(sharedData) => patch({ sharedData })}
-        />
-      </Row>
       <Row plain label={t("inventory.locked")} description={t("inventory.lockedDesc")}>
         <Toggle
           checked={inventory.locked}
@@ -99,6 +92,13 @@ function InventoryCardContent() {
           checked={inventory.rememberPosition}
           label={t("inventory.remember")}
           onChange={(rememberPosition) => patch({ rememberPosition })}
+        />
+      </Row>
+      <Row plain label={t("inventory.sharedData")} description={t("inventory.sharedDataDesc")}>
+        <Toggle
+          checked={inventory.sharedData}
+          label={t("inventory.sharedData")}
+          onChange={(sharedData) => patch({ sharedData })}
         />
       </Row>
       <Row plain label={t("inventory.hover")} description={t("inventory.hoverDesc")}>

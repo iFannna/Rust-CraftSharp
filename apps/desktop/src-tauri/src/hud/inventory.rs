@@ -148,8 +148,8 @@ impl Default for InventoryCfg {
     fn default() -> Self {
         InventoryCfg {
             visible: false,
-            locked: true,
-            remember_position: true,
+            locked: false,
+            remember_position: false,
             position: None,
             gray_overlay: true,
             gray_overlay_opacity: 75.0,

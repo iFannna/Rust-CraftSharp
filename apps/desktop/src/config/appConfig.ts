@@ -311,8 +311,8 @@ const DEFAULTS: AppConfig = {
   },
   inventory: {
     visible: false,
-    locked: true,
-    rememberPosition: true,
+    locked: false,
+    rememberPosition: false,
     position: null,
     grayOverlay: true,
     grayOverlayOpacity: 75,
