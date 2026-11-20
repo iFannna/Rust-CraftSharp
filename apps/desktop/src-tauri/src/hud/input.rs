@@ -325,6 +325,13 @@ fn on_leave(state: &mut State) {
 
 fn on_down(state: &mut State, lparam: isize) {
     let (x, y) = point_of(lparam);
+    // 菜单是独立窗口且不会抢前台，点击快捷栏时先把它收起来，这次点击只用于关闭
+    if close_slot_menu(state) {
+        if slot_at(state, x, y) < 0 {
+            select(state, -1);
+        }
+        return;
+    }
     // SAFETY: 捕获鼠标，保证拖出窗口后仍能收到移动
     unsafe {
         w::SetCapture(state.hwnd);
@@ -466,13 +473,27 @@ fn on_menu(state: &mut State, lparam: isize) {
     let (x, y) = point_of(lparam);
     let slot = slot_at(state, x, y);
     if slot < 0 {
+        close_slot_menu(state);
         return;
     }
+    // 右键打开菜单时连同格子一起选中，和点击选中的高亮保持一致
+    select(state, slot);
     let screen = w::to_screen(state.hwnd, w::Point { x: x as i32, y: y as i32 });
     let _ = state.app.emit(
         "hud-menu",
         serde_json::json!({ "index": slot, "x": screen.x, "y": screen.y }),
     );
+}
+
+/// 关闭快捷栏的右键菜单，返回关闭前是否打开着
+fn close_slot_menu(state: &State) -> bool {
+    use tauri::Manager;
+
+    let Some(menu) = state.app.get_webview_window("slot-menu") else {
+        return false;
+    };
+    let _ = menu.close();
+    true
 }
 
 fn on_capture_lost(state: &mut State) {
