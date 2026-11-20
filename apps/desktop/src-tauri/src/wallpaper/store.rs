@@ -280,13 +280,14 @@ pub fn source_rect(
     let scale = (virtual_w / img_w).max(virtual_h / img_h) * zoom;
     let width = virtual_w / scale;
     let height = virtual_h / scale;
+    // 预览用 translate 移动图片本身，裁剪窗口要反向移动才能看到同一块
     let cx = clamp_center(
-        img_w / 2.0 + transform.offset_x.clamp(-1.0, 1.0) * img_w,
+        img_w / 2.0 - transform.offset_x.clamp(-1.0, 1.0) * width,
         width / 2.0,
         img_w - width / 2.0,
     );
     let cy = clamp_center(
-        img_h / 2.0 + transform.offset_y.clamp(-1.0, 1.0) * img_h,
+        img_h / 2.0 - transform.offset_y.clamp(-1.0, 1.0) * height,
         height / 2.0,
         img_h - height / 2.0,
     );
@@ -330,7 +331,8 @@ fn topology(monitors: &[MonitorInfo]) -> String {
     for byte in joined.bytes() {
         hash = hash.wrapping_mul(31).wrapping_add(byte as u32);
     }
-    format!("v1_{hash:08X}")
+    // 版本随裁剪算法变化，保证旧缓存不会命中
+    format!("v3_{hash:08X}")
 }
 
 fn sanitize(value: &str) -> String {
@@ -427,6 +429,26 @@ mod tests {
             },
         );
         assert!((rect.2 - 960.0).abs() < 0.01);
+        assert!((rect.3 - 540.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn offset_follows_visible_window_fraction() {
+        // 预览里偏移是可见窗口宽高的百分比且方向相反，裁剪要落到同一块
+        let rect = source_rect(
+            3840.0,
+            2160.0,
+            3840.0,
+            1080.0,
+            Transform {
+                zoom: 2.0,
+                offset_x: 0.25,
+                offset_y: 0.25,
+            },
+        );
+        assert!((rect.0 - 480.0).abs() < 0.01);
+        assert!((rect.1 - 675.0).abs() < 0.01);
+        assert!((rect.2 - 1920.0).abs() < 0.01);
         assert!((rect.3 - 540.0).abs() < 0.01);
     }
 }
