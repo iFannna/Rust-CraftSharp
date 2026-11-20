@@ -71,9 +71,9 @@ fn apply_tray(app: &AppHandle, rgba: &[u8]) {
     }
 }
 
-fn apply_windows(app: &AppHandle, rgba: &[u8], entries: &[ico::Entry]) {
+fn apply_windows(app: &AppHandle, rgba: &[u8], entries: &[ico::Entry], rebuild_taskbar: bool) {
     #[cfg(windows)]
-    if window_icon::apply(app.webview_windows().values(), entries) {
+    if window_icon::apply(app.webview_windows().values(), entries, rebuild_taskbar) {
         return;
     }
     for window in app.webview_windows().values() {
@@ -131,7 +131,7 @@ pub fn apply(app: &AppHandle, png: Option<String>) -> Result<(), String> {
     // 文件与快捷方式先换，窗口图标最后写，避免 Shell 刷新把图标重置回旧值
     let result = apply_files(app, &entries);
     apply_tray(app, &icon32);
-    apply_windows(app, &icon32, &entries);
+    apply_windows(app, &icon32, &entries, true);
     result
 }
 
@@ -146,6 +146,7 @@ fn apply_files(app: &AppHandle, entries: &[ico::Entry]) -> Result<(), String> {
 
     match exe::replace(&exe, entries) {
         Ok(()) => {
+            shell::notify_file(&exe);
             shell::update_shortcuts(&exe);
             Ok(())
         }
@@ -165,7 +166,7 @@ pub fn startup(app: &AppHandle) {
     let Some(source) = load_source(app) else { return };
     let Ok(square) = ico::square_source(&source) else { return };
     let Ok(entries) = ico::entries(&square) else { return };
-    apply_windows(app, &ico::resize(&square, WINDOW_ICON_SIZE).into_raw(), &entries);
+    apply_windows(app, &ico::resize(&square, WINDOW_ICON_SIZE).into_raw(), &entries, false);
 }
 
 /// 创建托盘前读取保存的图标，避免先显示默认图标

@@ -202,6 +202,20 @@ fn patch_file(path: &Path, entries: &[Entry]) -> Result<(), String> {
     Ok(())
 }
 
+#[link(name = "kernel32")]
+extern "system" {
+    fn SetFileAttributesW(path: *const u16, attributes: u32) -> i32;
+}
+
+const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+
+fn hide(path: &Path) {
+    let wide = wide(path);
+    unsafe {
+        SetFileAttributesW(wide.as_ptr(), FILE_ATTRIBUTE_HIDDEN);
+    }
+}
+
 fn permission(error: &io::Error) -> PatchError {
     if error.kind() == io::ErrorKind::PermissionDenied || error.raw_os_error() == Some(5) {
         PatchError::Permission
@@ -246,8 +260,10 @@ pub fn replace(target: &Path, entries: &[Entry]) -> Result<(), PatchError> {
         let _ = std::fs::remove_file(&temp);
         return Err(permission(&error));
     }
-    // 当前进程仍从备份文件运行，删除失败时留到下次启动清理
-    let _ = std::fs::remove_file(&backup);
+    // 当前进程仍从备份文件运行，删除失败时隐藏它，留到下次启动清理
+    if std::fs::remove_file(&backup).is_err() {
+        hide(&backup);
+    }
     Ok(())
 }
 

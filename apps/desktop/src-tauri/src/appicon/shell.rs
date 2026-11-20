@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use crate::icons::{set_shortcut_icon, shortcut_target};
 
 const SHCNE_ASSOCCHANGED: i32 = 0x0800_0000;
+const SHCNE_UPDATEITEM: i32 = 0x0000_2000;
 const SHCNF_IDLIST: u32 = 0;
+const SHCNF_PATHW: u32 = 0x0005;
 const SEE_MASK_NOCLOSEPROCESS: u32 = 0x40;
 const SEE_MASK_FLAG_NO_UI: u32 = 0x400;
 const SW_SHOWNORMAL: i32 = 1;
@@ -128,6 +130,19 @@ pub fn update_shortcuts(exe: &Path) {
         });
     }
     refresh();
+}
+
+/// 通知资源管理器刷新单个文件的图标缓存
+pub fn notify_file(path: &Path) {
+    let wide = wide_path(path);
+    unsafe {
+        SHChangeNotify(
+            SHCNE_UPDATEITEM,
+            SHCNF_PATHW,
+            wide.as_ptr() as *const c_void,
+            std::ptr::null(),
+        );
+    }
 }
 
 /// 通知资源管理器刷新文件与快捷方式图标
