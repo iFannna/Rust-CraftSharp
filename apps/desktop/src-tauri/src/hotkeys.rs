@@ -4,7 +4,8 @@
 #![allow(non_snake_case)]
 
 #[cfg(windows)]
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::AtomicIsize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use tauri::{AppHandle, Emitter};
@@ -13,12 +14,18 @@ pub const EVENT_NAME: &str = "craftsharp-hotkey";
 pub const FAILURES_EVENT: &str = "craftsharp-hotkey-failures";
 pub(crate) const MAX_SEQUENCE: usize = 3;
 
+#[cfg(windows)]
 const WM_KEYDOWN: u32 = 0x0100;
+#[cfg(windows)]
 const WM_KEYUP: u32 = 0x0101;
+#[cfg(windows)]
 const WM_SYSKEYDOWN: u32 = 0x0104;
+#[cfg(windows)]
 const WM_SYSKEYUP: u32 = 0x0105;
+#[cfg(windows)]
 const WH_KEYBOARD_LL: i32 = 13;
 /// KBDLLHOOKSTRUCT.flags 的扩展键位，用于区分右侧 Ctrl/Alt
+#[cfg(windows)]
 pub(crate) const LLKHF_EXTENDED: u32 = 0x01;
 
 #[cfg(windows)]
@@ -79,27 +86,21 @@ extern "system" {
     fn GetCurrentProcessId() -> u32;
 }
 
-#[cfg(windows)]
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// 每个动作下标当前生效的组合，未设置或解析失败时为 None
 static REGISTERED: Mutex<Vec<Option<String>>> = Mutex::new(Vec::new());
-#[cfg(windows)]
 static FAILURES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
 /// 录制暂停时清空，匹配不到任何序列
 static HOOK_BINDINGS: Mutex<Vec<HookBinding>> = Mutex::new(Vec::new());
-#[cfg(windows)]
 static HOOK_ACTIVE: AtomicBool = AtomicBool::new(false);
 #[cfg(windows)]
 static HOOK: AtomicIsize = AtomicIsize::new(0);
 /// 当前按住的虚拟键，用于自动重复抑制与松开判定
-#[cfg(windows)]
 static HOOK_DOWN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 /// 本次按下的顺序序列，最多三键
-#[cfg(windows)]
 static HOOK_SEQUENCE: Mutex<Vec<HookKey>> = Mutex::new(Vec::new());
-#[cfg(windows)]
 static HOOK_OVERFLOW: AtomicBool = AtomicBool::new(false);
 
 /// 注册一批热键，下标即热键 id；失败项通过事件和查询命令回传。
@@ -133,8 +134,19 @@ pub fn register(app: &AppHandle, actions: Vec<String>) {
     apply_hotkeys(app);
 }
 
+/// X11 全局监听在后台线程启动，就绪后由监听线程补上首次绑定。
+#[cfg(target_os = "linux")]
+pub fn register(app: &AppHandle, actions: Vec<String>) {
+    let _ = APP.set(app.clone());
+    if let Ok(mut pending) = PENDING.lock() {
+        *pending = actions;
+    }
+    if crate::hotkeys_x11::start(app) {
+        apply_hotkeys(app);
+    }
+}
+
 /// 最近一次解析失败的组合，供快捷键页初始化。
-#[cfg(windows)]
 pub fn failures() -> Vec<String> {
     FAILURES.lock().map(|list| list.clone()).unwrap_or_default()
 }
@@ -164,6 +176,7 @@ fn foreground_is_app() -> bool {
 }
 
 /// 钩子与窗口消息里的修饰键只有通用码，按扫描码和扩展位还原左右
+#[cfg(windows)]
 pub(crate) fn normalized_key(vk: u32, scan: u32, extended: bool) -> u32 {
     match vk {
         0x10 => {
@@ -192,6 +205,7 @@ pub(crate) fn normalized_key(vk: u32, scan: u32, extended: bool) -> u32 {
 }
 
 /// 从窗口按键消息的 lParam 还原左右明确的虚拟键码
+#[cfg(windows)]
 pub(crate) fn key_from_message(wparam: usize, lparam: isize) -> u32 {
     let scan = ((lparam >> 16) & 0xff) as u32;
     let extended = (lparam >> 24) & 1 != 0;
@@ -232,8 +246,7 @@ unsafe extern "system" fn keyboard_hook(code: i32, wparam: usize, lparam: isize)
     CallNextHookEx(HOOK.load(Ordering::SeqCst), code, wparam, lparam)
 }
 
-#[cfg(windows)]
-fn on_hook_down(vk: u32) {
+pub(crate) fn on_hook_down(vk: u32) {
     let fresh = {
         let Ok(mut down) = HOOK_DOWN.lock() else { return };
         if down.contains(&vk) {
@@ -259,8 +272,7 @@ fn on_hook_down(vk: u32) {
     sequence.push(hook_key_of(vk));
 }
 
-#[cfg(windows)]
-fn on_hook_up(vk: u32) {
+pub(crate) fn on_hook_up(vk: u32) {
     let released = {
         let Ok(mut down) = HOOK_DOWN.lock() else { return };
         if !down.contains(&vk) {
@@ -338,9 +350,25 @@ fn binding_matches(binding: &HookBinding, sequence: &[HookKey]) -> bool {
 }
 
 #[cfg(windows)]
-fn apply_hotkeys(app: &AppHandle) {
+fn backend_ready() -> bool {
+    HOOK.load(Ordering::SeqCst) != 0
+}
+
+#[cfg(target_os = "linux")]
+fn backend_ready() -> bool {
+    crate::hotkeys_x11::ready()
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn backend_ready() -> bool {
+    false
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn register(_: &AppHandle, _: Vec<String>) {}
+pub(crate) fn apply_hotkeys(app: &AppHandle) {
     let actions = PENDING.lock().map(|pending| pending.clone()).unwrap_or_default();
-    let hook_ready = HOOK.load(Ordering::SeqCst) != 0;
+    let hook_ready = backend_ready();
 
     let mut bindings: Vec<HookBinding> = Vec::new();
     let mut registered: Vec<Option<String>> = Vec::new();
@@ -387,22 +415,28 @@ fn apply_hotkeys(app: &AppHandle) {
 }
 
 /// 配置重载时清空序列，并按物理按键重建修饰键，避免录制留下脏状态
-#[cfg(windows)]
 fn reset_hook_state() {
     if let Ok(mut sequence) = HOOK_SEQUENCE.lock() {
         sequence.clear();
     }
     HOOK_OVERFLOW.store(false, Ordering::SeqCst);
 
-    let mut down = Vec::new();
-    for vk in [0xA0u32, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C] {
-        let pressed = (unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000) != 0;
-        if pressed {
-            down.push(vk);
+    #[cfg(windows)]
+    {
+        let mut down = Vec::new();
+        for vk in [0xA0u32, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C] {
+            let pressed = (unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000) != 0;
+            if pressed {
+                down.push(vk);
+            }
+        }
+        if let Ok(mut current) = HOOK_DOWN.lock() {
+            *current = down;
         }
     }
-    if let Ok(mut current) = HOOK_DOWN.lock() {
-        *current = down;
+    #[cfg(target_os = "linux")]
+    if let Ok(mut down) = HOOK_DOWN.lock() {
+        down.clear();
     }
 }
 
@@ -645,12 +679,4 @@ pub(crate) fn virtual_key(key: &str) -> Option<u32> {
         "WAKEUP" => Some(0x5F),
         _ => None,
     }
-}
-
-#[cfg(not(windows))]
-pub fn register(_app: &AppHandle, _actions: Vec<String>) {}
-
-#[cfg(not(windows))]
-pub fn failures() -> Vec<String> {
-    Vec::new()
 }

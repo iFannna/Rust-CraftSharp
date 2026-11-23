@@ -19,6 +19,7 @@ use x11rb::rust_connection::RustConnection;
 
 use crate::hud::host::{Area, Event, Options, Point};
 use crate::hud::sprite::Frame;
+use crate::keys_x11::key_map;
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
@@ -41,8 +42,10 @@ pub struct Host {
     dispatch: fn(Event),
     app: AppHandle,
     click_through: bool,
+    managed: bool,
     band: f32,
     size: (u16, u16),
+    mask: Vec<Rectangle>,
     root: Window,
     timers: Mutex<HashMap<usize, Arc<AtomicBool>>>,
 }
@@ -67,6 +70,10 @@ impl Host {
             .find(|visual| visual.class == VisualClass::TRUE_COLOR)?
             .visual_id;
 
+        // 桌面层窗口都交给窗口管理器管理，置底与显示桌面才有意义；
+        // 置顶浮层保持 override-redirect，避免被 WM 重新排布
+        let managed = options.desktop;
+
         let win = conn.generate_id().ok()?;
         let colormap = conn.generate_id().ok()?;
         conn.create_colormap(ColormapAlloc::NONE, colormap, root, visual).ok()?.check().ok()?;
@@ -74,7 +81,7 @@ impl Host {
             .background_pixel(0)
             .border_pixel(0)
             .colormap(colormap)
-            .override_redirect(1);
+            .override_redirect(if managed { 0 } else { 1 });
         conn.create_window(
             32,
             win,
@@ -95,7 +102,7 @@ impl Host {
         let gc = conn.generate_id().ok()?;
         conn.create_gc(gc, win, &CreateGCAux::new()).ok()?.check().ok()?;
 
-        set_atoms(&conn, win, class, title, options.desktop);
+        set_atoms(&conn, win, class, title, options.desktop, managed);
         let host = Self {
             conn,
             win,
@@ -104,16 +111,20 @@ impl Host {
             dispatch,
             app,
             click_through: options.click_through,
+            managed,
             band: 0.0,
             size: (1, 1),
+            mask: Vec::new(),
             root,
             timers: Mutex::new(HashMap::new()),
         };
         host.apply_input_shape();
-        if options.desktop {
-            host.park();
-        } else {
-            host.raise();
+        if !managed {
+            if options.desktop {
+                host.park();
+            } else {
+                host.raise();
+            }
         }
         host.spawn_events();
         host.conn.flush().ok()?;
@@ -201,12 +212,12 @@ impl Host {
             32,
             bytes,
         );
+        self.update_input_mask(pixels, width, height);
         let _ = self.conn.flush();
     }
 
     pub fn set_band(&mut self, band: f32) {
         self.band = band;
-        self.apply_input_shape();
     }
 
     pub fn show(&self) {
@@ -220,6 +231,9 @@ impl Host {
     }
 
     pub fn park(&self) {
+        if self.managed {
+            return;
+        }
         let aux = ConfigureWindowAux::new().stack_mode(StackMode::BELOW);
         let _ = self.conn.configure_window(self.win, &aux);
         set_below(&self.conn, self.win, true);
@@ -227,6 +241,9 @@ impl Host {
     }
 
     pub fn raise(&self) {
+        if self.managed {
+            return;
+        }
         let aux = ConfigureWindowAux::new().stack_mode(StackMode::ABOVE);
         let _ = self.conn.configure_window(self.win, &aux);
         set_below(&self.conn, self.win, false);
@@ -351,6 +368,60 @@ impl Host {
         let _ = self.conn.flush();
     }
 
+    /// 按像素透明度生成输入区域，透明处让给下层窗口
+    fn update_input_mask(&mut self, pixels: &[u32], width: u16, height: u16) {
+        if self.click_through {
+            return;
+        }
+        let stride = width as usize;
+        let top = (self.band.max(0.0).ceil() as usize).min(height as usize);
+        let mut rects = Vec::new();
+        for y in top..height as usize {
+            let row = &pixels[y * stride..(y + 1) * stride];
+            let mut x = 0;
+            while x < stride {
+                while x < stride && row[x] >> 24 == 0 {
+                    x += 1;
+                }
+                if x == stride {
+                    break;
+                }
+                let start = x;
+                while x < stride && row[x] >> 24 != 0 {
+                    x += 1;
+                }
+                rects.push(Rectangle {
+                    x: start as i16,
+                    y: y as i16,
+                    width: (x - start) as u16,
+                    height: 1,
+                });
+            }
+        }
+        let changed = rects.len() != self.mask.len()
+            || rects
+                .iter()
+                .zip(self.mask.iter())
+                .any(|(next, prev)| next.x != prev.x || next.y != prev.y || next.width != prev.width);
+        if changed {
+            self.mask = rects;
+            self.apply_mask();
+        }
+    }
+
+    fn apply_mask(&self) {
+        let _ = self.conn.shape_rectangles(
+            SO::SET,
+            SK::INPUT,
+            ClipOrdering::UNSORTED,
+            self.win,
+            0,
+            0,
+            &self.mask,
+        );
+        let _ = self.conn.flush();
+    }
+
     fn spawn_events(&self) {
         if self.click_through {
             return;
@@ -388,48 +459,6 @@ impl Host {
     }
 }
 
-fn key_map(conn: &RustConnection) -> std::collections::HashMap<u8, u32> {
-    let setup = conn.setup();
-    let min = setup.min_keycode;
-    let count = setup.max_keycode.saturating_sub(min).saturating_add(1);
-    let Some(reply) = conn
-        .get_keyboard_mapping(min, count)
-        .ok()
-        .and_then(|cookie| cookie.reply().ok())
-    else {
-        return std::collections::HashMap::new();
-    };
-    let per = reply.keysyms_per_keycode.max(1) as usize;
-    let mut keys = std::collections::HashMap::new();
-    for index in 0..count as usize {
-        let keysym = reply.keysyms.get(index * per).copied().unwrap_or(0);
-        let vk = keysym_to_vk(keysym);
-        if vk != 0 {
-            keys.insert(min.wrapping_add(index as u8), vk);
-        }
-    }
-    keys
-}
-
-fn keysym_to_vk(keysym: u32) -> u32 {
-    match keysym {
-        0x30..=0x39 => keysym,
-        0x61..=0x7a => keysym - 0x20,
-        0x20 => 0x20,
-        0xff0d | 0xff8d => 0x0d,
-        0xff1b => 0x1b,
-        0xffe1 | 0xffe2 => 0xa0,
-        0xffe3 | 0xffe4 => 0xa2,
-        0xffe9 | 0xffea => 0xa4,
-        0xffe7 | 0xffe8 => 0x5b,
-        0xffbe..=0xffc9 => 0x70 + (keysym - 0xffbe),
-        0xff51..=0xff54 => 0x25 + (keysym - 0xff51),
-        0xff50 => 0x24,
-        0xff57 => 0x23,
-        _ => 0,
-    }
-}
-
 fn translate(
     event: XEvent,
     keys: &std::collections::HashMap<u8, u32>,
@@ -460,7 +489,7 @@ fn intern(conn: &RustConnection, name: &str) -> Option<u32> {
     conn.intern_atom(false, name.as_bytes()).ok()?.reply().ok().map(|reply| reply.atom)
 }
 
-fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, desktop: bool) {
+fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, desktop: bool, managed: bool) {
     let utf8 = intern(conn, "UTF8_STRING").unwrap_or(AtomEnum::STRING.into());
     if let Some(atom) = intern(conn, "_NET_WM_NAME") {
         let _ = conn.change_property(
@@ -499,6 +528,67 @@ fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, deskt
             &kind.to_ne_bytes(),
         );
     }
+    if desktop && managed {
+        set_states(
+            conn,
+            win,
+            &[
+                "_NET_WM_STATE_BELOW",
+                "_NET_WM_STATE_STICKY",
+                "_NET_WM_STATE_SKIP_TASKBAR",
+                "_NET_WM_STATE_SKIP_PAGER",
+            ],
+        );
+        if let Some(prop) = intern(conn, "_NET_WM_DESKTOP") {
+            let _ = conn.change_property(
+                PropMode::REPLACE,
+                win,
+                prop,
+                AtomEnum::CARDINAL,
+                32,
+                1,
+                &u32::MAX.to_ne_bytes(),
+            );
+        }
+        if let Some(prop) = intern(conn, "_NET_WM_PID") {
+            let _ = conn.change_property(
+                PropMode::REPLACE,
+                win,
+                prop,
+                AtomEnum::CARDINAL,
+                32,
+                1,
+                &std::process::id().to_ne_bytes(),
+            );
+        }
+        if let Some(prop) = intern(conn, "_MOTIF_WM_HINTS") {
+            let mut data = Vec::with_capacity(20);
+            for value in [2u32, 0, 0, 0, 0] {
+                data.extend_from_slice(&value.to_ne_bytes());
+            }
+            let _ = conn.change_property(PropMode::REPLACE, win, prop, prop, 32, 5, &data);
+        }
+    }
+}
+
+fn set_states(conn: &RustConnection, win: Window, names: &[&str]) {
+    let Some(prop) = intern(conn, "_NET_WM_STATE") else {
+        return;
+    };
+    let atoms: Vec<u32> = names.iter().filter_map(|name| intern(conn, name)).collect();
+    let mut data = Vec::with_capacity(atoms.len() * 4);
+    for atom in &atoms {
+        data.extend_from_slice(&atom.to_ne_bytes());
+    }
+    let _ = conn.change_property(
+        PropMode::REPLACE,
+        win,
+        prop,
+        AtomEnum::ATOM,
+        32,
+        atoms.len() as u32,
+        &data,
+    );
 }
 
 fn set_below(conn: &RustConnection, win: Window, below: bool) {

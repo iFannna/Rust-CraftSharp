@@ -118,20 +118,24 @@ fn percent(window: &BossBarWindow, bar: &BossBarCfg) -> f32 {
     1.0
 }
 
-fn texture_pair(color: &str, notch: &Option<String>) -> (Option<Rc<Sprite>>, Option<Rc<Sprite>>) {
+fn texture_pair(color: &str) -> (Option<Rc<Sprite>>, Option<Rc<Sprite>>) {
     let color = match color {
         "green" | "pink" | "purple" | "red" | "white" | "yellow" | "blue" => color,
         _ => "blue",
     };
-    let background = sprite::load(&format!("gui/sprites/hud/boss_bar/{color}_background.png"));
-    let progress = sprite::load(&format!("gui/sprites/hud/boss_bar/{color}_progress.png"));
+    (
+        sprite::load(&format!("gui/sprites/hud/boss_bar/{color}_background.png")),
+        sprite::load(&format!("gui/sprites/hud/boss_bar/{color}_progress.png")),
+    )
+}
 
+/// 分段刻度只是一层蒙版，叠加在彩色血条上，不能替换血条本身
+fn notch_texture(notch: &Option<String>) -> Option<Rc<Sprite>> {
     match notch.as_deref() {
-        Some(name @ ("notched_6" | "notched_10" | "notched_12" | "notched_20")) => (
-            sprite::load(&format!("gui/sprites/hud/boss_bar/{name}_background.png")).or(background),
-            sprite::load(&format!("gui/sprites/hud/boss_bar/{name}_progress.png")).or(progress),
-        ),
-        _ => (background, progress),
+        Some(name @ ("notched_6" | "notched_10" | "notched_12" | "notched_20")) => {
+            sprite::load(&format!("gui/sprites/hud/boss_bar/{name}_progress.png"))
+        }
+        _ => None,
     }
 }
 
@@ -174,7 +178,8 @@ fn render(window: &mut BossBarWindow) {
     let shadow = (SHADOW_DEPTH * unit).round();
 
     for (index, bar) in bars.iter().enumerate() {
-        let (background, progress) = texture_pair(&bar.color, &bar.notch);
+        let (background, progress) = texture_pair(&bar.color);
+        let notch = notch_texture(&bar.notch);
 
         if !bar.name.is_empty() {
             let name_top = NAME_TEXT_TOP * unit + index as f32 * pitch;
@@ -186,16 +191,19 @@ fn render(window: &mut BossBarWindow) {
             frame.draw(background, 0.0, bar_top, bar_width, bar_height);
         }
         let filled = (bar_width * percents.get(index).copied().unwrap_or(1.0)).round();
-        if filled <= 0.0 {
-            continue;
+        if filled > 0.0 {
+            if let Some(progress) = &progress {
+                frame.draw_column_clipped(progress, 0.0, bar_top, bar_width, bar_height, filled);
+            }
         }
-        if let Some(progress) = &progress {
-            frame.draw_column_clipped(progress, 0.0, bar_top, bar_width, bar_height, filled);
+        if let Some(notch) = &notch {
+            frame.draw(notch, 0.0, bar_top, bar_width, bar_height);
         }
     }
 
     let x = monitor.left + ((monitor.right - monitor.left) as f32 - width) as i32 / 2;
-    let y = monitor.top;
+    // 顶栏占用屏幕顶部时，整条窗口按工作区顶部下移，避免名字被顶栏盖住
+    let y = window.host.work_area().top.max(monitor.top);
     if let Some(frame) = &window.frame {
         window.host.present(frame, x, y);
     }

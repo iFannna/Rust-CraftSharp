@@ -32,6 +32,9 @@ async function setVisible(label: WindowLabel, visible: boolean, focus = false) {
     await target.unminimize().catch(() => undefined);
   }
   if (focus) await target.setFocus().catch(() => undefined);
+  if (label === WINDOW_LABEL.settings) {
+    void invoke("raise_window", { label }).catch(() => undefined);
+  }
 }
 
 /** 状态栏由 Rust 原生窗口绘制，显隐走独立命令 */

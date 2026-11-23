@@ -45,5 +45,12 @@ mod window_fx {
     pub fn install_caption_hook(_hwnd: isize, _app: tauri::AppHandle, _label: String) {}
 }
 
+#[cfg(target_os = "linux")]
+mod window_x11;
+#[cfg(target_os = "linux")]
+pub use window_x11::raise;
+#[cfg(not(target_os = "linux"))]
+pub fn raise(_: &tauri::WebviewWindow) {}
+
 pub use windows_api::*;
 pub use window_fx::*;

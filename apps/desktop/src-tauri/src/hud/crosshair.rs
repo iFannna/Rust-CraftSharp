@@ -33,6 +33,8 @@ struct CrosshairWindow {
     metrics: Metrics,
     frame: Option<Frame>,
     shown: bool,
+    /// 当前窗口所在层，置顶切换时需要重建窗口
+    topmost: Option<bool>,
     /// 窗口矩形，坐标全部换算到窗口客户区
     origin: (i32, i32),
 }
@@ -59,6 +61,7 @@ fn with_window<T>(f: impl FnOnce(&mut CrosshairWindow) -> T) -> Option<T> {
                 metrics: Metrics::default(),
                 frame: None,
                 shown: false,
+                topmost: Some(false),
                 origin: (0, 0),
             });
         }
@@ -70,6 +73,18 @@ pub fn apply(config: CrosshairCfg) {
     with_window(|window| {
         window.config = Some(config);
         let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
+        // 桌面层与置顶层在 X11 上是两种窗口，切换时重建
+        if window.topmost != Some(topmost) {
+            let options = Options { click_through: true, desktop: !topmost };
+            let Some(host) =
+                Host::create("CraftSharpCrosshair", "CraftSharp Crosshair", options, ignore)
+            else {
+                return;
+            };
+            window.host = host;
+            window.topmost = Some(topmost);
+            window.shown = false;
+        }
         window.host.set_layer(!topmost);
         render(window);
     });

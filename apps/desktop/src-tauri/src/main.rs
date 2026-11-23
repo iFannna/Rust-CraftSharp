@@ -61,6 +61,10 @@ mod windowdrag;
 mod hitmask;
 
 mod hotkeys;
+#[cfg(target_os = "linux")]
+mod hotkeys_x11;
+#[cfg(target_os = "linux")]
+mod keys_x11;
 
 /// 给自定义标题栏安装最大化按钮分屏命中。
 #[tauri::command]
@@ -85,19 +89,19 @@ fn install_caption_hook(app: tauri::AppHandle, window: tauri::WebviewWindow) -> 
 
 #[tauri::command]
 fn register_hotkeys(app: tauri::AppHandle, actions: Vec<String>) {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     hotkeys::register(&app, actions);
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = (app, actions);
 }
 
 #[tauri::command]
 fn hotkey_failures() -> Vec<String> {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     {
         hotkeys::failures()
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Vec::new()
     }
@@ -601,6 +605,16 @@ async fn clear_app_data(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?
 }
 
+/// WebView 自行 show 后补一次置顶，X11 下由平台层完成。
+#[tauri::command]
+fn raise_window(app: tauri::AppHandle, label: String) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(&label) {
+        let _ = window.set_focus();
+        platform::raise(&window);
+    }
+}
+
 /// 清除数据后重新加载配置驱动的窗口，设置面板本身就地刷新
 #[tauri::command]
 fn reload_app_windows(app: tauri::AppHandle) {
@@ -641,6 +655,7 @@ fn show_settings(app: &tauri::AppHandle) {
         let _ = window.unminimize();
     }
     let _ = window.set_focus();
+    platform::raise(&window);
 }
 
 fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -678,8 +693,35 @@ fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         builder = builder.icon(icon);
     }
 
+    // Linux 托盘只有原生菜单，不派发点击事件
+    #[cfg(target_os = "linux")]
+    {
+        use tauri::menu::{Menu, MenuItem};
+        let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+        let exit = MenuItem::with_id(app, "exit", "退出", true, None::<&str>)?;
+        let menu = Menu::with_items(app, &[&settings, &exit])?;
+        builder = builder.menu(&menu).on_menu_event(|app, event| match event.id.as_ref() {
+            "settings" => crate::show_settings(app),
+            "exit" => app.exit(0),
+            _ => {}
+        });
+    }
+
     builder.build(app)?;
     Ok(())
+}
+
+/// Linux 关闭设置只隐藏，保留原生 HUD 所需的事件循环
+fn keep_alive(window: &tauri::Window, event: &tauri::WindowEvent) {
+    #[cfg(target_os = "linux")]
+    if window.label() == "settings" {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (window, event);
 }
 
 /// 隐藏窗口默认会被 WebView2 降频，设置面板和 HUD 控制页要等首次显示才补渲染。
@@ -725,7 +767,25 @@ fn harden_webviews(app: &tauri::AppHandle) {
     }
 }
 
+/// X11 下没有 DRI3 时 WebKit 的 DMA-BUF 合成会白屏，Wayland 保持默认
+#[cfg(target_os = "linux")]
+fn tune_linux_webkit() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
+        return;
+    }
+    let wayland = match std::env::var("XDG_SESSION_TYPE") {
+        Ok(kind) => kind == "wayland",
+        Err(_) => std::env::var_os("WAYLAND_DISPLAY").is_some(),
+    };
+    if !wayland {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "linux")]
+    tune_linux_webkit();
+
     #[cfg(windows)]
     keep_hidden_webviews_active();
 
@@ -747,7 +807,11 @@ fn main() {
         .setup(|app| {
             use tauri::Manager;
 
+            #[cfg(windows)]
             create_tray(app.handle())?;
+            // Linux 托盘依赖桌面扩展，创建失败不影响主流程
+            #[cfg(target_os = "linux")]
+            let _ = create_tray(app.handle());
             singleinstance::watch(app.handle().clone());
 
             let slots_path = app.path().app_config_dir().unwrap_or_default().join("slots.json");
@@ -766,6 +830,10 @@ fn main() {
             for config in app.config().app.windows.iter() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
+
+            // Linux 没有常驻 WebView 窗口时事件循环会结束，启动直接给设置入口
+            #[cfg(target_os = "linux")]
+            show_settings(app.handle());
 
             #[cfg(all(windows, not(debug_assertions)))]
             harden_webviews(app.handle());
@@ -788,6 +856,7 @@ fn main() {
             dragdrop::install_all(app.handle());
             Ok(())
         })
+        .on_window_event(keep_alive)
         .invoke_handler(tauri::generate_handler![
             slot_icon,
             open_path,
@@ -836,6 +905,7 @@ fn main() {
             exit_app,
             clear_app_data,
             reload_app_windows,
+            raise_window,
             wallpaper_list,
             wallpaper_monitors,
             wallpaper_apply_layout,
