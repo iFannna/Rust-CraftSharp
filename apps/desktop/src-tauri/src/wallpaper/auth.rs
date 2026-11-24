@@ -53,7 +53,13 @@ pub fn save(app: &AppHandle, cookie: &str) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     let encrypted = protect(cookie)?;
-    fs::write(file, encrypted).map_err(|error| format!("保存登录信息失败：{error}"))?;
+    fs::write(&file, encrypted).map_err(|error| format!("保存登录信息失败：{error}"))?;
+    // Linux 没有 DPAPI，会话文件只对当前用户可读
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&file, fs::Permissions::from_mode(0o600));
+    }
     if let Ok(mut slot) = slot().write() {
         *slot = Some(cookie.to_string());
     }
@@ -193,11 +199,11 @@ fn unsafe_unprotect(bytes: &[u8]) -> Result<Vec<u8>, ()> {
 }
 
 #[cfg(not(windows))]
-fn protect(_value: &str) -> Result<Vec<u8>, String> {
-    Err("当前平台未实现".into())
+fn protect(value: &str) -> Result<Vec<u8>, String> {
+    Ok(value.as_bytes().to_vec())
 }
 
 #[cfg(not(windows))]
-fn unprotect(_bytes: &[u8]) -> Result<String, String> {
-    Err("当前平台未实现".into())
+fn unprotect(bytes: &[u8]) -> Result<String, String> {
+    String::from_utf8(bytes.to_vec()).map_err(|_| "登录信息格式异常".into())
 }

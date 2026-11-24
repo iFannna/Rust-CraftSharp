@@ -35,7 +35,7 @@ fn engine() -> &'static Mutex<Engine> {
 }
 
 pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
-    let monitors = desktop::monitors();
+    let monitors = desktop::monitors_native();
     let mut specs = Vec::new();
     for (device, video) in targets {
         let monitor = monitors
@@ -62,7 +62,7 @@ pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
 }
 
 pub fn apply_span(video: &PathBuf, transform: Transform) -> Result<(), String> {
-    let monitors = desktop::monitors();
+    let monitors = desktop::monitors_native();
     let virtual_bounds = virtual_bounds(&monitors).ok_or_else(|| "没有可用显示器".to_string())?;
     let specs = monitors
         .iter()
@@ -129,7 +129,7 @@ pub fn restore(app: &AppHandle) {
 
 /// 返回 None 表示显示器尚未就绪，保留状态稍后重试
 fn specs_from(app: &AppHandle, saved: &[Saved]) -> Option<Vec<Spec>> {
-    let monitors = desktop::monitors();
+    let monitors = desktop::monitors_native();
     if monitors.is_empty() {
         return None;
     }
@@ -281,7 +281,7 @@ fn ensure_watchdog() {
                 break;
             }
 
-            let monitors = desktop::monitors();
+            let monitors = desktop::monitors_native();
             let mut next = Vec::new();
             let mut changed = false;
             for spec in &engine.specs {

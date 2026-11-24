@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use serde::Serialize;
+use tauri::AppHandle;
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,17 +26,45 @@ impl MonitorInfo {
     }
 }
 
-/// 枚举在场显示器，按左上到右下排序；COM 不可用时返回空列表
-pub fn monitors() -> Vec<MonitorInfo> {
+/// 枚举在场显示器；Linux 走 Tauri 后端，X11 与 Wayland 都能拿到
+pub fn monitors(app: &AppHandle) -> Vec<MonitorInfo> {
     #[cfg(windows)]
     {
-        com::Desktop::new()
-            .map(|desktop| desktop.monitors())
-            .unwrap_or_default()
+        let _ = app;
+        monitors_native()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
+        linux::monitors(app)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let _ = app;
         Vec::new()
+    }
+}
+
+/// Windows 动态壁纸内部直接取 COM 枚举，不依赖 Tauri 窗口
+#[cfg(windows)]
+pub fn monitors_native() -> Vec<MonitorInfo> {
+    com::Desktop::new()
+        .map(|desktop| desktop.monitors())
+        .unwrap_or_default()
+}
+
+/// 各平台静态壁纸的最小能力描述：能否逐屏设置、能否跨屏拼接
+pub fn per_monitor() -> bool {
+    #[cfg(windows)]
+    {
+        true
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux::per_monitor()
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        false
     }
 }
 
@@ -62,9 +91,26 @@ pub fn apply(path: &Path) -> Result<(), String> {
             Err("设置壁纸失败".into())
         };
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::apply(path)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = path;
+        Err("当前平台未实现".into())
+    }
+}
+
+/// 跨屏拼接：系统原生 spanned 一眼铺满全部屏幕，不能逐屏设置时使用
+pub fn apply_span(source: &Path) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        linux::apply_span(source)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = source;
         Err("当前平台未实现".into())
     }
 }
@@ -83,7 +129,11 @@ pub fn set_for(device_path: &str, path: &Path) -> Result<(), String> {
             Err(format!("显示器设置失败：{device_path}"))
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::set_for(device_path, path)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = (device_path, path);
         Err("当前平台未实现".into())
@@ -393,5 +443,163 @@ mod com {
                 }
             }
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::path::Path;
+    use std::process::Command;
+
+    use tauri::AppHandle;
+
+    use super::MonitorInfo;
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum Desktop {
+        Gnome,
+        Kde,
+        Other,
+    }
+
+    fn desktop() -> Desktop {
+        let current = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+        if current.contains("GNOME") || current.contains("UNITY") {
+            Desktop::Gnome
+        } else if current.contains("KDE") {
+            Desktop::Kde
+        } else {
+            Desktop::Other
+        }
+    }
+
+    /// 显示器来自 Tauri 后端：X11 是 XRandR，Wayland 是合成器，两边都能枚举
+    pub fn monitors(app: &AppHandle) -> Vec<MonitorInfo> {
+        let list = app.available_monitors().unwrap_or_default();
+        let mut result = Vec::new();
+        for (index, monitor) in list.iter().enumerate() {
+            let position = monitor.position();
+            let size = monitor.size();
+            let left = position.x;
+            let top = position.y;
+            let right = left + size.width as i32;
+            let bottom = top + size.height as i32;
+            if right <= left || bottom <= top {
+                continue;
+            }
+            let primary = left <= 0 && top <= 0 && right > 0 && bottom > 0;
+            let name = monitor
+                .name()
+                .cloned()
+                .unwrap_or_else(|| format!("monitor-{index}"));
+            result.push(MonitorInfo {
+                device_path: name,
+                left,
+                top,
+                right,
+                bottom,
+                primary,
+            });
+        }
+        if !result.iter().any(|monitor| monitor.primary) {
+            if let Some(first) = result.first_mut() {
+                first.primary = true;
+            }
+        }
+        result.sort_by_key(|monitor| (monitor.left, monitor.top));
+        result
+    }
+
+    fn file_uri(path: &Path) -> String {
+        let text = path.to_string_lossy();
+        let mut uri = String::from("file://");
+        for byte in text.as_bytes() {
+            match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                    uri.push(*byte as char)
+                }
+                _ => uri.push_str(&format!("%{byte:02X}")),
+            }
+        }
+        uri
+    }
+
+    fn gsettings(key: &str, value: &str) -> Result<(), String> {
+        let status = Command::new("gsettings")
+            .args(["set", "org.gnome.desktop.background", key, value])
+            .status()
+            .map_err(|error| format!("无法调用 gsettings：{error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("写入 GNOME 壁纸设置失败".into())
+        }
+    }
+
+    /// GNOME 只提供整屏设置；zoom 对应填充，spanned 对应拼接
+    fn gnome_set(path: &Path, options: &str) -> Result<(), String> {
+        let uri = file_uri(path);
+        gsettings("picture-uri", &uri)?;
+        let _ = gsettings("picture-uri-dark", &uri);
+        let _ = gsettings("picture-options", options);
+        Ok(())
+    }
+
+    fn command_ok(program: &str, args: &[&str]) -> Result<(), String> {
+        let status = Command::new(program)
+            .args(args)
+            .status()
+            .map_err(|error| format!("无法调用 {program}：{error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("{program} 执行失败"))
+        }
+    }
+
+    fn xwallpaper(program: &str, args: &[&str]) -> Result<(), String> {
+        command_ok(program, args)
+    }
+
+    pub fn apply(path: &Path) -> Result<(), String> {
+        let file = path.to_string_lossy().into_owned();
+        match desktop() {
+            Desktop::Gnome => gnome_set(path, "zoom"),
+            Desktop::Kde => command_ok("plasma-apply-wallpaperimage", &[&file]),
+            Desktop::Other => xwallpaper("xwallpaper", &["--zoom", &file])
+                .or_else(|_| command_ok("feh", &["--bg-fill", &file])),
+        }
+    }
+
+    pub fn set_for(device: &str, path: &Path) -> Result<(), String> {
+        match desktop() {
+            Desktop::Gnome | Desktop::Kde => Err("当前桌面不支持每屏独立壁纸".into()),
+            Desktop::Other => {
+                let file = path.to_string_lossy().into_owned();
+                xwallpaper("xwallpaper", &["--output", device, "--zoom", &file])
+            }
+        }
+    }
+
+    pub fn apply_span(source: &Path) -> Result<(), String> {
+        match desktop() {
+            Desktop::Gnome => gnome_set(source, "spanned"),
+            _ => Err("当前桌面不支持跨屏拼接壁纸".into()),
+        }
+    }
+
+    pub fn per_monitor() -> bool {
+        desktop() == Desktop::Other && command_exists("xwallpaper")
+    }
+
+    fn command_exists(program: &str) -> bool {
+        std::env::var_os("PATH")
+            .map(|paths| {
+                std::env::split_paths(&paths)
+                    .any(|dir| dir.join(program).is_file())
+            })
+            .unwrap_or(false)
     }
 }

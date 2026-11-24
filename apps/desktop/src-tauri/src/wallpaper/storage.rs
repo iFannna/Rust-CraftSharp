@@ -65,7 +65,16 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dir)
+            .status()
+            .map_err(|error| format!("无法打开文件夹：{error}"))?;
+        Ok(())
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     Err("当前平台未实现".into())
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "craftsharp-desktop"
-version = "26.11.20"
+version = "26.11.24"
 description = "CraftSharp desktop shell"
 license = "MIT"
 repository = "https://github.com/iFannna/Rust-CraftSharp"
@@ -19,6 +19,7 @@ ab_glyph = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["shape", "xinput", "xkb"] }
+ureq = { version = "2", features = ["tls"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"

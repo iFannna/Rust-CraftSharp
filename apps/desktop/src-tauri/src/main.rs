@@ -161,8 +161,8 @@ async fn system_metrics() -> metrics::SystemMetrics {
 }
 
 #[tauri::command]
-fn set_autostart(enabled: bool) -> Result<(), String> {
-    autostart::set(enabled)
+fn set_autostart(enabled: bool, open_settings: bool) -> Result<(), String> {
+    autostart::set(enabled, open_settings)
 }
 
 /// 更新 HUD 窗口的可命中矩形，透明像素穿透到桌面。
@@ -490,8 +490,8 @@ async fn wallpaper_list(page: u32, kind: String, sort: String) -> Result<wallpap
 }
 
 #[tauri::command]
-async fn wallpaper_monitors() -> Vec<wallpaper::MonitorInfo> {
-    tauri::async_runtime::spawn_blocking(wallpaper::monitors)
+async fn wallpaper_monitors(app: tauri::AppHandle) -> Vec<wallpaper::MonitorInfo> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::monitors(&app))
         .await
         .unwrap_or_default()
 }
@@ -641,6 +641,13 @@ fn double_click_ms() -> u32 {
 #[cfg(not(windows))]
 fn double_click_ms() -> u32 {
     500
+}
+
+/// 登录自启默认只拉起 HUD，勾了默认打开面板才显示设置
+#[cfg(target_os = "linux")]
+fn launched_hidden() -> bool {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    args.iter().any(|arg| arg == "--autostart") && !args.iter().any(|arg| arg == "--open")
 }
 
 fn show_settings(app: &tauri::AppHandle) {
@@ -812,7 +819,6 @@ fn main() {
             // Linux 托盘依赖桌面扩展，创建失败不影响主流程
             #[cfg(target_os = "linux")]
             let _ = create_tray(app.handle());
-            singleinstance::watch(app.handle().clone());
 
             let slots_path = app.path().app_config_dir().unwrap_or_default().join("slots.json");
             slots::init(app.handle(), slots_path);
@@ -841,9 +847,15 @@ fn main() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
 
-            // Linux 没有常驻 WebView 窗口时事件循环会结束，启动直接给设置入口
+            // Linux 没有常驻 WebView 窗口时事件循环会结束，启动直接给设置入口；
+            // 登录自启且未勾默认打开面板时保持隐藏，只跑 HUD
             #[cfg(target_os = "linux")]
-            show_settings(app.handle());
+            if !launched_hidden() {
+                show_settings(app.handle());
+            }
+
+            // 窗口都建好后再监听第二个实例，收到唤醒就能直接显示设置
+            singleinstance::watch(app.handle().clone());
 
             #[cfg(all(windows, not(debug_assertions)))]
             harden_webviews(app.handle());

@@ -6,7 +6,7 @@ import { useAppConfig } from "@/config/useAppConfig";
 import { tOf } from "@/i18n";
 import { languageOptions } from "@/settings/options";
 import { stripHotkeySides } from "@/settings/hotkey";
-import { ActionBar, Button, Note, Row, SectionHead, SectionSubhead, Select, Toggle } from "@/settings/components/controls";
+import { ActionBar, Button, Row, SectionHead, SectionSubhead, Select, Toggle } from "@/settings/components/controls";
 import { TrayControls } from "@/settings/sections/system/trayControls";
 import { StorageControls } from "@/settings/sections/system/storageControls";
 import { confirmRestoreDefaults } from "@/settings/confirmRestore";
@@ -14,8 +14,12 @@ import { confirmRestoreDefaults } from "@/settings/confirmRestore";
 export function SystemSection() {
   const config = useAppConfig();
   const t = tOf(config.system.language);
-  const [autoStartFailed, setAutoStartFailed] = useState(false);
   const [storageReset, setStorageReset] = useState(0);
+
+  const autoStartFailed = (reason: unknown) => {
+    console.error(reason);
+    toast.info(t("system.autoStartError"));
+  };
 
   const resetSystem = async () => {
     if (!(await confirmRestoreDefaults(t))) return;
@@ -23,11 +27,9 @@ export function SystemSection() {
     updateConfig({ system: defaults.system, tray: defaults.tray });
     setStorageReset((value) => value + 1);
     toast.success(t("common.restoreDone"));
-    // 配置里关闭自启还不够，注册表项也要一起移除
+    // 配置里关闭自启还不够，系统启动项也要一起移除
     if ("__TAURI_INTERNALS__" in window) {
-      void invoke("set_autostart", { enabled: false })
-        .then(() => setAutoStartFailed(false))
-        .catch(() => setAutoStartFailed(true));
+      void invoke("set_autostart", { enabled: false, openSettings: false }).catch(autoStartFailed);
     }
   };
 
@@ -52,21 +54,28 @@ export function SystemSection() {
               updateConfig({ system: { autoStart } });
               return;
             }
-            void invoke("set_autostart", { enabled: autoStart })
-              .then(() => {
-                setAutoStartFailed(false);
-                updateConfig({ system: { autoStart } });
-              })
-              .catch(() => setAutoStartFailed(true));
+            void invoke("set_autostart", {
+              enabled: autoStart,
+              openSettings: config.system.defaultOpenSettings
+            })
+              .then(() => updateConfig({ system: { autoStart } }))
+              .catch(autoStartFailed);
           }}
         />
       </Row>
-      {autoStartFailed ? <Note tone="warning">{t("system.autoStartError")}</Note> : null}
       <Row label={t("system.defaultOpenLabel")} description={t("system.defaultOpenDesc")}>
         <Toggle
           checked={config.system.defaultOpenSettings}
           label={t("system.defaultOpenLabel")}
-          onChange={(defaultOpenSettings) => updateConfig({ system: { defaultOpenSettings } })}
+          onChange={(defaultOpenSettings) => {
+            updateConfig({ system: { defaultOpenSettings } });
+            // Linux 的登录自启项里带着这个开关，已开启时同步改写
+            if (config.system.autoStart && "__TAURI_INTERNALS__" in window) {
+              void invoke("set_autostart", { enabled: true, openSettings: defaultOpenSettings }).catch(
+                autoStartFailed
+              );
+            }
+          }}
         />
       </Row>
       <Row label={t("system.rememberPositionLabel")} description={t("system.rememberPositionDesc")}>

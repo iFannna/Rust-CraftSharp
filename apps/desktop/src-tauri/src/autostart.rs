@@ -1,4 +1,4 @@
-//! 开机自启：读写 HKCU\Software\Microsoft\Windows\CurrentVersion\Run。
+//! 开机自启：Windows 写 HKCU Run，Linux 写 XDG autostart 入口。
 
 #![allow(non_snake_case)]
 
@@ -60,7 +60,7 @@ mod imp {
         }
     }
 
-    pub fn set(enabled: bool) -> Result<(), String> {
+    pub fn set(enabled: bool, _open_settings: bool) -> Result<(), String> {
         let key = open_run_key()?;
         let name = wide(VALUE_NAME);
         let status = unsafe {
@@ -93,13 +93,54 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 mod imp {
-    pub fn set(_enabled: bool) -> Result<(), String> {
+    use std::path::PathBuf;
+
+    /// 登录自启统一用 XDG 入口，跟随用户配置目录
+    fn entry_path() -> PathBuf {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+            .unwrap_or_else(|| PathBuf::from(".config"));
+        base.join("autostart").join("craftsharp.desktop")
+    }
+
+    pub fn set(enabled: bool, open_settings: bool) -> Result<(), String> {
+        let path = entry_path();
+        if !enabled {
+            return match std::fs::remove_file(&path) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(format!("移除开机自启失败：{error}")),
+            };
+        }
+
+        let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|error| format!("创建自启目录失败：{error}"))?;
+        }
+        // 登录启动时先只拉起 HUD；勾了默认打开面板才顺带显示设置
+        let args = if open_settings {
+            "--autostart --open"
+        } else {
+            "--autostart"
+        };
+        let entry = format!(
+            "[Desktop Entry]\nType=Application\nName=CraftSharp\nComment=CraftSharp 桌面 HUD\nExec=\"{}\" {args}\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+            exe.display()
+        );
+        std::fs::write(&path, entry).map_err(|error| format!("写入开机自启失败：{error}"))
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+mod imp {
+    pub fn set(_enabled: bool, _open_settings: bool) -> Result<(), String> {
         Err("当前平台未实现".into())
     }
 }
 
-pub fn set(enabled: bool) -> Result<(), String> {
-    imp::set(enabled)
+pub fn set(enabled: bool, open_settings: bool) -> Result<(), String> {
+    imp::set(enabled, open_settings)
 }

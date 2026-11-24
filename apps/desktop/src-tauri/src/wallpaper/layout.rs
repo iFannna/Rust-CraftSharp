@@ -52,7 +52,7 @@ pub struct ApplyResult {
 }
 
 pub fn apply(app: &AppHandle, plan: Plan) -> Result<ApplyResult, String> {
-    let monitors = desktop::monitors();
+    let monitors = desktop::monitors(app);
     if monitors.is_empty() {
         return Err("没有检测到显示器".into());
     }
@@ -198,11 +198,22 @@ fn apply_span(
         return Ok(result);
     }
 
+    let source = store::prepare(app, &span.entry.id)?;
+    // GNOME 这类桌面不能逐屏设置，直接交给系统做跨屏拼接
+    if !desktop::per_monitor() {
+        desktop::apply_span(&source)?;
+        dynamic::stop_all();
+        dynamic::forget(app);
+        store::sweep(app, std::slice::from_ref(&source));
+        result
+            .applied
+            .extend(monitors.iter().map(|m| m.device_path.clone()));
+        return Ok(result);
+    }
+
     let crops = store::span_crops(app, &span.entry.id, monitors, span.transform)?;
     let mut keeps: Vec<PathBuf> = crops.iter().map(|(_, path)| path.clone()).collect();
-    if let Ok(source) = store::prepare(app, &span.entry.id) {
-        keeps.push(source);
-    }
+    keeps.push(source);
     for (device, path) in &crops {
         match desktop::set_for(device, path) {
             Ok(()) => result.applied.push(device.clone()),

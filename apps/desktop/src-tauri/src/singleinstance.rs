@@ -75,7 +75,61 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod imp {
+    use std::io::{Read, Write};
+    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    use tauri::AppHandle;
+
+    /// 在 acquire 阶段就绑定，避免第二个实例落在初始化空档里
+    static LISTENER: OnceLock<UnixListener> = OnceLock::new();
+
+    fn socket_path() -> PathBuf {
+        let base = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        base.join("craftsharp-desktop.sock")
+    }
+
+    pub fn acquire() -> bool {
+        let path = socket_path();
+        if let Ok(mut stream) = UnixStream::connect(&path) {
+            let _ = stream.write_all(b"show");
+            return false;
+        }
+        // 上次退出留下的 socket 无法连接，删除后重建
+        let _ = std::fs::remove_file(&path);
+        match UnixListener::bind(&path) {
+            Ok(listener) => {
+                let _ = LISTENER.set(listener);
+                true
+            }
+            Err(_) => true,
+        }
+    }
+
+    pub fn watch(app: AppHandle) {
+        let Some(listener) = LISTENER.get().and_then(|listener| listener.try_clone().ok()) else {
+            return;
+        };
+        let _ = std::thread::Builder::new()
+            .name("single-instance".into())
+            .spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { continue };
+                    let mut buffer = [0u8; 8];
+                    let _ = stream.read(&mut buffer);
+                    let handle = app.clone();
+                    let _ = app.run_on_main_thread(move || crate::show_settings(&handle));
+                }
+            });
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 mod imp {
     pub fn acquire() -> bool {
         true

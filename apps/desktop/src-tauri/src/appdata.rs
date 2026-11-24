@@ -39,7 +39,7 @@ pub fn clear(app: &tauri::AppHandle) -> Result<(), String> {
     if let Err(error) = appicon::apply(app, None) {
         failures.push(format!("应用图标：{error}"));
     }
-    if let Err(error) = autostart::set(false) {
+    if let Err(error) = autostart::set(false, false) {
         failures.push(format!("开机自启：{error}"));
     }
 

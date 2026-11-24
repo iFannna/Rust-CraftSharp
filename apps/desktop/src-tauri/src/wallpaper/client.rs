@@ -150,7 +150,11 @@ pub fn download(url: &str, limit: usize, cookie: Option<&str>) -> Result<Vec<u8>
     {
         winhttp::get(&parsed, limit, cookie)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_http::get(&url, limit, cookie)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = (parsed, limit, cookie);
         Err("当前平台未实现".into())
@@ -476,5 +480,38 @@ mod tests {
         let data = envelope.data.unwrap();
         assert_eq!(data.wallpapers[0].id, "wp_1");
         assert_eq!(data.pagination.total_pages, 1);
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_http {
+    use std::io::Read;
+    use std::time::Duration;
+
+    /// Linux 侧走 ureq，TLS 与根证书随程序分发，不依赖系统 curl
+    pub fn get(url: &str, limit: usize, cookie: Option<&str>) -> Result<Vec<u8>, String> {
+        let agent = ureq::AgentBuilder::new()
+            .timeout(Duration::from_secs(30))
+            .build();
+        let mut request = agent
+            .get(url)
+            .set("User-Agent", "CraftSharp/26.11.24")
+            .set("Accept", "*/*");
+        if let Some(cookie) = cookie {
+            request = request.set("Cookie", cookie);
+        }
+        let response = request
+            .call()
+            .map_err(|error| format!("网络请求失败：{error}"))?;
+        let mut body = Vec::new();
+        response
+            .into_reader()
+            .take(limit as u64 + 1)
+            .read_to_end(&mut body)
+            .map_err(|error| format!("读取响应失败：{error}"))?;
+        if body.len() > limit {
+            return Err("壁纸内容过大".into());
+        }
+        Ok(body)
     }
 }

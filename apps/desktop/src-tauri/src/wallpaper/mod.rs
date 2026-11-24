@@ -51,6 +51,9 @@ pub use layout::ApplyResult;
 
 static WATCHING: AtomicBool = AtomicBool::new(false);
 
+/// 壁纸站登录态只认这个站点
+const LOGIN_SITE: &str = "https://mcblock.top";
+
 pub fn init(app: &AppHandle) {
     storage::init(app);
     auth::load(app);
@@ -66,8 +69,8 @@ pub fn image_response(app: &AppHandle, path: &str) -> tauri::http::Response<Vec<
     display::response(app, path)
 }
 
-pub fn monitors() -> Vec<MonitorInfo> {
-    desktop::monitors()
+pub fn monitors(app: &AppHandle) -> Vec<MonitorInfo> {
+    desktop::monitors(app)
 }
 
 pub fn apply_plan(app: &AppHandle, plan: layout::Plan) -> Result<ApplyResult, String> {
@@ -84,7 +87,6 @@ pub fn session() -> bool {
 
 pub fn logout(app: &AppHandle) {
     auth::clear(app);
-    #[cfg(windows)]
     forget_cookies(app);
     if let Some(window) = app.get_window("wallpaper-login") {
         let _ = window.close();
@@ -157,7 +159,11 @@ pub fn capture_session(app: &AppHandle) -> Result<(), String> {
         }
         Ok(())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_cookies::capture(app)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = app;
         Err("当前平台未实现".into())
@@ -165,11 +171,74 @@ pub fn capture_session(app: &AppHandle) -> Result<(), String> {
 }
 
 /// 删除站点 Cookie，登录窗口与常驻窗口的 Cookie 库都尝试一次
-#[cfg(windows)]
 fn forget_cookies(app: &AppHandle) {
-    for label in ["wallpaper-login-site", "settings"] {
-        if let Some(webview) = app.get_webview(label) {
-            let _ = webview.with_webview(|webview| cookie::forget(&webview.controller()));
+    #[cfg(windows)]
+    {
+        for label in ["wallpaper-login-site", "settings"] {
+            if let Some(webview) = app.get_webview(label) {
+                let _ = webview.with_webview(|webview| cookie::forget(&webview.controller()));
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    linux_cookies::forget(app);
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = app;
+}
+
+#[cfg(target_os = "linux")]
+mod linux_cookies {
+    use tauri::{AppHandle, Emitter, Manager};
+
+    use super::{auth, LOGIN_SITE};
+
+    /// WebKitGTK 与 WebView2 共用同一套 Cookie 接口，直接从登录子 WebView 读会话
+    pub fn capture(app: &AppHandle) -> Result<(), String> {
+        for label in ["wallpaper-login-site", "wallpaper-login", "settings"] {
+            let Some(webview) = app.get_webview(label) else {
+                continue;
+            };
+            let url = tauri::Url::parse(LOGIN_SITE).map_err(|error| error.to_string())?;
+            let Ok(cookies) = webview.cookies_for_url(url) else {
+                continue;
+            };
+            let parts: Vec<String> = cookies
+                .iter()
+                .filter(|cookie| cookie.name().to_ascii_lowercase().contains("session-token"))
+                .map(|cookie| format!("{}={}", cookie.name(), cookie.value()))
+                .collect();
+            if parts.is_empty() {
+                continue;
+            }
+            let value = parts.join("; ");
+            if auth::cookie().as_deref() != Some(value.as_str()) {
+                auth::save(app, &value)?;
+                let _ = app.emit("wallpaper:session", true);
+            }
+            if let Some(window) = app.get_window("wallpaper-login") {
+                let _ = window.close();
+            }
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    pub fn forget(app: &AppHandle) {
+        let Ok(url) = tauri::Url::parse(LOGIN_SITE) else {
+            return;
+        };
+        for label in ["wallpaper-login-site", "wallpaper-login", "settings"] {
+            let Some(webview) = app.get_webview(label) else {
+                continue;
+            };
+            let Ok(cookies) = webview.cookies_for_url(url.clone()) else {
+                continue;
+            };
+            for cookie in cookies {
+                if cookie.name().to_ascii_lowercase().contains("session-token") {
+                    let _ = webview.delete_cookie(cookie);
+                }
+            }
         }
     }
 }
@@ -181,9 +250,7 @@ mod cookie {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
     use windows_core::{Interface, HSTRING};
 
-    use super::auth;
-
-    const SITE: &str = "https://mcblock.top";
+    use super::{auth, LOGIN_SITE};
 
     /// 登录页轮询：拿到会话 Cookie 才落盘并发事件，否则静默
     pub fn capture(app: &AppHandle, controller: &ICoreWebView2Controller) {
@@ -192,7 +259,7 @@ mod cookie {
         };
         let handle = app.clone();
         let generation = auth::generation();
-        let uri = HSTRING::from(SITE);
+        let uri = HSTRING::from(LOGIN_SITE);
         let handler = GetCookiesCompletedHandler::create(Box::new(move |_result, list| {
             let Some(value) = list.and_then(read_session) else {
                 return Ok(());
@@ -221,7 +288,7 @@ mod cookie {
             return;
         };
         let cookies = manager.clone();
-        let uri = HSTRING::from(SITE);
+        let uri = HSTRING::from(LOGIN_SITE);
         let handler = GetCookiesCompletedHandler::create(Box::new(move |_result, list| {
             if let Some(list) = list {
                 let mut count = 0u32;
