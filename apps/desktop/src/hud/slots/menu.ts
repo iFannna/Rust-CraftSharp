@@ -143,7 +143,8 @@ async function showMenuAt(
       shadow: false,
       alwaysOnTop: true,
       skipTaskbar: true,
-      resizable: false,
+      // Linux 的非可调整窗口会被 GTK 撑到最小默认高度，必须允许程序改高度
+      resizable: true,
       focus: true
     });
 

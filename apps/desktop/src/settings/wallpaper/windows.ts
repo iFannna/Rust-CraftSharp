@@ -1,11 +1,13 @@
 /** 壁纸预览与设置窗口：已打开时复用并广播最新壁纸 */
 
 import { emit } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { findAppWindow, focusAppWindow, openAppWindow } from "@/lib/appWindow";
+import { isLinux } from "@/lib/runtime";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
-import { watchLogin, type WallpaperItem, type WallpaperKind, type WallpaperSort } from "./api";
+import { LOGIN_URL, watchLogin, type WallpaperItem, type WallpaperKind, type WallpaperSort } from "./api";
 
 export const PREVIEW_EVENT = "wallpaper:preview";
 export const APPLY_EVENT = "wallpaper:apply";
@@ -56,6 +58,21 @@ export async function openWallpaperLogin(title: string): Promise<void> {
   const existing = await findAppWindow(WINDOW_LABEL.wallpaperLogin);
   if (existing) {
     await focusAppWindow(existing);
+  } else if (isLinux()) {
+    // Linux 的子 WebView 会上下排布，登录页直接铺满独立窗口，标题栏交给系统
+    new WebviewWindow(WINDOW_LABEL.wallpaperLogin, {
+      url: LOGIN_URL,
+      title,
+      width: 1100,
+      height: 760,
+      minWidth: 720,
+      minHeight: 480,
+      center: true,
+      decorations: true,
+      resizable: true,
+      focus: true,
+      skipTaskbar: false
+    });
   } else {
     await openAppWindow({
       label: WINDOW_LABEL.wallpaperLogin,

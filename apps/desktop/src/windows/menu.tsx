@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { MenuItemSpec } from "@/hud/slots/menu";
+import { menuHeight } from "@/hud/slots/menu";
 import { installLocalHotkeys } from "@/lib/localHotkeys";
 import { isTauri } from "@/lib/runtime";
-import { useRevealWindow } from "@/lib/windowReveal";
 import { ThemeRoot } from "@/ui/theme-root";
 import { cn } from "@/ui/lib/utils";
 import "@/ui/styles.css";
@@ -21,21 +22,58 @@ function close() {
 }
 
 function MenuWindow() {
-  useRevealWindow();
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const currentWindow = isTauri() ? getCurrentWindow() : null;
-    void currentWindow?.setFocus().catch(() => undefined);
+    if (!currentWindow) return;
 
-    const dispose = currentWindow?.onFocusChanged(({ payload }) => {
+    const dispose = currentWindow.onFocusChanged(({ payload }) => {
       if (!payload) close();
     });
 
     const enabledButtons = () =>
       [...(listRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
 
-    enabledButtons()[0]?.focus();
+    // 先按目标宽度完成布局，再按实际内容高度收起窗口，避免窗口带多余空白
+    const fit = async () => {
+      const targetHeight = menuHeight(items, isTray ? "tray" : "slot");
+      const [scale, inner] = await Promise.all([
+        currentWindow.scaleFactor(),
+        currentWindow.innerSize()
+      ]);
+      let width = inner.width / scale;
+      if (!(width > 40)) width = window.innerWidth;
+      // 创建时的高度在 Linux 上可能没生效，显示前先按条目数落一次
+      if (width > 40 && Math.abs(inner.height / scale - targetHeight) >= 1) {
+        await currentWindow.setSize(new LogicalSize(width, targetHeight)).catch(() => undefined);
+      }
+      await currentWindow.show().catch(() => undefined);
+      await currentWindow.setFocus().catch(() => undefined);
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      const list = listRef.current;
+      if (!list) return;
+      const style = getComputedStyle(list);
+      const padding =
+        (Number.parseFloat(style.paddingTop) || 0) +
+        (Number.parseFloat(style.paddingBottom) || 0);
+      const border =
+        (Number.parseFloat(style.borderTopWidth) || 0) +
+        (Number.parseFloat(style.borderBottomWidth) || 0);
+      const content = [...list.children].reduce(
+        (sum, child) => sum + (child as HTMLElement).offsetHeight,
+        0
+      );
+      const height = Math.max(24, Math.round(content + padding + border));
+      if (width > 40 && Math.abs(inner.height / scale - height) >= 1) {
+        await currentWindow.setSize(new LogicalSize(width, height)).catch(() => undefined);
+      }
+      enabledButtons()[0]?.focus();
+    };
+    void fit();
+
     // 隐藏窗口创建时焦点不生效，显示后补一次
     const focusTimer = window.setTimeout(() => enabledButtons()[0]?.focus(), 60);
 

@@ -52,17 +52,29 @@ function ConfirmDialog() {
       const footer = textEl.nextElementSibling as HTMLElement | null;
       const containerStyle = container ? getComputedStyle(container) : null;
       const footerStyle = footer ? getComputedStyle(footer) : null;
+      const paddingX =
+        (Number.parseFloat(containerStyle?.paddingLeft ?? "") || 20) +
+        (Number.parseFloat(containerStyle?.paddingRight ?? "") || 20);
       const chrome =
         (header?.offsetHeight || 32) +
         (Number.parseFloat(containerStyle?.paddingTop ?? "") || 20) +
         (Number.parseFloat(containerStyle?.paddingBottom ?? "") || 20) +
         (footer?.offsetHeight || 36) +
         (Number.parseFloat(footerStyle?.marginTop ?? "") || 16);
-      const wanted = Math.max(minHeight, chrome + bodyEl.offsetHeight);
+
+      const [scale, inner] = await Promise.all([current.scaleFactor(), current.innerSize()]);
+      let width = inner.width / scale;
+      if (!(width > 40)) width = window.innerWidth;
+      if (!(width > 40)) width = 400;
+
+      // 隐藏窗口在 Linux 上可能还没分配视口，先按目标宽度量文本再还原
+      bodyEl.style.width = `${Math.max(80, width - paddingX)}px`;
+      const bodyHeight = bodyEl.offsetHeight;
+      bodyEl.style.width = "";
+
+      const wanted = Math.max(minHeight, chrome + bodyHeight);
       const maxHeight = Math.max(minHeight, window.screen.availHeight - SCREEN_MARGIN);
       const height = Math.min(wanted, maxHeight);
-      const [scale, inner] = await Promise.all([current.scaleFactor(), current.innerSize()]);
-      const width = inner.width / scale;
 
       await current.setSize(new LogicalSize(width, height));
       if (cancelled) return;

@@ -4,6 +4,8 @@ const blockedSingleKeys = new Set(["F5", "F12", "F7"]);
 const blockedCtrlKeys = new Set(["r", "u", "p", "s"]);
 const blockedCtrlShiftKeys = new Set(["i", "j", "c", "k"]);
 
+let installed = false;
+
 function isBlockedShortcut(event: KeyboardEvent): boolean {
   if (blockedSingleKeys.has(event.key)) return true;
   if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) return true;
@@ -14,8 +16,9 @@ function isBlockedShortcut(event: KeyboardEvent): boolean {
 }
 
 export function installProductionGuards() {
-  if (import.meta.env.DEV) return;
+  if (installed || import.meta.env.DEV) return;
   if (!("__TAURI_INTERNALS__" in window)) return;
+  installed = true;
 
   // 捕获阶段只拦默认行为，页面自定义右键菜单仍能收到事件
   window.addEventListener("contextmenu", (event) => event.preventDefault(), true);
