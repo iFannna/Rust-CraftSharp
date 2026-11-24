@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
-import { isTauri } from "@/lib/runtime";
+import { isLinux, isTauri } from "@/lib/runtime";
 import { cn } from "@/ui/lib/utils";
 import { TitleBar } from "@/ui/title-bar";
 
@@ -53,6 +53,7 @@ export function WindowFrame({
   const [maximized, setMaximized] = useState(false);
   const maximizedListener = useRef(onMaximizedChange);
   maximizedListener.current = onMaximizedChange;
+  const shell = isLinux();
 
   useEffect(() => {
     if (controls !== "full" || !isTauri()) return;
@@ -89,7 +90,12 @@ export function WindowFrame({
   const t = tOf(getConfig().system.language);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div
+      className={cn(
+        "flex h-screen flex-col overflow-hidden bg-background text-foreground",
+        shell && !maximized && "rounded-xl border border-black/10 dark:border-white/15"
+      )}
+    >
       {resizable && !maximized
         ? RESIZE_EDGES.map((edge) => (
             <div

@@ -828,6 +828,16 @@ fn main() {
             // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序；
             // 3D 覆盖层与各类弹窗由页面按需创建
             for config in app.config().app.windows.iter() {
+                // Linux 没有 DWM 的圆角与描边，设置面板透明后由页面画外壳
+                #[cfg(target_os = "linux")]
+                {
+                    let mut config = config.clone();
+                    if config.label == "settings" {
+                        config.transparent = true;
+                    }
+                    tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
+                }
+                #[cfg(not(target_os = "linux"))]
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
             }
 

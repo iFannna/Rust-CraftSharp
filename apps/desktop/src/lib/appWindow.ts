@@ -1,7 +1,7 @@
 /** 非模态独立窗口：按锚点居中、隐藏创建后显示，已打开时由调用方复用 */
 
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isTauri } from "@/lib/runtime";
+import { isLinux, isTauri } from "@/lib/runtime";
 
 /** 锚点窗口居中，未指定或窗口不存在时回落到屏幕居中 */
 export async function windowPosition(
@@ -79,7 +79,8 @@ export async function openAppWindow(options: AppWindowOptions): Promise<WebviewW
     minWidth: options.minWidth,
     minHeight: options.minHeight,
     visible: false,
-    transparent: false,
+    // Linux 由页面自绘圆角外壳
+    transparent: isLinux(),
     decorations: false,
     shadow: true,
     alwaysOnTop: false,

@@ -5,6 +5,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getConfig, updateConfig } from "@/config/appConfig";
 import { tOf } from "@/i18n";
 import { WINDOW_LABEL } from "@/lib/windowLabels";
+import { isLinux } from "@/lib/runtime";
 
 export type WindowLabel = "settings" | "entity-view" | "entity-preview";
 
@@ -125,6 +126,7 @@ export async function toggleEntityPreview() {
       center: true,
       // 页面挂载后由 useRevealWindow 显示，避免空白帧
       visible: false,
+      transparent: isLinux(),
       decorations: false,
       shadow: true,
       resizable: true,
