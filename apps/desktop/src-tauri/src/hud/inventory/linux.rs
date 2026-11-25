@@ -18,6 +18,7 @@ use crate::slots::{self, SlotItem};
 const ENTITY: &str = "entity-view";
 const TIMER_LOOK: usize = 1;
 const TIMER_HOVER: usize = 2;
+const TIMER_REDRAW: usize = 3;
 const LOOK_INTERVAL_MS: u32 = 16;
 const HOVER_GREEN_MS: u64 = 250;
 const LONG_PRESS_MS: u64 = 150;
@@ -69,6 +70,7 @@ pub struct State {
     tooltip_slot: Option<usize>,
     hover_timer: bool,
     look_timer: bool,
+    redraws: u8,
     entity_meta: Option<String>,
     last_look: Option<(i32, i32, i32, i32)>,
     frame: Option<Frame>,
@@ -153,6 +155,7 @@ pub fn init(app: &AppHandle) {
         tooltip_slot: None,
         hover_timer: false,
         look_timer: false,
+        redraws: 0,
         entity_meta: None,
         last_look: None,
         frame: None,
@@ -422,6 +425,16 @@ fn on_timer(state: &mut State, id: usize) {
         state.host.timer(TIMER_HOVER, 0, false);
         state.hover_timer = false;
         render(state);
+    } else if id == TIMER_REDRAW {
+        if state.redraws == 0 {
+            state.host.timer(TIMER_REDRAW, 0, false);
+            return;
+        }
+        state.redraws -= 1;
+        if state.redraws == 0 {
+            state.host.timer(TIMER_REDRAW, 0, false);
+        }
+        render(state);
     }
 }
 
@@ -525,6 +538,8 @@ fn set_visible_inner(state: &mut State) {
             state.shown = false;
             state.host.hide();
         }
+        state.host.timer(TIMER_REDRAW, 0, false);
+        state.redraws = 0;
         dragicon::hide("inventory");
     }
     sync_entity_setup(state);
@@ -596,6 +611,9 @@ fn present(state: &mut State) {
         state.host.focus();
         state.host.raise();
         raise_entity(state);
+        // 映射完成前提交的帧会被 mutter 丢弃，映射后再补两帧
+        state.redraws = 2;
+        state.host.timer(TIMER_REDRAW, 120, true);
     }
 
     if let (Some(drag), Some(origin)) = (&state.drag, state.rect) {
