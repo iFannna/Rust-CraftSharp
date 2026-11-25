@@ -54,6 +54,7 @@ struct Spec {
 #[derive(Clone)]
 struct Host {
     window: WebviewWindow,
+    xid: u32,
     spec: Spec,
     paused: bool,
 }
@@ -360,12 +361,16 @@ fn create_host(app: &AppHandle, spec: &Spec) -> Result<Host, String> {
         }
         gtk_window.show();
     }
-    if let Err(error) = settle_x11(&window) {
-        let _ = window.close();
-        return Err(error);
-    }
+    let xid = match settle_x11(&window) {
+        Ok(xid) => xid,
+        Err(error) => {
+            let _ = window.close();
+            return Err(error);
+        }
+    };
     Ok(Host {
         window,
+        xid,
         spec: spec.clone(),
         paused: false,
     })
@@ -394,7 +399,6 @@ fn prepare_x11(window: &WebviewWindow) -> Result<(), String> {
 
     let gtk_window = window.gtk_window().map_err(|error| error.to_string())?;
     gtk_window.set_type_hint(gdk::WindowTypeHint::Desktop);
-    gtk_window.set_keep_below(true);
     gtk_window.set_skip_taskbar_hint(true);
     gtk_window.set_skip_pager_hint(true);
     gtk_window.set_focus_on_map(false);
@@ -405,16 +409,15 @@ fn prepare_x11(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-/// 映射完成后补齐所有工作区，并再次清空输入区
-fn settle_x11(window: &WebviewWindow) -> Result<(), String> {
+/// 映射完成后补齐所有工作区、清空输入区，并沉到桌面层最底部
+fn settle_x11(window: &WebviewWindow) -> Result<u32, String> {
     use gtk::glib::Cast;
     use gtk::prelude::*;
 
-    let Ok(gtk_window) = window.gtk_window() else {
-        return Err("动态壁纸仅支持 X11 会话".into());
-    };
+    let gtk_window = window
+        .gtk_window()
+        .map_err(|_| "动态壁纸仅支持 X11 会话".to_string())?;
     gtk_window.stick();
-    gtk_window.set_keep_below(true);
     let empty = gtk::cairo::Region::create();
     gtk_window.input_shape_combine_region(Some(&empty));
 
@@ -425,32 +428,44 @@ fn settle_x11(window: &WebviewWindow) -> Result<(), String> {
         .downcast::<gdkx11::X11Window>()
         .map_err(|_| "动态壁纸仅支持 X11 会话".to_string())?;
     let xid = x11_window.xid() as u32;
+    // 桌面图标由独立桌面层窗口绘制，等窗口进入栈后立刻沉到它下面
     let _ = std::thread::Builder::new()
         .name("wallpaper-restack".into())
         .spawn(move || {
-            std::thread::sleep(Duration::from_millis(400));
-            restack_below(xid);
+            let Ok((conn, screen)) = x11rb::connect(None) else {
+                return;
+            };
+            let root = conn.setup().roots[screen].root;
+            for _ in 0..40 {
+                if read_stack(&conn, root).is_some_and(|stack| stack.contains(&xid)) {
+                    // 映射瞬间的请求可能被 mutter 的入栈覆盖，补发几次
+                    for _ in 0..4 {
+                        lower(&conn, root, &[xid]);
+                        std::thread::sleep(Duration::from_millis(150));
+                    }
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
         });
-    Ok(())
+    Ok(xid)
 }
 
-/// 桌面图标在独立窗口绘制，请求沉到同一层底部，图标才能留在视频之上。
+/// 用分页器身份的 EWMH 请求沉底；普通 ConfigureRequest 会被 mutter 丢弃。
 /// data 依次是 source indication、sibling window、detail，sibling 0 表示没有邻窗
-fn restack_below(xid: u32) {
-    let Ok((conn, screen)) = x11rb::connect(None) else {
+fn lower(conn: &RustConnection, root: Window, xids: &[u32]) {
+    let Some(atom) = intern(conn, "_NET_RESTACK_WINDOW") else {
         return;
     };
-    let root = conn.setup().roots[screen].root;
-    let Some(atom) = intern(&conn, "_NET_RESTACK_WINDOW") else {
-        return;
-    };
-    let event = ClientMessageEvent::new(32, xid, atom, [1, 0, 1, 0, 0]);
-    let _ = conn.send_event(
-        false,
-        root,
-        EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
-        event,
-    );
+    for xid in xids {
+        let event = ClientMessageEvent::new(32, *xid, atom, [2, 0, 1, 0, 0]);
+        let _ = conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        );
+    }
     let _ = conn.flush();
 }
 
@@ -480,12 +495,18 @@ fn watch(app: AppHandle) {
     let root = conn.setup().roots[screen].root;
     loop {
         std::thread::sleep(Duration::from_secs(1));
-        let idle = engine()
-            .lock()
-            .map(|guard| guard.specs.is_empty())
-            .unwrap_or(true);
+        let (idle, xids) = {
+            let Ok(guard) = engine().lock() else {
+                break;
+            };
+            let xids = guard.hosts.iter().map(|host| host.xid).collect::<Vec<_>>();
+            (guard.specs.is_empty(), xids)
+        };
         if idle {
             break;
+        }
+        if !xids.is_empty() && icons_below(&conn, root, &xids) {
+            lower(&conn, root, &xids);
         }
         let cover = fullscreen_cover(&conn, root);
         let handle = app.clone();
@@ -588,6 +609,23 @@ fn fullscreen_cover(conn: &RustConnection, root: Window) -> Option<Bounds> {
         right: left + size.width as i32,
         bottom: top + size.height as i32,
     })
+}
+
+/// 桌面层的其它窗口（例如桌面图标）压在视频下方时，把视频重新沉底
+fn icons_below(conn: &RustConnection, root: Window, xids: &[u32]) -> bool {
+    read_stack(conn, root)
+        .and_then(|stack| stack.iter().position(|win| xids.contains(win)))
+        .is_some_and(|lowest| lowest > 0)
+}
+
+fn read_stack(conn: &RustConnection, root: Window) -> Option<Vec<u32>> {
+    let atom = intern(conn, "_NET_CLIENT_LIST_STACKING")?;
+    let reply = conn
+        .get_property(false, root, atom, AtomEnum::WINDOW, 0, 4096)
+        .ok()?
+        .reply()
+        .ok()?;
+    reply.value32().map(|values| values.collect())
 }
 
 fn read32(conn: &RustConnection, win: Window, name: &str) -> Option<u32> {
