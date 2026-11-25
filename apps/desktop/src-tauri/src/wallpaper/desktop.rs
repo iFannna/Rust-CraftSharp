@@ -14,6 +14,10 @@ pub struct MonitorInfo {
     pub right: i32,
     pub bottom: i32,
     pub primary: bool,
+    /// 物理像素到逻辑坐标的比例；仅 X11 窗口定位使用
+    #[serde(skip)]
+    #[cfg_attr(windows, allow(dead_code))]
+    pub scale_factor: f64,
 }
 
 impl MonitorInfo {
@@ -413,6 +417,7 @@ mod com {
                     right: rect.right,
                     bottom: rect.bottom,
                     primary,
+                    scale_factor: 1.0,
                 });
             }
             list.sort_by_key(|item| (item.left, item.top));
@@ -478,6 +483,7 @@ mod linux {
     /// 显示器来自 Tauri 后端：X11 是 XRandR，Wayland 是合成器，两边都能枚举
     pub fn monitors(app: &AppHandle) -> Vec<MonitorInfo> {
         let list = app.available_monitors().unwrap_or_default();
+        let connectors = x11_connectors();
         let mut result = Vec::new();
         for (index, monitor) in list.iter().enumerate() {
             let position = monitor.position();
@@ -490,10 +496,16 @@ mod linux {
                 continue;
             }
             let primary = left <= 0 && top <= 0 && right > 0 && bottom > 0;
-            let name = monitor
+            // Tauri 在 Linux 返回的是显示器型号，双胞胎屏会重名；X11 下换回连接器名
+            let mut name = monitor
                 .name()
                 .cloned()
                 .unwrap_or_else(|| format!("monitor-{index}"));
+            if let Some((connector, ..)) = connectors.iter().find(|(_, x, y, w, h)| {
+                *x == left && *y == top && *w == size.width as i32 && *h == size.height as i32
+            }) {
+                name = connector.clone();
+            }
             result.push(MonitorInfo {
                 device_path: name,
                 left,
@@ -501,6 +513,7 @@ mod linux {
                 right,
                 bottom,
                 primary,
+                scale_factor: monitor.scale_factor().max(0.5),
             });
         }
         if !result.iter().any(|monitor| monitor.primary) {
@@ -510,6 +523,38 @@ mod linux {
         }
         result.sort_by_key(|monitor| (monitor.left, monitor.top));
         result
+    }
+
+    /// XRandR 的显示器名称与物理矩形；Wayland 会话下为空，退回 Tauri 名称
+    fn x11_connectors() -> Vec<(String, i32, i32, i32, i32)> {
+        use x11rb::connection::Connection;
+        use x11rb::protocol::randr::ConnectionExt as _;
+        use x11rb::protocol::xproto::ConnectionExt as _;
+
+        let Ok((conn, screen)) = x11rb::connect(None) else {
+            return Vec::new();
+        };
+        let root = conn.setup().roots[screen].root;
+        let Ok(cookie) = conn.randr_get_monitors(root, true) else {
+            return Vec::new();
+        };
+        let Ok(reply) = cookie.reply() else {
+            return Vec::new();
+        };
+        reply
+            .monitors
+            .iter()
+            .filter_map(|monitor| {
+                let name = conn.get_atom_name(monitor.name).ok()?.reply().ok()?;
+                Some((
+                    String::from_utf8_lossy(&name.name).into_owned(),
+                    monitor.x as i32,
+                    monitor.y as i32,
+                    monitor.width as i32,
+                    monitor.height as i32,
+                ))
+            })
+            .collect()
     }
 
     fn file_uri(path: &Path) -> String {

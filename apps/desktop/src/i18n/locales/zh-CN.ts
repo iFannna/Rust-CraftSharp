@@ -128,6 +128,7 @@ export const zhCN = {
   "wallpaper.zoomOut": "缩小",
   "wallpaper.imageFailed": "加载失败",
   "wallpaper.applyFailed": "设置壁纸失败：{reason}",
+  "wallpaper.videoError": "动态壁纸播放失败，系统可能缺少视频解码组件",
   "wallpaper.downloadFailed": "下载失败：{reason}",
   "wallpaper.setPartial": "已设置，{count} 个显示器未成功",
   "wallpaper.modeSync": "同步",

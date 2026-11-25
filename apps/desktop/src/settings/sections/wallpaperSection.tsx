@@ -1,6 +1,7 @@
 /** 壁纸页：筛选、排序与分页；查看和设置分别交给独立窗口 */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { useAppConfig } from "@/config/useAppConfig";
 import { tOf, type MessageKey } from "@/i18n";
@@ -44,6 +45,25 @@ export function WallpaperSection() {
   const [data, setData] = useState<WallpaperPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 解码失败时桌面只剩一张不动的封面，这里给出明确提示
+  const tRef = useRef(t);
+  tRef.current = t;
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    let dispose: (() => void) | null = null;
+    void listen("wallpaper-video-error", () => {
+      toast.error(tRef.current("wallpaper.videoError"));
+    }).then((off) => {
+      if (cancelled) off();
+      else dispose = off;
+    });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

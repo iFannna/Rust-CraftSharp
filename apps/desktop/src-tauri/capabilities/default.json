@@ -18,6 +18,7 @@
     "wallpaper-preview",
     "wallpaper-apply",
     "wallpaper-login",
+    "wallpaper-video-*",
     "settings"
   ],
   "permissions": [

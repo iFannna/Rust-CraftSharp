@@ -5,38 +5,11 @@ mod client;
 mod desktop;
 mod dialog;
 mod display;
-#[cfg(windows)]
 mod dynamic;
-#[cfg(not(windows))]
-mod dynamic {
-    use std::path::PathBuf;
-
-    use tauri::AppHandle;
-
-    use super::store::Transform;
-
-    pub use super::saved::Saved;
-
-    pub fn apply_monitors(_: &[(String, PathBuf)]) -> Result<(), String> {
-        Err("当前平台暂不支持动态壁纸".into())
-    }
-
-    pub fn apply_span(_: &PathBuf, _: Transform) -> Result<(), String> {
-        Err("当前平台暂不支持动态壁纸".into())
-    }
-
-    pub fn stop_all() {}
-
-    pub fn remember(_: &AppHandle, _: &[Saved]) {}
-
-    pub fn forget(_: &AppHandle) {}
-
-    pub fn restore(_: &AppHandle) {}
-
-    pub fn stop_devices(_: &[String]) {}
-}
 pub(crate) mod layout;
 mod saved;
+#[cfg(target_os = "linux")]
+mod stream;
 mod storage;
 mod store;
 
@@ -47,7 +20,21 @@ use tauri::{AppHandle, Emitter, Manager};
 
 pub use client::Page;
 pub use desktop::MonitorInfo;
+pub use dynamic::VideoState;
 pub use layout::ApplyResult;
+
+/// 视频窗口加载后按 label 取回播放参数
+pub fn video_state(label: &str) -> Option<VideoState> {
+    dynamic::state(label)
+}
+
+/// 视频页自报的播放状态，出错时后端日志能直接看到原因
+pub fn video_status(app: &AppHandle, label: &str, status: &str, detail: &str) {
+    eprintln!("wallpaper-video[{label}]: {status} {detail}");
+    if status == "error" {
+        let _ = app.emit("wallpaper-video-error", detail.to_string());
+    }
+}
 
 static WATCHING: AtomicBool = AtomicBool::new(false);
 
@@ -57,16 +44,18 @@ const LOGIN_SITE: &str = "https://mcblock.top";
 pub fn init(app: &AppHandle) {
     storage::init(app);
     auth::load(app);
+    #[cfg(target_os = "linux")]
+    dynamic::attach(app);
     dynamic::restore(app);
-}
-
-pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
-    client::list(page, kind, sort)
 }
 
 /// 本地协议响应：静态壁纸的无水印缩略图与预览图
 pub fn image_response(app: &AppHandle, path: &str) -> tauri::http::Response<Vec<u8>> {
     display::response(app, path)
+}
+
+pub fn list(page: u32, kind: &str, sort: &str) -> Result<Page, String> {
+    client::list(page, kind, sort)
 }
 
 pub fn monitors(app: &AppHandle) -> Vec<MonitorInfo> {

@@ -130,6 +130,7 @@ export const enUS: Messages = {
   "wallpaper.zoomOut": "Zoom Out",
   "wallpaper.imageFailed": "Failed to Load",
   "wallpaper.applyFailed": "Failed to apply wallpaper: {reason}",
+  "wallpaper.videoError": "Dynamic wallpaper failed to play, the system may lack a video decoder",
   "wallpaper.downloadFailed": "Download failed: {reason}",
   "wallpaper.setPartial": "Applied, {count} monitor(s) failed",
   "wallpaper.modeSync": "Sync",
