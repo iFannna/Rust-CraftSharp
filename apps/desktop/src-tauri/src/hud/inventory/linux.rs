@@ -821,10 +821,20 @@ fn raise_entity(state: &mut State) {
     }
 }
 
+/// 3D 覆盖层跟随物品栏一起直接出现，避免两个窗口各播一段开窗动画
+fn no_window_animation(window: &tauri::WebviewWindow) {
+    use gtk::prelude::*;
+
+    if let Ok(gtk_window) = window.gtk_window() {
+        gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Menu);
+    }
+}
+
 /// 离屏窗口完成贴图加载后登记：置顶、补发参数、显示并定位
 pub fn entity_ready() {
     with_state(|state| {
         let Some(window) = state.app.get_webview_window(ENTITY) else { return };
+        no_window_animation(&window);
         let _ = window.set_always_on_top(true);
         state.entity_meta = None;
         sync_entity_setup(state);

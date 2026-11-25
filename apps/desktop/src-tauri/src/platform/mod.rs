@@ -72,6 +72,8 @@ pub fn restack_top(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
 
     let Some(gtk_window) = window.gtk_window().ok() else { return };
+    // 与物品栏同为菜单类窗口，才能落在同一个弹层层里再按顺序重排
+    gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Menu);
     let Some(gdk_window) = gtk_window.window() else { return };
     if let Ok(x11) = gdk_window.downcast::<gdkx11::X11Window>() {
         crate::hud::host_x11::restack_top(x11.xid() as u32);

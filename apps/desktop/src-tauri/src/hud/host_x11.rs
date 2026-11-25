@@ -598,7 +598,8 @@ fn set_atoms(
     let kind = if desktop {
         "_NET_WM_WINDOW_TYPE_DESKTOP"
     } else if panel {
-        "_NET_WM_WINDOW_TYPE_NORMAL"
+        // 菜单类窗口 mutter 不播开窗动画，浮层直接出现
+        "_NET_WM_WINDOW_TYPE_MENU"
     } else {
         "_NET_WM_WINDOW_TYPE_UTILITY"
     };

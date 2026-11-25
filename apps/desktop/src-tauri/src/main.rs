@@ -851,6 +851,8 @@ fn main() {
             // 原生状态栏先于 WebView 建好，启动就能按上次的参数出画面
             hud::init(app.handle());
             hud::inventory::init(app.handle());
+            // 蒙版提前映射为透明窗口，首次打开物品栏时只换像素，不带窗口动画
+            hud::overlay::prewarm();
             hud::cache::restore(app.handle());
             slots::on_changed(hud::inventory::slots_changed);
 
