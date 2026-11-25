@@ -162,6 +162,10 @@ function inventoryConfig() {
 }
 
 function push() {
+  // 启动恢复时 Rust 先于本页显示物品栏，预热事件会丢；配置就绪后补建覆盖层
+  if (getConfig().inventory.visible && getConfig().inventory.showModel) {
+    void ensureEntityOverlay().catch(() => undefined);
+  }
   void invoke("hud_apply", { config: buildConfig() }).catch(() => undefined);
   void invoke("inventory_apply", { config: inventoryConfig() }).catch(() => undefined);
   void invoke("crosshair_apply", { config: crosshairConfig() }).catch(() => undefined);

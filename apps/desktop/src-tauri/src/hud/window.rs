@@ -108,7 +108,7 @@ pub fn with_state<T>(f: impl FnOnce(&mut State) -> T) -> Option<T> {
 pub fn init(app: &AppHandle) {
     // 状态栏属于桌面层：顶层窗口置底、点击不激活，所有者设为桌面以随显示桌面保留
     host::attach_app(app);
-    let options = host::Options { click_through: false, desktop: true };
+    let options = host::Options { click_through: false, desktop: true, panel: false };
     let Some(host) = Host::create("CraftSharpHud", "CraftSharp HUD", options, dispatch)
     else {
         return;

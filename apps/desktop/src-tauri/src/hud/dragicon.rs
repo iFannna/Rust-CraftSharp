@@ -29,7 +29,7 @@ pub fn show(owner: &'static str, sprite: &Sprite, x: i32, y: i32) {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            let options = Options { click_through: true, desktop: false };
+            let options = Options { click_through: true, desktop: false, panel: false };
             let Some(host) =
                 Host::create("CraftSharpDragIcon", "CraftSharp Drag", options, ignore)
             else {

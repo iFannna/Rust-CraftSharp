@@ -76,7 +76,7 @@ fn with_window<T>(f: impl FnOnce(&mut TooltipWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            let options = Options { click_through: true, desktop: false };
+            let options = Options { click_through: true, desktop: false, panel: false };
             let Some(host) =
                 Host::create("CraftSharpTooltip", "CraftSharp Tooltip", options, ignore)
             else {

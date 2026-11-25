@@ -54,7 +54,7 @@ fn with_window<T>(f: impl FnOnce(&mut BossBarWindow) -> T) -> Option<T> {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
             // BOSS 条和状态栏一样属于桌面层，整窗鼠标穿透
-            let options = Options { click_through: true, desktop: true };
+            let options = Options { click_through: true, desktop: true, panel: false };
             let Some(host) =
                 Host::create("CraftSharpBossBar", "CraftSharp Boss Bar", options, ignore)
             else {

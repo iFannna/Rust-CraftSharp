@@ -4,24 +4,37 @@
 mod windows_api;
 #[cfg(not(windows))]
 mod windows_api {
-    pub fn open(_path: &str) -> Result<(), String> {
-        Err("当前平台未实现".into())
+    use std::path::Path;
+    use std::process::Command;
+
+    fn launch(target: &Path) -> Result<(), String> {
+        Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 
-    pub fn reveal(_path: &str) -> Result<(), String> {
-        Err("当前平台未实现".into())
+    pub fn open(path: &str) -> Result<(), String> {
+        launch(Path::new(path))
+    }
+
+    /// 在文件管理器里打开所在目录
+    pub fn reveal(path: &str) -> Result<(), String> {
+        let target = Path::new(path);
+        launch(target.parent().unwrap_or(target))
     }
 
     pub fn run_as_admin(_path: &str) -> Result<(), String> {
         Err("当前平台未实现".into())
     }
 
-    pub fn exists(_path: &str) -> bool {
-        false
+    pub fn exists(path: &str) -> bool {
+        Path::new(path).exists()
     }
 
-    pub fn rename(_from: &str, _to: &str) -> Result<(), String> {
-        Err("当前平台未实现".into())
+    pub fn rename(from: &str, to: &str) -> Result<(), String> {
+        std::fs::rename(from, to).map_err(|error| error.to_string())
     }
 
     pub fn copy_text(_text: &str) -> Result<(), String> {
@@ -51,6 +64,21 @@ mod window_x11;
 pub use window_x11::raise;
 #[cfg(not(target_os = "linux"))]
 pub fn raise(_: &tauri::WebviewWindow) {}
+
+/// 独立弹窗叠在同层浮层之上，菜单等窗口显示后调用
+#[cfg(target_os = "linux")]
+pub fn restack_top(window: &tauri::WebviewWindow) {
+    use gtk::glib::Cast;
+    use gtk::prelude::*;
+
+    let Some(gtk_window) = window.gtk_window().ok() else { return };
+    let Some(gdk_window) = gtk_window.window() else { return };
+    if let Ok(x11) = gdk_window.downcast::<gdkx11::X11Window>() {
+        crate::hud::host_x11::restack_top(x11.xid() as u32);
+    }
+}
+#[cfg(not(target_os = "linux"))]
+pub fn restack_top(_: &tauri::WebviewWindow) {}
 
 pub use windows_api::*;
 pub use window_fx::*;

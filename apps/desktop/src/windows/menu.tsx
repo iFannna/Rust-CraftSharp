@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -70,6 +71,8 @@ function MenuWindow() {
       if (width > 40 && Math.abs(inner.height / scale - height) >= 1) {
         await currentWindow.setSize(new LogicalSize(width, height)).catch(() => undefined);
       }
+      // 物品栏等浮层同为置顶层，菜单需要显式叠到其上方
+      await invoke("restack_window", { label: currentWindow.label }).catch(() => undefined);
       enabledButtons()[0]?.focus();
     };
     void fit();

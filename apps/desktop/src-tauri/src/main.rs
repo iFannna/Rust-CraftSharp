@@ -439,7 +439,6 @@ pub(crate) fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
 /// 离屏窗口完成贴图加载并注册监听后调用，登记预览覆盖层并补发参数
 #[tauri::command]
 fn entity_view_ready() {
-    #[cfg(windows)]
     hud::inventory::entity_ready();
 }
 
@@ -629,6 +628,15 @@ fn raise_window(app: tauri::AppHandle, label: String) {
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.set_focus();
         platform::raise(&window);
+    }
+}
+
+/// 独立弹窗显示后叠到同层浮层最上，Linux 菜单被物品栏压住时使用
+#[tauri::command]
+fn restack_window(app: tauri::AppHandle, label: String) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(&label) {
+        platform::restack_top(&window);
     }
 }
 
@@ -842,10 +850,8 @@ fn main() {
 
             // 原生状态栏先于 WebView 建好，启动就能按上次的参数出画面
             hud::init(app.handle());
-            #[cfg(windows)]
             hud::inventory::init(app.handle());
             hud::cache::restore(app.handle());
-            #[cfg(windows)]
             slots::on_changed(hud::inventory::slots_changed);
 
             // 配置里的窗口全部延迟到这里创建，顺序即初始化顺序；
@@ -945,6 +951,7 @@ fn main() {
             clear_app_data,
             reload_app_windows,
             raise_window,
+            restack_window,
             wallpaper_list,
             wallpaper_monitors,
             wallpaper_video_state,

@@ -10,9 +10,9 @@ use tauri::AppHandle;
 use x11rb::connection::Connection;
 use x11rb::protocol::shape::{ConnectionExt as ShapeExt, SK, SO};
 use x11rb::protocol::xproto::{
-    AtomEnum, ClipOrdering, ColormapAlloc, ConfigureWindowAux, ConnectionExt, CreateGCAux, CreateWindowAux,
-    EventMask, GrabMode, ImageFormat, InputFocus, PropMode, Rectangle, StackMode, VisualClass,
-    Window, WindowClass,
+    AtomEnum, ClientMessageEvent, ClipOrdering, ColormapAlloc, ConfigureWindowAux, ConnectionExt,
+    CreateGCAux, CreateWindowAux, EventMask, GrabMode, ImageFormat, InputFocus, PropMode, Rectangle,
+    StackMode, VisualClass, Window, WindowClass,
 };
 use x11rb::protocol::Event as XEvent;
 use x11rb::rust_connection::RustConnection;
@@ -43,6 +43,7 @@ pub struct Host {
     app: AppHandle,
     click_through: bool,
     managed: bool,
+    panel: bool,
     band: f32,
     size: (u16, u16),
     mask: Vec<Rectangle>,
@@ -70,15 +71,15 @@ impl Host {
             .find(|visual| visual.class == VisualClass::TRUE_COLOR)?
             .visual_id;
 
-        // 桌面层窗口都交给窗口管理器管理，置底与显示桌面才有意义；
-        // 置顶浮层保持 override-redirect，避免被 WM 重新排布
-        let managed = options.desktop;
+        // 桌面层与浮层面板交给窗口管理器；置顶浮层保持 override-redirect
+        let managed = options.desktop || options.panel;
 
         let win = conn.generate_id().ok()?;
         let colormap = conn.generate_id().ok()?;
         conn.create_colormap(ColormapAlloc::NONE, colormap, root, visual).ok()?.check().ok()?;
         let aux = CreateWindowAux::new()
-            .background_pixel(0)
+            // 不设背景：映射与重挂载时服务器不会用背景色抹掉已提交的画面
+            .background_pixmap(x11rb::NONE)
             .border_pixel(0)
             .colormap(colormap)
             .override_redirect(if managed { 0 } else { 1 });
@@ -102,7 +103,7 @@ impl Host {
         let gc = conn.generate_id().ok()?;
         conn.create_gc(gc, win, &CreateGCAux::new()).ok()?.check().ok()?;
 
-        set_atoms(&conn, win, class, title, options.desktop, managed);
+        set_atoms(&conn, win, class, title, options.desktop, options.panel, managed);
         let host = Self {
             conn,
             win,
@@ -112,6 +113,7 @@ impl Host {
             app,
             click_through: options.click_through,
             managed,
+            panel: options.panel,
             band: 0.0,
             size: (1, 1),
             mask: Vec::new(),
@@ -200,18 +202,21 @@ impl Host {
         let bytes = unsafe {
             std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)
         };
-        let _ = self.conn.put_image(
-            ImageFormat::Z_PIXMAP,
-            self.win,
-            self.gc,
-            width,
-            height,
-            0,
-            0,
-            0,
-            32,
-            bytes,
-        );
+        {
+            let _ = self.conn.put_image(
+                ImageFormat::Z_PIXMAP,
+                self.win,
+                self.gc,
+                width,
+                height,
+                0,
+                0,
+                0,
+                32,
+                bytes,
+            );
+            let _ = self.conn.flush();
+        }
         self.update_input_mask(pixels, width, height);
         let _ = self.conn.flush();
     }
@@ -223,6 +228,11 @@ impl Host {
     pub fn show(&self) {
         let _ = self.conn.map_window(self.win);
         let _ = self.conn.flush();
+        if self.panel {
+            // 映射前的初始状态会被 mutter 覆盖，映射后按 EWMH 再声明一次置顶
+            set_state(&self.conn, self.root, self.win, true);
+            self.raise();
+        }
     }
 
     pub fn hide(&self) {
@@ -241,12 +251,38 @@ impl Host {
     }
 
     pub fn raise(&self) {
+        if self.panel {
+            restack(&self.conn, self.root, self.win, 0);
+            return;
+        }
         if self.managed {
             return;
         }
         let aux = ConfigureWindowAux::new().stack_mode(StackMode::ABOVE);
         let _ = self.conn.configure_window(self.win, &aux);
         set_below(&self.conn, self.win, false);
+        let _ = self.conn.flush();
+    }
+
+    /// 把别的受管窗口提到本窗口之上（实体预览覆盖层）
+    pub fn restack_above(&self, xid: u32) {
+        restack(&self.conn, self.root, xid, 0);
+    }
+
+    /// 浮层面板取键盘焦点处理局部快捷键；先经 WM 激活，否则会被焦点策略改回
+    pub fn focus(&self) {
+        if self.panel {
+            if let Some(atom) = intern(&self.conn, "_NET_ACTIVE_WINDOW") {
+                let event = ClientMessageEvent::new(32, self.win, atom, [2, 0, 0, 0, 0]);
+                let _ = self.conn.send_event(
+                    false,
+                    self.root,
+                    EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+                    event,
+                );
+            }
+        }
+        let _ = self.conn.set_input_focus(InputFocus::PARENT, self.win, 0u32);
         let _ = self.conn.flush();
     }
 
@@ -489,7 +525,52 @@ fn intern(conn: &RustConnection, name: &str) -> Option<u32> {
     conn.intern_atom(false, name.as_bytes()).ok()?.reply().ok().map(|reply| reply.atom)
 }
 
-fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, desktop: bool, managed: bool) {
+/// 映射后追加置顶状态；属性写在映射前会被 mutter 的状态同步覆盖
+fn set_state(conn: &RustConnection, root: Window, win: Window, above: bool) {
+    let Some(prop) = intern(conn, "_NET_WM_STATE") else { return };
+    let name = if above { "_NET_WM_STATE_ABOVE" } else { "_NET_WM_STATE_BELOW" };
+    let Some(atom) = intern(conn, name) else { return };
+    let event = ClientMessageEvent::new(32, win, prop, [1, atom, 0, 2, 0]);
+    let _ = conn.send_event(
+        false,
+        root,
+        EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+        event,
+    );
+    let _ = conn.flush();
+}
+
+/// 分页器身份的 EWMH 重排；普通 ConfigureRequest 会被 mutter 丢弃
+pub fn restack(conn: &RustConnection, root: Window, win: Window, detail: u32) {
+    let Some(atom) = intern(conn, "_NET_RESTACK_WINDOW") else {
+        return;
+    };
+    let event = ClientMessageEvent::new(32, win, atom, [2, 0, detail, 0, 0]);
+    let _ = conn.send_event(
+        false,
+        root,
+        EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+        event,
+    );
+    let _ = conn.flush();
+}
+
+/// 把任意受管窗口提到同类窗口最上层，菜单等独立弹窗使用
+pub fn restack_top(xid: u32) {
+    let Ok((conn, screen)) = x11rb::connect(None) else { return };
+    let root = conn.setup().roots[screen].root;
+    restack(&conn, root, xid, 0);
+}
+
+fn set_atoms(
+    conn: &RustConnection,
+    win: Window,
+    class: &str,
+    title: &str,
+    desktop: bool,
+    panel: bool,
+    managed: bool,
+) {
     let utf8 = intern(conn, "UTF8_STRING").unwrap_or(AtomEnum::STRING.into());
     if let Some(atom) = intern(conn, "_NET_WM_NAME") {
         let _ = conn.change_property(
@@ -514,10 +595,14 @@ fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, deskt
             value.as_bytes(),
         );
     }
-    if let (Some(prop), Some(kind)) = (
-        intern(conn, "_NET_WM_WINDOW_TYPE"),
-        intern(conn, if desktop { "_NET_WM_WINDOW_TYPE_DESKTOP" } else { "_NET_WM_WINDOW_TYPE_UTILITY" }),
-    ) {
+    let kind = if desktop {
+        "_NET_WM_WINDOW_TYPE_DESKTOP"
+    } else if panel {
+        "_NET_WM_WINDOW_TYPE_NORMAL"
+    } else {
+        "_NET_WM_WINDOW_TYPE_UTILITY"
+    };
+    if let (Some(prop), Some(atom)) = (intern(conn, "_NET_WM_WINDOW_TYPE"), intern(conn, kind)) {
         let _ = conn.change_property(
             PropMode::REPLACE,
             win,
@@ -525,29 +610,41 @@ fn set_atoms(conn: &RustConnection, win: Window, class: &str, title: &str, deskt
             AtomEnum::ATOM,
             32,
             1,
-            &kind.to_ne_bytes(),
+            &atom.to_ne_bytes(),
         );
     }
-    if desktop && managed {
-        set_states(
-            conn,
-            win,
-            &[
-                "_NET_WM_STATE_BELOW",
-                "_NET_WM_STATE_STICKY",
-                "_NET_WM_STATE_SKIP_TASKBAR",
-                "_NET_WM_STATE_SKIP_PAGER",
-            ],
-        );
-        if let Some(prop) = intern(conn, "_NET_WM_DESKTOP") {
-            let _ = conn.change_property(
-                PropMode::REPLACE,
+    if managed {
+        if desktop {
+            set_states(
+                conn,
                 win,
-                prop,
-                AtomEnum::CARDINAL,
-                32,
-                1,
-                &u32::MAX.to_ne_bytes(),
+                &[
+                    "_NET_WM_STATE_BELOW",
+                    "_NET_WM_STATE_STICKY",
+                    "_NET_WM_STATE_SKIP_TASKBAR",
+                    "_NET_WM_STATE_SKIP_PAGER",
+                ],
+            );
+            if let Some(prop) = intern(conn, "_NET_WM_DESKTOP") {
+                let _ = conn.change_property(
+                    PropMode::REPLACE,
+                    win,
+                    prop,
+                    AtomEnum::CARDINAL,
+                    32,
+                    1,
+                    &u32::MAX.to_ne_bytes(),
+                );
+            }
+        } else {
+            set_states(
+                conn,
+                win,
+                &[
+                    "_NET_WM_STATE_ABOVE",
+                    "_NET_WM_STATE_SKIP_TASKBAR",
+                    "_NET_WM_STATE_SKIP_PAGER",
+                ],
             );
         }
         if let Some(prop) = intern(conn, "_NET_WM_PID") {

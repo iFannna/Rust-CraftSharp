@@ -104,7 +104,8 @@ async function createEntityOverlay() {
     transparent: true,
     decorations: false,
     skipTaskbar: true,
-    resizable: false,
+    // Linux 上 GTK 不允许改不可调整窗口的尺寸，覆盖层要跟随玩家区域缩放
+    resizable: isLinux(),
     focus: false,
     visible: false,
     shadow: false

@@ -49,7 +49,7 @@ fn with_window<T>(f: impl FnOnce(&mut CrosshairWindow) -> T) -> Option<T> {
     WINDOW.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            let options = Options { click_through: true, desktop: true };
+            let options = Options { click_through: true, desktop: true, panel: false };
             let Some(host) =
                 Host::create("CraftSharpCrosshair", "CraftSharp Crosshair", options, ignore)
             else {
@@ -75,7 +75,7 @@ pub fn apply(config: CrosshairCfg) {
         let topmost = window.config.as_ref().map(|config| config.top_most).unwrap_or(false);
         // 桌面层与置顶层在 X11 上是两种窗口，切换时重建
         if window.topmost != Some(topmost) {
-            let options = Options { click_through: true, desktop: !topmost };
+            let options = Options { click_through: true, desktop: !topmost, panel: false };
             let Some(host) =
                 Host::create("CraftSharpCrosshair", "CraftSharp Crosshair", options, ignore)
             else {

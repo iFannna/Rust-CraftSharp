@@ -41,6 +41,9 @@ pub struct Options {
     pub click_through: bool,
     /// 属于桌面层：所有者设为 Progman，停在普通窗口之下
     pub desktop: bool,
+    /// 受管浮层面板：无边框、置顶、可聚焦；仅 X11 后端使用
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub panel: bool,
 }
 
 #[cfg(windows)]
