@@ -1,14 +1,18 @@
-//! 格子图标提取：图片文件直读，其余走 Windows Shell 图标。
-//! 解码与缩放可能耗时几百毫秒，统一在后台线程完成；结果按
-//! 「路径 + 修改时间 + 目标尺寸」缓存，UI 线程只做像素搬运。
+//! 格子图标提取：图片文件直读，其余走系统图标。
+//! Windows 取 Shell 图标，Linux 取当前桌面图标主题；解码与缩放可能耗时
+//! 几百毫秒，统一在后台线程完成；结果按「路径 + 修改时间 + 目标尺寸」缓存。
 
 mod base64;
 mod png;
 
 #[cfg(windows)]
-mod shell_windows;
-#[cfg(not(windows))]
-mod shell_windows {
+#[path = "windows.rs"]
+mod platform;
+#[cfg(target_os = "linux")]
+#[path = "linux/mod.rs"]
+mod platform;
+#[cfg(not(any(windows, target_os = "linux")))]
+mod platform {
     pub fn icon_rgba(_path: &str) -> Option<(u32, u32, Vec<u8>)> {
         None
     }
@@ -16,13 +20,10 @@ mod shell_windows {
     pub fn shortcut_target(_path: &str) -> Option<String> {
         None
     }
-
-    pub fn set_shortcut_icon(_path: &str, _icon: &str) -> bool {
-        false
-    }
 }
 
-pub(crate) use shell_windows::{set_shortcut_icon, shortcut_target};
+#[cfg(windows)]
+pub(crate) use platform::{set_shortcut_icon, shortcut_target};
 
 use std::collections::HashMap;
 use std::fs;
@@ -180,7 +181,7 @@ fn raw_bytes(path: &str, show_target_icon: bool) -> Option<Vec<u8>> {
     }
 
     if !is_dir && extension == "lnk" && show_target_icon {
-        if let Some(target) = shell_windows::shortcut_target(path) {
+        if let Some(target) = platform::shortcut_target(path) {
             if fs::metadata(&target).is_ok() {
                 if let Some(icon) = shell_icon_bytes(&target).or_else(|| shell_icon_bytes(path)) {
                     return Some(icon);
@@ -200,7 +201,7 @@ fn extension_of(path: &str) -> String {
 }
 
 fn shell_icon_bytes(path: &str) -> Option<Vec<u8>> {
-    let (width, height, rgba) = shell_windows::icon_rgba(path)?;
+    let (width, height, rgba) = platform::icon_rgba(path)?;
     Some(png::encode_rgba(width, height, &rgba))
 }
 
