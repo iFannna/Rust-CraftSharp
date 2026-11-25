@@ -63,6 +63,9 @@ pub struct State {
     drop_hover: Option<usize>,
     press: Option<Press>,
     drag: Option<Drag>,
+    /// 已交给系统拖放的源格，期间图标不随数据刷新重新出现
+    drag_source: Option<usize>,
+    hidden_icon: Option<(Option<SlotIcon>, String)>,
     moving: Option<WindowMove>,
     left_down: bool,
     last_click_slot: Option<usize>,
@@ -96,23 +99,49 @@ fn with_state<T>(f: impl FnOnce(&mut State) -> T) -> Option<T> {
 }
 
 fn dispatch(event: Event) {
-    with_state(|state| match event {
+    let drag_out = with_state(|state| match event {
         Event::Move(x, y) => on_move(state, x, y),
-        Event::Leave => on_leave(state),
-        Event::Down(x, y) => on_down(state, x, y),
-        Event::Up(x, y) => on_up(state, x, y),
-        Event::Menu(x, y) => on_menu(state, x, y),
-        Event::KeyDown(key) => on_key(state, key),
-        Event::KeyUp(_) => {}
-        Event::CaptureLost => on_capture_lost(state),
-        Event::Timer(id) => on_timer(state, id),
+        Event::Leave => {
+            on_leave(state);
+            false
+        }
+        Event::Down(x, y) => {
+            on_down(state, x, y);
+            false
+        }
+        Event::Up(x, y) => {
+            on_up(state, x, y);
+            false
+        }
+        Event::Menu(x, y) => {
+            on_menu(state, x, y);
+            false
+        }
+        Event::KeyDown(key) => {
+            on_key(state, key);
+            false
+        }
+        Event::KeyUp(_) => false,
+        Event::CaptureLost => {
+            on_capture_lost(state);
+            false
+        }
+        Event::Timer(id) => {
+            on_timer(state, id);
+            false
+        }
         Event::DpiChanged => {
             rebuild_layout(state, false);
             refresh_icons(state);
             render(state);
+            false
         }
-        _ => {}
-    });
+        _ => false,
+    })
+    .unwrap_or(false);
+    if drag_out {
+        start_system_drag();
+    }
 }
 
 pub fn init(app: &AppHandle) {
@@ -126,6 +155,7 @@ pub fn init(app: &AppHandle) {
         STARTED.store(false, Ordering::SeqCst);
         return;
     };
+    host.install_drop(app, "inventory");
 
     let style = inventory_draw::find_style("inventory.png");
     let background = inventory_draw::container_sprite(style).unwrap_or_else(|| {
@@ -148,6 +178,8 @@ pub fn init(app: &AppHandle) {
         drop_hover: None,
         press: None,
         drag: None,
+        drag_source: None,
+        hidden_icon: None,
         moving: None,
         left_down: false,
         last_click_slot: None,
@@ -193,6 +225,8 @@ pub fn apply(config: InventoryCfg) {
             state.drop_hover = None;
             state.press = None;
             state.drag = None;
+            state.drag_source = None;
+            state.hidden_icon = None;
             state.last_click_slot = None;
         }
         rebuild_layout(state, style_changed || state.rect.is_none());
@@ -228,6 +262,23 @@ fn rebuild_layout(state: &mut State, reposition: bool) {
     }
     place_entity(state);
     sync_look_timer(state);
+    push_drop_zones(state);
+}
+
+fn push_drop_zones(state: &State) {
+    let zones = state
+        .layout
+        .slots
+        .iter()
+        .map(|slot| crate::dragdrop::Zone {
+            id: slot.id.clone(),
+            left: slot.left as f64,
+            top: slot.top as f64,
+            width: slot.width as f64,
+            height: slot.height as f64,
+        })
+        .collect();
+    crate::dragdrop::set_zones("inventory", zones);
 }
 
 fn apply_geometry(state: &mut State) {
@@ -270,6 +321,11 @@ fn icon_size(state: &State) -> u32 {
     state.layout.slot_size.round().clamp(ICON_MIN, ICON_MAX) as u32
 }
 
+/// 拖动中的源格固定留空，系统拖放期间也不被刷新命中。
+fn drag_source(state: &State, index: usize) -> bool {
+    state.drag_source == Some(index) || state.drag.as_ref().map(|drag| drag.source) == Some(index)
+}
+
 fn file_stamp(path: &str) -> u128 {
     std::fs::metadata(path)
         .and_then(|meta| meta.modified())
@@ -297,9 +353,7 @@ fn install_icon(app: &AppHandle, key: &str, decoded: Option<Arc<crate::icons::De
     let _ = app;
     with_state(|state| {
         for index in 0..state.icon_keys.len() {
-            if state.icon_keys[index] != key
-                || state.drag.as_ref().map(|drag| drag.source) == Some(index)
-            {
+            if state.icon_keys[index] != key || drag_source(state, index) {
                 continue;
             }
             state.icons[index] = icon_from(decoded.clone(), size);
@@ -319,7 +373,7 @@ fn refresh_icons(state: &mut State) {
         state.icon_keys.resize(count, String::new());
     }
     for (index, slot) in state.layout.slots.iter().enumerate() {
-        if state.drag.as_ref().map(|drag| drag.source) == Some(index) {
+        if drag_source(state, index) {
             state.icons[index] = None;
             state.icon_keys[index].clear();
             continue;
@@ -529,6 +583,8 @@ fn set_visible_inner(state: &mut State) {
         hide_tooltip(state);
         state.press = None;
         state.drag = None;
+        state.drag_source = None;
+        state.hidden_icon = None;
         state.hover = None;
         state.drop_hover = None;
         state.moving = None;
@@ -566,6 +622,94 @@ fn update_hover(state: &mut State, hover: Option<usize>) {
     render(state);
 }
 
+fn outside(state: &State, x: f32, y: f32) -> bool {
+    let (left, top, right, bottom) = state.layout.bounds;
+    // 原版是 4 个界面像素，与格子缩放无关
+    let margin = OUTSIDE_MARGIN * state.dpi;
+    x < left - margin || y < top - margin || x > right + margin || y > bottom + margin
+}
+
+/// 拖出交接：先把图标从格子里拿掉并清掉 key，系统拖放期间该格不再刷新。
+fn prepare_drag_out(state: &mut State) -> Option<(String, u32, String)> {
+    let drag = state.drag.take()?;
+    state.press = None;
+    state.hover = None;
+    sync_tooltip(state, None);
+
+    let scope = state.config.scope();
+    let slot = state.layout.slots[drag.source].id.clone();
+    let Some(item) = slots::get(&scope, &slot) else {
+        render(state);
+        return None;
+    };
+    if slots::is_missing(&item.path) {
+        render(state);
+        return None;
+    }
+
+    let hidden = state.icons.get(drag.source).cloned().unwrap_or(None);
+    let hidden_key = if drag.source < state.icon_keys.len() {
+        std::mem::take(&mut state.icon_keys[drag.source])
+    } else {
+        String::new()
+    };
+    if drag.source < state.icons.len() {
+        state.icons[drag.source] = None;
+    }
+    state.hidden_icon = Some((hidden, hidden_key));
+    state.drag_source = Some(drag.source);
+    // 交出去之前释放指针，否则系统拖放期间事件仍被本窗口独占
+    state.host.release();
+    dragicon::hide("inventory");
+    render(state);
+
+    let size = icon_size(state);
+    Some((item.path, size, slot))
+}
+
+fn finish_drag_out(state: &mut State, source: usize, result: crate::dragdrop::DragResult) {
+    state.drag_source = None;
+    if result.dropped && !result.same_source {
+        // 落在本应用的格子上时数据已经由 Rust 一次搬走；
+        // 落到桌面或资源管理器时只清空格子
+        if !result.handled {
+            let scope = state.config.scope();
+            let id = state.layout.slots[source].id.clone();
+            slots::clear(&scope, &id);
+        }
+        state.hidden_icon = None;
+        refresh_icons(state);
+        render(state);
+        return;
+    }
+
+    if let Some((hidden, key)) = state.hidden_icon.take() {
+        if source < state.icons.len() {
+            state.icons[source] = hidden;
+        }
+        if source < state.icon_keys.len() {
+            state.icon_keys[source] = key;
+        }
+    }
+    refresh_icons(state);
+    render(state);
+}
+
+/// 系统拖放会阻塞当前线程，只在 State 未被借用时调用。
+fn start_system_drag() {
+    let Some((Some(job), Some(source))) = with_state(|state| {
+        let source = state.drag.as_ref().map(|drag| drag.source);
+        let job = prepare_drag_out(state);
+        (job, source)
+    }) else {
+        return;
+    };
+
+    let (path, size, slot) = job;
+    let result = crate::dragdrop::begin_file_drag(path, size, Some(("inventory".to_string(), slot)));
+    with_state(|state| finish_drag_out(state, source, result));
+}
+
 fn render(state: &mut State) {
     let width = state.layout.width.ceil().max(1.0) as u32;
     let height = state.layout.height.ceil().max(1.0) as u32;
@@ -595,7 +739,7 @@ fn render(state: &mut State) {
         hover,
         hover_green: green,
         show_player: state.config.show_model,
-        drag_source: state.drag.as_ref().map(|drag| drag.source),
+        drag_source: state.drag.as_ref().map(|drag| drag.source).or(state.drag_source),
         dimmed,
     };
     let Some(frame) = &mut state.frame else { return };
@@ -671,7 +815,8 @@ fn click_slot(state: &mut State, index: usize) {
     }
 }
 
-fn on_move(state: &mut State, x: f32, y: f32) {
+/// 返回 true 表示拖拽离开物品栏，交由系统接管。
+fn on_move(state: &mut State, x: f32, y: f32) -> bool {
     if let Some((cursor, origin)) = state.moving.as_ref().map(|moving| (moving.cursor, moving.origin)) {
         let now = state.host.cursor();
         let nx = origin.0 + now.x - cursor.x;
@@ -681,15 +826,20 @@ fn on_move(state: &mut State, x: f32, y: f32) {
         }
         place_entity(state);
         render(state);
-        return;
+        return false;
     }
 
-    if let Some(drag) = &mut state.drag {
-        drag.x = x;
-        drag.y = y;
-        drag.target = inventory_draw::slot_at(&state.layout, x, y).unwrap_or(drag.source);
+    if state.drag.is_some() {
+        if outside(state, x, y) {
+            return true;
+        }
+        if let Some(drag) = &mut state.drag {
+            drag.x = x;
+            drag.y = y;
+            drag.target = inventory_draw::slot_at(&state.layout, x, y).unwrap_or(drag.source);
+        }
         render(state);
-        return;
+        return false;
     }
 
     if let Some(press) = &state.press {
@@ -704,10 +854,11 @@ fn on_move(state: &mut State, x: f32, y: f32) {
             state.host.capture();
             render(state);
         }
-        return;
+        return false;
     }
 
     update_hover(state, inventory_draw::slot_at(&state.layout, x, y));
+    false
 }
 
 fn on_down(state: &mut State, x: f32, y: f32) {

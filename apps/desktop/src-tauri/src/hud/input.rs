@@ -278,13 +278,13 @@ fn drag_out(state: &mut State) {
     let Some(drag) = state.drag.take() else { return };
     state.host.release();
 
-    let missing = state.missing.get(drag.source as usize).copied().unwrap_or(false);
     let path = state
         .config
         .as_ref()
         .and_then(|config| config.slot(drag.source))
         .and_then(|slot| slot.path.clone())
-        .filter(|path| !path.trim().is_empty() && !missing);
+        // 图标解码失败不等于文件不存在，没有图标的文件也要能拖出
+        .filter(|path| !path.trim().is_empty() && !crate::slots::is_missing(path));
     let size = state.layout.as_ref().map(|layout| layout.slot_size.round().max(1.0) as u32).unwrap_or(32);
 
     let Some(path) = path else {

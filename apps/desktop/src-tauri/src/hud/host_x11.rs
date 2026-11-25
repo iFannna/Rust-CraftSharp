@@ -35,7 +35,7 @@ pub fn ticks() -> u64 {
 }
 
 pub struct Host {
-    conn: RustConnection,
+    conn: Arc<RustConnection>,
     win: Window,
     gc: u32,
     screen: usize,
@@ -104,6 +104,10 @@ impl Host {
         conn.create_gc(gc, win, &CreateGCAux::new()).ok()?.check().ok()?;
 
         set_atoms(&conn, win, class, title, options.desktop, options.panel, managed);
+        if options.click_through {
+            crate::dragdrop::register_helper(win);
+        }
+        let conn = Arc::new(conn);
         let host = Self {
             conn,
             win,
@@ -133,7 +137,9 @@ impl Host {
         Some(host)
     }
 
-    pub fn install_drop(&self, _app: &AppHandle, _label: &str) {}
+    pub fn install_drop(&self, app: &AppHandle, label: &str) {
+        crate::dragdrop::install(app, label, self.win, self.conn.clone(), self.root);
+    }
 
     pub fn install_input(&self) {}
 

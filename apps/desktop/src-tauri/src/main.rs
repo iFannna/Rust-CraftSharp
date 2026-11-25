@@ -6,7 +6,10 @@ mod autostart;
 mod desktop;
 #[cfg(windows)]
 mod dragdrop;
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[path = "dragdrop_x11.rs"]
+mod dragdrop;
+#[cfg(not(any(windows, target_os = "linux")))]
 mod dragdrop {
     use tauri::AppHandle;
 
