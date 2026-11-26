@@ -1,0 +1,3 @@
+# Wayland 下合成器不向普通应用转发全局按键，CraftSharp 直接读取输入设备。
+# uaccess 只授予当前登录会话用户，等同 X11 会话里全局键盘监听的能力。
+SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"

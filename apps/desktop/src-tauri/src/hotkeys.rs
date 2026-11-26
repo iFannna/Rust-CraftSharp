@@ -134,14 +134,20 @@ pub fn register(app: &AppHandle, actions: Vec<String>) {
     apply_hotkeys(app);
 }
 
-/// X11 全局监听在后台线程启动，就绪后由监听线程补上首次绑定。
+/// Linux 全局监听在后台线程启动，就绪后由监听线程补上首次绑定。
+/// Wayland 下合成器不向普通应用转发全局按键，改用直接读取输入设备。
 #[cfg(target_os = "linux")]
 pub fn register(app: &AppHandle, actions: Vec<String>) {
     let _ = APP.set(app.clone());
     if let Ok(mut pending) = PENDING.lock() {
         *pending = actions;
     }
-    if crate::hotkeys_x11::start(app) {
+    let started = if crate::wayland_session() {
+        crate::hotkeys_evdev::start(app)
+    } else {
+        crate::hotkeys_x11::start(app)
+    };
+    if started {
         apply_hotkeys(app);
     }
 }
@@ -356,7 +362,11 @@ fn backend_ready() -> bool {
 
 #[cfg(target_os = "linux")]
 fn backend_ready() -> bool {
-    crate::hotkeys_x11::ready()
+    if crate::wayland_session() {
+        crate::hotkeys_evdev::ready()
+    } else {
+        crate::hotkeys_x11::ready()
+    }
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]

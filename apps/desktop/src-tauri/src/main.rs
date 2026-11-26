@@ -65,6 +65,8 @@ mod hitmask;
 
 mod hotkeys;
 #[cfg(target_os = "linux")]
+mod hotkeys_evdev;
+#[cfg(target_os = "linux")]
 mod hotkeys_x11;
 #[cfg(target_os = "linux")]
 mod keys_x11;
@@ -802,22 +804,40 @@ fn harden_webviews(app: &tauri::AppHandle) {
     }
 }
 
-/// X11 下没有 DRI3 时 WebKit 的 DMA-BUF 合成会白屏，Wayland 保持默认
+/// 当前是否运行在 Wayland 会话。
+#[cfg(target_os = "linux")]
+pub(crate) fn wayland_session() -> bool {
+    std::env::var("XDG_SESSION_TYPE").map(|kind| kind == "wayland").unwrap_or(false)
+        || std::env::var_os("WAYLAND_DISPLAY").is_some()
+}
+
+/// Wayland 无法让客户端自行定位或压到桌面层，统一用 XWayland 承载全部窗口。
+#[cfg(target_os = "linux")]
+fn pin_xwayland_backend() {
+    if wayland_session()
+        && std::env::var_os("DISPLAY").is_some()
+        && std::env::var_os("GDK_BACKEND").is_none()
+    {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+}
+
+/// X11 后端没有 DRI3 时 WebKit 的 DMA-BUF 合成会白屏，Wayland 原生后端保持默认
 #[cfg(target_os = "linux")]
 fn tune_linux_webkit() {
     if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
         return;
     }
-    let wayland = match std::env::var("XDG_SESSION_TYPE") {
-        Ok(kind) => kind == "wayland",
-        Err(_) => std::env::var_os("WAYLAND_DISPLAY").is_some(),
-    };
-    if !wayland {
+    let x11 = std::env::var_os("GDK_BACKEND").map(|value| value == "x11").unwrap_or(false);
+    if x11 || !wayland_session() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 }
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    pin_xwayland_backend();
+
     #[cfg(target_os = "linux")]
     tune_linux_webkit();
 

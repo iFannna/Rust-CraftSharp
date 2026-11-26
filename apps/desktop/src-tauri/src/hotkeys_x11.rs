@@ -227,7 +227,7 @@ fn intern(conn: &RustConnection, name: &str) -> Option<u32> {
 }
 
 /// 本应用的 WebView 窗口获得焦点时让路；原生 HUD 窗口自己处理局部按键
-fn settings_focused(
+pub(crate) fn settings_focused(
     conn: &RustConnection,
     root: Window,
     active_atom: u32,
