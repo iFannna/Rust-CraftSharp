@@ -500,23 +500,6 @@ async fn wallpaper_monitors(app: tauri::AppHandle) -> Vec<wallpaper::MonitorInfo
         .unwrap_or_default()
 }
 
-/// 桌面层视频窗口加载后按 label 取回播放参数
-#[tauri::command]
-fn wallpaper_video_state(window: tauri::WebviewWindow) -> Option<wallpaper::VideoState> {
-    wallpaper::video_state(window.label())
-}
-
-/// 视频页回报播放状态：src、playing、error，日志用于排查解码问题
-#[tauri::command]
-fn wallpaper_video_status(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-    status: String,
-    detail: String,
-) {
-    wallpaper::video_status(&app, window.label(), &status, &detail);
-}
-
 /// 应用整套壁纸布局：同步、按屏独立或跨屏拼接
 #[tauri::command]
 async fn wallpaper_apply_layout(
@@ -979,9 +962,7 @@ fn main() {
             restack_window,
             wallpaper_list,
             wallpaper_monitors,
-            wallpaper_video_state,
-            wallpaper_video_status,
-            wallpaper_apply_layout,
+                        wallpaper_apply_layout,
             wallpaper_pick_path,
             wallpaper_export,
             wallpaper_session,

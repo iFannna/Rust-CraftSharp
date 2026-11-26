@@ -22,6 +22,8 @@ x11rb = { version = "0.13", features = ["shape", "xinput", "xkb", "randr"] }
 ureq = { version = "2", features = ["tls"] }
 gtk = "0.18"
 gdkx11 = "0.18"
+gstreamer = "0.21"
+gstreamer-video = "0.21"
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"

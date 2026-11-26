@@ -79,7 +79,7 @@ fn apply_sync(
             .iter()
             .map(|monitor| (monitor.device_path.clone(), video.clone()))
             .collect();
-        dynamic::apply_monitors(&targets)?;
+        dynamic::apply_monitors(app, &targets)?;
         let saved: Vec<Saved> = monitors
             .iter()
             .map(|monitor| Saved {
@@ -150,7 +150,7 @@ fn apply_independent(app: &AppHandle, entries: Vec<MonitorPlan>) -> Result<Apply
     dynamic::stop_devices(&statics);
     let mut dynamic_started = false;
     if !dynamics.is_empty() {
-        if let Err(error) = dynamic::apply_monitors(&dynamics) {
+        if let Err(error) = dynamic::apply_monitors(app, &dynamics) {
             result.warnings.push(error);
         } else {
             dynamic::remember(app, &saved);
@@ -186,7 +186,7 @@ fn apply_span(
 
     if span.entry.kind == "dynamic" {
         let video = store::prepare_video(app, &span.entry.id)?;
-        dynamic::apply_span(&video, span.transform)?;
+        dynamic::apply_span(app, &video, span.transform)?;
         let saved: Vec<Saved> = monitors
             .iter()
             .map(|monitor| Saved {

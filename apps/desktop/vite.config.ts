@@ -22,7 +22,6 @@ const pages = [
   "entity-view",
   "wallpaper-preview",
   "wallpaper-apply",
-  "wallpaper-video",
   "wallpaper-login"
 ];
 

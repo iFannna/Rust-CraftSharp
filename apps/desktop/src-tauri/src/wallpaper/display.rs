@@ -1,8 +1,6 @@
 //! 界面壁纸图：登录后用原图生成无水印缩略图和预览图，失败时回退公共预览。
 
 use std::fs;
-#[cfg(target_os = "linux")]
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::SystemTime;
@@ -161,86 +159,6 @@ fn not_found() -> Response<Vec<u8>> {
         .status(StatusCode::NOT_FOUND)
         .body(Vec::new())
         .unwrap_or_else(|_| Response::new(Vec::new()))
-}
-
-/// 动态壁纸视频的一段取流句柄；WebKit 只对 http(s) 走自带取流器
-#[cfg(target_os = "linux")]
-pub(crate) struct Slice {
-    pub file: fs::File,
-    pub start: u64,
-    pub length: u64,
-    pub total: u64,
-    pub mime: &'static str,
-    pub partial: bool,
-}
-
-#[cfg(target_os = "linux")]
-pub(crate) enum SliceError {
-    Missing,
-    Range(u64),
-}
-
-/// 按单段 Range 定位缓存视频，调用方负责把内容写回客户端
-#[cfg(target_os = "linux")]
-pub(crate) fn video_slice(path: &Path, range: Option<&str>) -> Result<Slice, SliceError> {
-    let mut file = fs::File::open(path).map_err(|_| SliceError::Missing)?;
-    let total = file
-        .metadata()
-        .map(|meta| meta.len())
-        .map_err(|_| SliceError::Missing)?;
-    if total == 0 {
-        return Err(SliceError::Missing);
-    }
-
-    let (start, end) = match range {
-        Some(value) => parse_range(value, total).ok_or(SliceError::Range(total))?,
-        None => (0, total - 1),
-    };
-    let mime = sniff_video(&mut file);
-    if file.seek(SeekFrom::Start(start)).is_err() {
-        return Err(SliceError::Missing);
-    }
-    Ok(Slice {
-        file,
-        start,
-        length: end - start + 1,
-        total,
-        mime,
-        partial: range.is_some(),
-    })
-}
-
-/// 站点可能发 WebM 原片，扩展名统一是 mp4，按文件头给真实类型
-#[cfg(target_os = "linux")]
-fn sniff_video(file: &mut fs::File) -> &'static str {
-    let mut header = [0u8; 4];
-    let mime = if file.read(&mut header).is_ok() && header == [0x1A, 0x45, 0xDF, 0xA3] {
-        "video/webm"
-    } else {
-        "video/mp4"
-    };
-    let _ = file.seek(SeekFrom::Start(0));
-    mime
-}
-
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn parse_range(value: &str, total: u64) -> Option<(u64, u64)> {
-    let spec = value.trim().strip_prefix("bytes=")?;
-    let (start, end) = spec.split_once('-')?;
-    if start.is_empty() {
-        let length = end.trim().parse::<u64>().ok()?.min(total);
-        return (length > 0).then_some((total - length, total - 1));
-    }
-    let start = start.trim().parse::<u64>().ok()?;
-    if start >= total {
-        return None;
-    }
-    let end = if end.trim().is_empty() {
-        total - 1
-    } else {
-        end.trim().parse::<u64>().ok()?.min(total - 1)
-    };
-    (start <= end).then_some((start, end))
 }
 
 /// 控制同时生成的数量，避免一次翻页同时解码几十张原图

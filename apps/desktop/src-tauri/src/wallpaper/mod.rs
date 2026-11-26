@@ -8,8 +8,6 @@ mod display;
 mod dynamic;
 pub(crate) mod layout;
 mod saved;
-#[cfg(target_os = "linux")]
-mod stream;
 mod storage;
 mod store;
 
@@ -20,21 +18,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 pub use client::Page;
 pub use desktop::MonitorInfo;
-pub use dynamic::VideoState;
 pub use layout::ApplyResult;
-
-/// 视频窗口加载后按 label 取回播放参数
-pub fn video_state(label: &str) -> Option<VideoState> {
-    dynamic::state(label)
-}
-
-/// 视频页自报的播放状态，出错时后端日志能直接看到原因
-pub fn video_status(app: &AppHandle, label: &str, status: &str, detail: &str) {
-    eprintln!("wallpaper-video[{label}]: {status} {detail}");
-    if status == "error" {
-        let _ = app.emit("wallpaper-video-error", detail.to_string());
-    }
-}
 
 static WATCHING: AtomicBool = AtomicBool::new(false);
 
