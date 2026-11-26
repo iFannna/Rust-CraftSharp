@@ -22,6 +22,7 @@ pub use super::super::saved::Saved;
 const PAGE: &str = "pages/wallpaper-video.html";
 const EVENT: &str = "wallpaper-video";
 const REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+const X11_REQUIRED: &str = "动态壁纸需要 XWayland 支持";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Bounds {
@@ -79,14 +80,11 @@ pub fn attach(app: &AppHandle) {
     stream::init(app);
 }
 
-/// 动态壁纸只能落在 X11 桌面层；Wayland 没有等价的置底手段
+/// 动态壁纸窗口落在 X11 桌面层；Wayland 会话由 XWayland 承载
 fn x11_session() -> Result<(), String> {
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        return Err("动态壁纸仅支持 X11 会话".into());
-    }
     x11rb::connect(None)
         .map(|_| ())
-        .map_err(|_| "动态壁纸仅支持 X11 会话".into())
+        .map_err(|_| X11_REQUIRED.into())
 }
 
 /// 窗口操作统一切到主线程，调用方等待结果
@@ -230,7 +228,7 @@ pub fn restore(app: &AppHandle) {
 
 fn restore_once(app: &AppHandle, items: &[Saved]) -> Result<bool, String> {
     if x11_session().is_err() {
-        return Err("动态壁纸仅支持 X11 会话".into());
+        return Err(X11_REQUIRED.into());
     }
     let monitors = desktop::monitors(app);
     if monitors.is_empty() {
@@ -357,7 +355,7 @@ fn create_host(app: &AppHandle, spec: &Spec) -> Result<Host, String> {
             window.downcast::<gdkx11::X11Window>().is_err()
         }) {
             let _ = window.close();
-            return Err("动态壁纸仅支持 X11 会话".into());
+            return Err(X11_REQUIRED.into());
         }
         gtk_window.show();
     }
@@ -416,17 +414,17 @@ fn settle_x11(window: &WebviewWindow) -> Result<u32, String> {
 
     let gtk_window = window
         .gtk_window()
-        .map_err(|_| "动态壁纸仅支持 X11 会话".to_string())?;
+        .map_err(|_| X11_REQUIRED.to_string())?;
     gtk_window.stick();
     let empty = gtk::cairo::Region::create();
     gtk_window.input_shape_combine_region(Some(&empty));
 
     let gdk_window = gtk_window
         .window()
-        .ok_or_else(|| "动态壁纸仅支持 X11 会话".to_string())?;
+        .ok_or_else(|| X11_REQUIRED.to_string())?;
     let x11_window = gdk_window
         .downcast::<gdkx11::X11Window>()
-        .map_err(|_| "动态壁纸仅支持 X11 会话".to_string())?;
+        .map_err(|_| X11_REQUIRED.to_string())?;
     let xid = x11_window.xid() as u32;
     // 桌面图标由独立桌面层窗口绘制，等窗口进入栈后立刻沉到它下面
     let _ = std::thread::Builder::new()

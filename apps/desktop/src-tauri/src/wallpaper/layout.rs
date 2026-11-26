@@ -56,10 +56,6 @@ pub fn apply(app: &AppHandle, plan: Plan) -> Result<ApplyResult, String> {
     if monitors.is_empty() {
         return Err("没有检测到显示器".into());
     }
-    #[cfg(target_os = "linux")]
-    if crate::wayland_session() && plan_has_dynamic(&plan) {
-        return Err("Wayland 会话不支持动态壁纸，请选择静态壁纸".into());
-    }
 
     match plan.mode.as_str() {
         "sync" => apply_sync(app, plan.sync, &monitors),
@@ -67,14 +63,6 @@ pub fn apply(app: &AppHandle, plan: Plan) -> Result<ApplyResult, String> {
         "span" => apply_span(app, plan.span, &monitors),
         _ => Err("壁纸模式无效".into()),
     }
-}
-
-/// 动态壁纸依赖 X11 桌面层；Wayland 下在改动任何壁纸与缓存之前直接拒绝
-#[cfg(target_os = "linux")]
-fn plan_has_dynamic(plan: &Plan) -> bool {
-    plan.sync.as_ref().is_some_and(|entry| entry.kind == "dynamic")
-        || plan.monitors.iter().any(|item| item.entry.kind == "dynamic")
-        || plan.span.as_ref().is_some_and(|span| span.entry.kind == "dynamic")
 }
 
 fn apply_sync(
@@ -181,7 +169,10 @@ fn apply_independent(app: &AppHandle, entries: Vec<MonitorPlan>) -> Result<Apply
             .cloned()
             .unwrap_or_else(|| "没有可应用的显示器".into()));
     }
-    store::sweep(app, &keeps);
+    // 动态壁纸运行时会盖住系统壁纸，系统仍引用原静态文件作为退出后的回退
+    if !dynamic_started {
+        store::sweep(app, &keeps);
+    }
     Ok(result)
 }
 
