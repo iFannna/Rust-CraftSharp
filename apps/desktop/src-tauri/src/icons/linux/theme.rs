@@ -199,7 +199,7 @@ fn exists(roots: &[PathBuf], name: &str) -> bool {
     roots.iter().any(|root| root.join(name).is_dir())
 }
 
-/// 主题名优先取 GTK 配置，其次 KDE 配置，最后问 GSettings。
+/// 主题顺序：用户配置、用户显式选择、系统默认、GSettings 默认。
 fn active_theme() -> Option<String> {
     for version in ["gtk-3.0", "gtk-4.0"] {
         if let Some(name) = ini_value(&config_dir().join(version).join("settings.ini"), "gtk-icon-theme-name") {
@@ -209,7 +209,40 @@ fn active_theme() -> Option<String> {
     if let Some(name) = ini_value(&config_dir().join("kdeglobals"), "Theme") {
         return Some(name);
     }
-    ffi::theme_name().filter(|name| !name.is_empty() && name != "hicolor")
+    // 用户没改过主题时跟随发行版默认，Ubuntu 的 Yaru 写在系统 GTK 配置里
+    ffi::theme_name_user()
+        .or_else(system_theme)
+        .or_else(|| ffi::theme_name())
+        .filter(|name| !name.is_empty() && name != "hicolor")
+}
+
+/// 系统级 GTK 配置里的图标主题，不依赖当前进程的会话环境
+fn system_theme() -> Option<String> {
+    for version in ["gtk-3.0", "gtk-4.0"] {
+        let file = format!("{version}/settings.ini");
+        for root in system_config_dirs() {
+            if let Some(name) = ini_value(&root.join(&file), "gtk-icon-theme-name") {
+                return Some(name);
+            }
+        }
+    }
+    None
+}
+
+fn system_config_dirs() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = env::var("XDG_CONFIG_DIRS")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    for fallback in ["/etc/xdg", "/etc"] {
+        let path = PathBuf::from(fallback);
+        if !dirs.contains(&path) {
+            dirs.push(path);
+        }
+    }
+    dirs
 }
 
 fn ini_value(path: &Path, key: &str) -> Option<String> {

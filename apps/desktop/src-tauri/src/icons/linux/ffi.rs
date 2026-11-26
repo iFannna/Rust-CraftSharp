@@ -10,6 +10,8 @@ use std::ptr;
 extern "C" {
     fn g_free(pointer: *mut c_void);
     fn g_error_free(error: *mut c_void);
+    fn g_variant_get_string(value: *mut c_void, length: *mut usize) -> *const c_char;
+    fn g_variant_unref(value: *mut c_void);
 }
 
 #[link(name = "gobject-2.0")]
@@ -31,6 +33,7 @@ extern "C" {
     fn g_themed_icon_get_names(icon: *mut c_void) -> *const *const c_char;
     fn g_settings_new(schema: *const c_char) -> *mut c_void;
     fn g_settings_get_string(settings: *mut c_void, key: *const c_char) -> *mut c_char;
+    fn g_settings_get_user_value(settings: *mut c_void, key: *const c_char) -> *mut c_void;
 }
 
 #[link(name = "gdk_pixbuf-2.0")]
@@ -125,6 +128,35 @@ pub fn theme_name() -> Option<String> {
         let value = take_string(g_settings_get_string(settings, key.as_ptr()));
         g_object_unref(settings);
         value
+    }
+}
+
+/// 用户显式选过的图标主题；未设置时返回 None，交由系统默认决定
+pub fn theme_name_user() -> Option<String> {
+    let schema = CString::new("org.gnome.desktop.interface").ok()?;
+    let key = CString::new("icon-theme").ok()?;
+    // SAFETY: 返回对象与字符串均由本函数释放
+    unsafe {
+        let settings = g_settings_new(schema.as_ptr());
+        if settings.is_null() {
+            return None;
+        }
+        let value = g_settings_get_user_value(settings, key.as_ptr());
+        let name = if value.is_null() {
+            None
+        } else {
+            let text = g_variant_get_string(value, ptr::null_mut());
+            let name = if text.is_null() {
+                None
+            } else {
+                let name = CStr::from_ptr(text).to_string_lossy().into_owned();
+                (!name.is_empty()).then_some(name)
+            };
+            g_variant_unref(value);
+            name
+        };
+        g_object_unref(settings);
+        name
     }
 }
 
