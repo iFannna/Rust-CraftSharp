@@ -103,7 +103,16 @@ impl Host {
         let gc = conn.generate_id().ok()?;
         conn.create_gc(gc, win, &CreateGCAux::new()).ok()?.check().ok()?;
 
-        set_atoms(&conn, win, class, title, options.desktop, options.panel, managed);
+        set_atoms(
+            &conn,
+            win,
+            class,
+            title,
+            options.desktop,
+            options.panel,
+            managed,
+            !options.click_through,
+        );
         if options.click_through {
             crate::dragdrop::register_helper(win);
         }
@@ -248,6 +257,10 @@ impl Host {
 
     pub fn park(&self) {
         if self.managed {
+            // Wayland 下可交互桌面窗不能带 BELOW 状态，否则收不到指针，改用分页器置底
+            if !self.panel && !self.click_through && crate::wayland_session() {
+                lower(&self.conn, self.root, self.win);
+            }
             return;
         }
         let aux = ConfigureWindowAux::new().stack_mode(StackMode::BELOW);
@@ -484,6 +497,9 @@ impl Host {
         let app = self.app.clone();
         let dispatch = self.dispatch;
         let win = self.win;
+        let root = self.root;
+        // 点击会让合成器把普通层窗口提到最前，处理完按键立即压回底部
+        let sink = !self.click_through && self.managed && !self.panel && crate::wayland_session();
         let keys = key_map(&event_conn);
         std::thread::spawn(move || loop {
             let Ok(event) = event_conn.wait_for_event() else { break };
@@ -493,6 +509,9 @@ impl Host {
                     let _ = event_conn.set_input_focus(InputFocus::PARENT, win, 0u32);
                     let _ = event_conn.flush();
                 }
+            }
+            if sink && matches!(&event, XEvent::ButtonPress(_)) {
+                lower(&event_conn, root, win);
             }
             let Some(event) = translate(event, &keys) else { continue };
             let app = app.clone();
@@ -568,6 +587,22 @@ pub fn restack_top(xid: u32) {
     restack(&conn, root, xid, 0);
 }
 
+/// EWMH 置底：Wayland 下桌面窗不能带 BELOW 状态，用分页器请求压到普通层最下面
+fn lower(conn: &RustConnection, root: Window, win: Window) {
+    let Some(atom) = intern(conn, "_NET_RESTACK_WINDOW") else {
+        return;
+    };
+    // data.l[1] 为 detail（Below），data.l[2] 为 sibling（None）
+    let event = ClientMessageEvent::new(32, win, atom, [2, 1, 0, 0, 0]);
+    let _ = conn.send_event(
+        false,
+        root,
+        EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+        event,
+    );
+    let _ = conn.flush();
+}
+
 fn set_atoms(
     conn: &RustConnection,
     win: Window,
@@ -576,6 +611,7 @@ fn set_atoms(
     desktop: bool,
     panel: bool,
     managed: bool,
+    interactive: bool,
 ) {
     let utf8 = intern(conn, "UTF8_STRING").unwrap_or(AtomEnum::STRING.into());
     if let Some(atom) = intern(conn, "_NET_WM_NAME") {
@@ -602,7 +638,12 @@ fn set_atoms(
         );
     }
     let kind = if desktop {
-        "_NET_WM_WINDOW_TYPE_DESKTOP"
+        if interactive && crate::wayland_session() {
+            // mutter 不向 XWayland 的 DESKTOP 窗口转发指针，换成置底的普通窗口
+            "_NET_WM_WINDOW_TYPE_NORMAL"
+        } else {
+            "_NET_WM_WINDOW_TYPE_DESKTOP"
+        }
     } else if panel {
         // 菜单类窗口 mutter 不播开窗动画，浮层直接出现
         "_NET_WM_WINDOW_TYPE_MENU"
@@ -622,16 +663,16 @@ fn set_atoms(
     }
     if managed {
         if desktop {
-            set_states(
-                conn,
-                win,
-                &[
-                    "_NET_WM_STATE_BELOW",
-                    "_NET_WM_STATE_STICKY",
-                    "_NET_WM_STATE_SKIP_TASKBAR",
-                    "_NET_WM_STATE_SKIP_PAGER",
-                ],
-            );
+            let mut states = vec![
+                "_NET_WM_STATE_STICKY",
+                "_NET_WM_STATE_SKIP_TASKBAR",
+                "_NET_WM_STATE_SKIP_PAGER",
+            ];
+            // mutter 不向 BELOW 的 XWayland 窗口转发指针，可交互桌面窗停在普通层由 park 置底
+            if !(interactive && crate::wayland_session()) {
+                states.insert(0, "_NET_WM_STATE_BELOW");
+            }
+            set_states(conn, win, &states);
             if let Some(prop) = intern(conn, "_NET_WM_DESKTOP") {
                 let _ = conn.change_property(
                     PropMode::REPLACE,

@@ -586,6 +586,16 @@ mod linux {
     /// GNOME 只提供整屏设置；zoom 对应填充，spanned 对应拼接
     fn gnome_set(path: &Path, options: &str) -> Result<(), String> {
         let uri = file_uri(path);
+        // 文件刚重新下载时，同一 URI 仍对应 GNOME 里旧的加载失败结果，先清空强制重载
+        let fresh = std::fs::metadata(path)
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|time| time.elapsed().ok())
+            .is_some_and(|age| age < std::time::Duration::from_secs(10));
+        if fresh {
+            let _ = gsettings("picture-uri", "");
+            let _ = gsettings("picture-uri-dark", "");
+        }
         gsettings("picture-uri", &uri)?;
         let _ = gsettings("picture-uri-dark", &uri);
         let _ = gsettings("picture-options", options);

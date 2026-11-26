@@ -442,7 +442,7 @@ dependencies = [
 
 [[package]]
 name = "craftsharp-desktop"
-version = "26.11.25"
+version = "26.11.26"
 dependencies = [
  "ab_glyph",
  "gdkx11",
