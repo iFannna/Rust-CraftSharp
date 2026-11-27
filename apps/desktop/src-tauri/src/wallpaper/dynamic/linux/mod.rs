@@ -578,6 +578,7 @@ impl From<&Spec> for render::RenderSpec {
         Self {
             video: spec.video.clone(),
             bounds: spec.bounds,
+            scale: spec.scale,
             span: spec.span,
             transform: spec.transform,
         }

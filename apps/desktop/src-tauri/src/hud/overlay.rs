@@ -12,6 +12,7 @@ struct Overlay {
     alpha: u32,
     repaints: u8,
     mapped: bool,
+    reveal: bool,
 }
 
 /// 映射由窗口管理器异步完成，重挂载前提交的像素会丢，映射后再补两帧
@@ -44,6 +45,12 @@ fn on_event(event: Event) {
             monitor.left,
             monitor.top,
         );
+        // 新映射的窗口等首帧提交后再显示，避免露出未初始化画面
+        if overlay.reveal {
+            overlay.reveal = false;
+            #[cfg(target_os = "linux")]
+            overlay.host.set_opacity(u32::MAX);
+        }
     });
 }
 
@@ -68,6 +75,7 @@ fn create(slot: &mut Option<Overlay>) {
         alpha: u32::MAX,
         repaints: 0,
         mapped: false,
+        reveal: false,
     });
 }
 
@@ -121,6 +129,10 @@ pub fn prewarm() {
         create(&mut slot);
         let Some(overlay) = slot.as_mut() else { return };
         resize(overlay, 0);
+        // 窗口映射前先保持全透明，等透明像素提交后再恢复不透明
+        #[cfg(target_os = "linux")]
+        overlay.host.set_opacity(0);
+        overlay.reveal = true;
         if !overlay.mapped {
             overlay.host.show();
             overlay.mapped = true;

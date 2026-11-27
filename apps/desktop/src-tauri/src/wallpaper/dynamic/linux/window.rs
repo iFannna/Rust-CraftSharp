@@ -15,8 +15,10 @@ use x11rb::wrapper::ConnectionExt as _;
 use super::{Bounds, X11_REQUIRED};
 
 const TITLE: &str = "CraftSharp 壁纸";
+/// 首帧就绪前窗口先映射在屏幕外，画好画面再移进桌面
+const HIDDEN: f64 = -32000.0;
 
-/// 创建窗口并保持全透明；视频首帧就绪后再由渲染线程显示
+/// 建好窗口后先在屏幕外映射，渲染线程画好首帧再移进桌面
 pub(super) fn create(
     app: &AppHandle,
     label: &str,
@@ -25,10 +27,7 @@ pub(super) fn create(
 ) -> Result<(Window, u32), String> {
     let window = WindowBuilder::new(app, label)
         .title(TITLE)
-        .position(
-            bounds.left as f64 / scale,
-            bounds.top as f64 / scale,
-        )
+        .position(HIDDEN, HIDDEN)
         .inner_size(
             bounds.width() as f64 / scale,
             bounds.height() as f64 / scale,
@@ -48,11 +47,7 @@ pub(super) fn create(
         let _ = window.close();
         return Err(error);
     }
-    if let Err(error) = window.show() {
-        let _ = window.close();
-        return Err(format!("显示壁纸窗口失败：{error}"));
-    }
-    let xid = match settle(&window) {
+    let xid = match show(&window) {
         Ok(xid) => xid,
         Err(error) => {
             let _ = window.close();
@@ -90,14 +85,16 @@ fn prepare(window: &Window) -> Result<(), String> {
     gtk_window.set_skip_pager_hint(true);
     gtk_window.set_focus_on_map(false);
     gtk_window.set_accept_focus(false);
+    // 窗口自身不画任何底色，内容只来自 GStreamer 提交的视频帧
+    gtk_window.set_app_paintable(true);
     let empty = gtk::cairo::Region::create();
     gtk_window.input_shape_combine_region(Some(&empty));
     gtk_window.realize();
     set_opacity(xid_of(&gtk_window)?, 0)
 }
 
-/// 映射完成后补齐所有工作区、清空输入区，并沉到桌面层最底部
-fn settle(window: &Window) -> Result<u32, String> {
+/// 先按屏幕外位置映射，画面就绪后再由渲染线程移进桌面
+pub(super) fn show(window: &Window) -> Result<u32, String> {
     use gtk::prelude::*;
 
     let gtk_window = window
@@ -142,11 +139,13 @@ pub(super) fn clear_input(
     conn.flush().map_err(|error| error.to_string())
 }
 
-/// 用窗口透明度保证静态壁纸在视频首帧前不被白底或黑底盖住
+/// 部分合成器不会对桌面层窗口应用透明度，这里只作为首帧前的额外保险
 pub(super) fn set_opacity(xid: u32, value: u32) -> Result<(), String> {
     let (conn, _) = x11rb::connect(None).map_err(|_| X11_REQUIRED.to_string())?;
     let atom = intern(&conn, "_NET_WM_WINDOW_OPACITY").ok_or_else(|| X11_REQUIRED.to_string())?;
     conn.change_property32(PropMode::REPLACE, xid, atom, AtomEnum::CARDINAL, &[value])
+        .map_err(|error| error.to_string())?
+        .check()
         .map_err(|error| error.to_string())?;
     conn.flush().map_err(|error| error.to_string())
 }

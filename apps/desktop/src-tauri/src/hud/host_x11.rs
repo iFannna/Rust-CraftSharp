@@ -16,6 +16,7 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::protocol::Event as XEvent;
 use x11rb::rust_connection::RustConnection;
+use x11rb::wrapper::ConnectionExt as _;
 
 use crate::hud::host::{Area, Event, Options, Point};
 use crate::hud::sprite::Frame;
@@ -253,6 +254,20 @@ impl Host {
     pub fn hide(&self) {
         let _ = self.conn.unmap_window(self.win);
         let _ = self.conn.flush();
+    }
+
+    /// 窗口内容尚未提交时用透明度藏住未初始化的画面
+    pub fn set_opacity(&self, value: u32) {
+        if let Some(atom) = intern(&self.conn, "_NET_WM_WINDOW_OPACITY") {
+            let _ = self.conn.change_property32(
+                PropMode::REPLACE,
+                self.win,
+                atom,
+                AtomEnum::CARDINAL,
+                &[value],
+            );
+            let _ = self.conn.flush();
+        }
     }
 
     pub fn park(&self) {

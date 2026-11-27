@@ -1,7 +1,7 @@
 //! 原生 GStreamer 渲染：XvImage 直绘桌面窗口，首帧就绪后再显示。
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -23,6 +23,7 @@ const SINK: &str = "ximagesink";
 pub(super) struct RenderSpec {
     pub video: PathBuf,
     pub bounds: Bounds,
+    pub scale: f64,
     pub span: Option<Bounds>,
     pub transform: Option<Transform>,
 }
@@ -65,8 +66,8 @@ fn run(
     commands: Receiver<Command>,
     alive: Arc<AtomicBool>,
 ) {
-    let mut pipeline = match render(&spec, xid) {
-        Ok(pipeline) => pipeline,
+    let (mut pipeline, mut frames) = match render(&spec, xid) {
+        Ok(pair) => pair,
         Err(error) => {
             fail(&app, &window, &label, &error, &alive);
             return;
@@ -77,6 +78,8 @@ fn run(
         return;
     };
     let mut paused = false;
+    let mut moved = false;
+    let mut ready_at: Option<usize> = None;
     loop {
         while let Some(message) = bus.pop() {
             match message.view() {
@@ -113,10 +116,9 @@ fn run(
                 }
             }
             Ok(Command::Switch(next)) => {
-                let _ = window::set_opacity(xid, 0);
                 let _ = pipeline.set_state(gst::State::Null);
                 match render(&next, xid) {
-                    Ok(next_pipeline) => {
+                    Ok((next_pipeline, next_frames)) => {
                         match next_pipeline.bus() {
                             Some(next_bus) => bus = next_bus,
                             None => {
@@ -126,6 +128,7 @@ fn run(
                             }
                         }
                         pipeline = next_pipeline;
+                        frames = next_frames;
                         if paused {
                             let _ = pipeline.set_state(gst::State::Paused);
                         }
@@ -138,6 +141,33 @@ fn run(
             }
             Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
+        }
+        if !moved {
+            let count = frames.load(Ordering::Relaxed);
+            match ready_at {
+                // 先在屏幕外把画面播起来，再移进桌面，映射瞬间就是视频帧
+                Some(at) if count >= at + 2 => {
+                    moved = true;
+                    let target = window.clone();
+                    let bounds = spec.bounds;
+                    let scale = spec.scale;
+                    let _ = app.run_on_main_thread(move || {
+                        if let Err(error) = window::place(&target, bounds, scale) {
+                            eprintln!("wallpaper-show: {error}");
+                            return;
+                        }
+                        if let Err(error) = window::set_opacity(xid, u32::MAX) {
+                            eprintln!("wallpaper-reveal: {error}");
+                        }
+                    });
+                }
+                Some(_) => {}
+                None => {
+                    if count > 0 {
+                        ready_at = Some(count);
+                    }
+                }
+            }
         }
     }
     let _ = pipeline.set_state(gst::State::Null);
@@ -157,12 +187,16 @@ fn fail(
     let _ = window.close();
 }
 
-fn render(spec: &RenderSpec, xid: u32) -> Result<gst::Pipeline, String> {
+fn render(spec: &RenderSpec, xid: u32) -> Result<(gst::Pipeline, Arc<AtomicUsize>), String> {
     ensure_gst()?;
     build(spec, xid, SINK)
 }
 
-fn build(spec: &RenderSpec, xid: u32, sink_name: &str) -> Result<gst::Pipeline, String> {
+fn build(
+    spec: &RenderSpec,
+    xid: u32,
+    sink_name: &str,
+) -> Result<(gst::Pipeline, Arc<AtomicUsize>), String> {
     let pipeline = gst::Pipeline::new();
     let element = |name: &str| {
         gst::ElementFactory::make(name)
@@ -247,10 +281,17 @@ fn build(spec: &RenderSpec, xid: u32, sink_name: &str) -> Result<gst::Pipeline, 
         let _ = pipeline.set_state(gst::State::Null);
         return Err(format!("{sink_name} 首帧就绪失败：{detail}"));
     }
-    if let Err(error) = window::set_opacity(xid, u32::MAX) {
-        let _ = pipeline.set_state(gst::State::Null);
-        return Err(error);
-    }
+    // PAUSED 阶段只保证有预卷帧，sink 未必已经画进窗口；
+    // 等播放状态下真正渲染出帧，再把窗口从屏幕外移进来
+    let sink_pad = sink
+        .static_pad("sink")
+        .ok_or_else(|| "视频输出组件不可用".to_string())?;
+    let frames = Arc::new(AtomicUsize::new(0));
+    let counter = frames.clone();
+    sink_pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+        counter.fetch_add(1, Ordering::Relaxed);
+        gst::PadProbeReturn::Ok
+    });
     pipeline
         .set_state(gst::State::Playing)
         .map_err(|error| format!("{sink_name} 播放失败：{error}"))?;
@@ -258,7 +299,7 @@ fn build(spec: &RenderSpec, xid: u32, sink_name: &str) -> Result<gst::Pipeline, 
         let _ = pipeline.set_state(gst::State::Null);
         return Err(error);
     }
-    Ok(pipeline)
+    Ok((pipeline, frames))
 }
 
 fn overlay(sink: &gst::Element, xid: u32) -> Result<(), String> {
