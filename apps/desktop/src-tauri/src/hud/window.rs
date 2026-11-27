@@ -169,7 +169,7 @@ fn preload_font(app: &AppHandle) {
     });
 }
 
-/// 指标采集会查询 PDH 与 WMI，放到后台线程按秒采样，结果投递回窗口线程。
+/// 指标采集放到后台线程按秒采样，结果投递回窗口线程。
 fn start_metrics(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || loop {

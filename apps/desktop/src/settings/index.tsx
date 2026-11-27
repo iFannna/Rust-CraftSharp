@@ -279,7 +279,7 @@ function SettingsApp() {
                 </button>
               ))}
             </div>
-            <div className="mt-auto px-3 py-3 text-xs text-muted-foreground">v26.11.26 Craft#</div>
+            <div className="mt-auto px-3 py-3 text-xs text-muted-foreground">v26.11.27 Craft#</div>
           </nav>
 
           {/* key 让切换分区时内容区回到顶部 */}

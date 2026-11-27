@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "craftsharp-desktop"
-version = "26.11.26"
+version = "26.11.27"
 dependencies = [
  "ab_glyph",
  "gdkx11",
@@ -456,6 +456,7 @@ dependencies = [
  "gstreamer-video",
  "gtk",
  "image",
+ "libloading",
  "serde",
  "serde_json",
  "tauri",
