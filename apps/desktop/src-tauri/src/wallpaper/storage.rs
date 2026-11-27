@@ -448,18 +448,12 @@ mod tests {
 
     #[test]
     fn encapsulates_picked_folder() {
-        assert_eq!(
-            target_for(Path::new(r"D:\game")),
-            PathBuf::from(r"D:\game\CraftSharp\wallpapers")
-        );
-        assert_eq!(
-            target_for(Path::new(r"D:\game\CraftSharp")),
-            PathBuf::from(r"D:\game\CraftSharp\wallpapers")
-        );
-        assert_eq!(
-            target_for(Path::new(r"D:\game\CraftSharp\wallpapers")),
-            PathBuf::from(r"D:\game\CraftSharp\wallpapers")
-        );
+        let base = Path::new("game");
+        let folder = base.join(FOLDER);
+        let leaf = folder.join(LEAF);
+        assert_eq!(target_for(base), leaf);
+        assert_eq!(target_for(&folder), leaf);
+        assert_eq!(target_for(&leaf), leaf);
     }
 
     #[test]

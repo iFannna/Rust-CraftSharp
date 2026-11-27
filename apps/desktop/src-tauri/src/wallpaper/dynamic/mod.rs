@@ -22,11 +22,11 @@ mod unsupported {
 
     pub use super::super::saved::Saved;
 
-    pub fn apply_monitors(_: &[(String, PathBuf)]) -> Result<(), String> {
+    pub fn apply_monitors(_: &AppHandle, _: &[(String, PathBuf)]) -> Result<(), String> {
         Err("当前平台暂不支持动态壁纸".into())
     }
 
-    pub fn apply_span(_: &PathBuf, _: Transform) -> Result<(), String> {
+    pub fn apply_span(_: &AppHandle, _: &PathBuf, _: Transform) -> Result<(), String> {
         Err("当前平台暂不支持动态壁纸".into())
     }
 

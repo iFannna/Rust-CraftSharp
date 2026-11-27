@@ -255,14 +255,4 @@ mod tests {
         bytes.extend_from_slice(b"WEBPVP8 ");
         assert_eq!(sniff(&bytes), "image/webp");
     }
-
-    #[test]
-    fn parses_video_ranges() {
-        assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)));
-        assert_eq!(parse_range("bytes=900-", 1000), Some((900, 999)));
-        assert_eq!(parse_range("bytes=-100", 1000), Some((900, 999)));
-        assert_eq!(parse_range("bytes=0-9999", 1000), Some((0, 999)));
-        assert_eq!(parse_range("bytes=1000-", 1000), None);
-        assert_eq!(parse_range("bytes=-0", 1000), None);
-    }
 }

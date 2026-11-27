@@ -32,7 +32,7 @@ fn engine() -> &'static Mutex<Engine> {
     })
 }
 
-pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
+pub fn apply_monitors(_app: &AppHandle, targets: &[(String, PathBuf)]) -> Result<(), String> {
     let monitors = desktop::monitors_native();
     let mut specs = Vec::new();
     for (device, video) in targets {
@@ -59,7 +59,7 @@ pub fn apply_monitors(targets: &[(String, PathBuf)]) -> Result<(), String> {
     restart(specs)
 }
 
-pub fn apply_span(video: &PathBuf, transform: Transform) -> Result<(), String> {
+pub fn apply_span(_app: &AppHandle, video: &PathBuf, transform: Transform) -> Result<(), String> {
     let monitors = desktop::monitors_native();
     let virtual_bounds = virtual_bounds(&monitors).ok_or_else(|| "没有可用显示器".to_string())?;
     let specs = monitors
