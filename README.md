@@ -4,13 +4,13 @@
 
 <h1 align="center">Craft #（CraftSharp）</h1>
 
-<p align="center"><strong>一款 Minecraft 风格的 Windows 桌面管理应用</strong></p>
+<p align="center"><strong>一款 Minecraft 风格的桌面管理应用</strong></p>
 
 <p align="center">
   <a href="https://github.com/iFannna/Rust-CraftSharp/releases">
     <img src="https://img.shields.io/github/v/release/iFannna/Rust-CraftSharp?style=flat-square&color=D97757" alt="Release" />
   </a>
-  <img src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/built%20with-Tauri%20%2B%20Rust-orange?style=flat-square" alt="Tauri + Rust" />
   <img src="https://img.shields.io/github/license/iFannna/Rust-CraftSharp?style=flat-square" alt="MIT License" />
 </p>
@@ -24,7 +24,7 @@
 
 ## 这是什么
 
-Craft # 把 Minecraft 的界面搬到 Windows 桌面上：状态栏、快捷栏、物品栏、准星和 BOSS 血条常驻桌面，快捷栏的每一格就是磁盘上的一个文件，同时提供 3D 皮肤预览和桌面壁纸引擎。
+Craft # 把 Minecraft 的界面搬到桌面上：状态栏、快捷栏、物品栏、准星和 BOSS 血条常驻桌面，快捷栏的每一格就是磁盘上的一个文件，同时提供 3D 皮肤预览和桌面壁纸引擎。
 
 界面与交互按 Minecraft 的手感还原，并在此基础上延伸出硬件数据映射和壁纸两块功能。
 
@@ -40,13 +40,25 @@ Craft # 把 Minecraft 的界面搬到 Windows 桌面上：状态栏、快捷栏�
 
 ## 安装
 
-前往 [GitHub Releases](https://github.com/iFannna/Rust-CraftSharp/releases/latest) 下载最新安装包，双击运行即可。
+前往 [GitHub Releases](https://github.com/iFannna/Rust-CraftSharp/releases/latest) 下载最新安装包。
 
-仅支持 Windows 10/11。安装包自带应用与资源，不需要 Node.js、Rust 或 .NET；界面依赖系统的 WebView2 运行时，Win11 自带，Win10 一般随 Edge 存在，缺失时安装器会引导安装。
+Windows 10/11：下载 `CraftSharp_<版本>_Windows_x64-setup.exe` 或对应 MSI，双击安装。安装包自带应用与资源，不需要 Node.js、Rust 或 .NET；界面依赖系统的 WebView2 运行时，Win11 自带，Win10 一般随 Edge 存在，缺失时安装器会引导安装。
+
+Linux（Ubuntu 24.04 amd64，预览）：下载 `CraftSharp_<版本>_Linux_amd64.deb`，把 `<版本>` 换成实际版本号后执行：
+
+```bash
+sudo apt install ./CraftSharp_<版本>_Linux_amd64.deb
+CraftSharp
+```
+
+安装后也可以从应用列表搜索 CraftSharp；程序位于 `/usr/bin/CraftSharp`。依赖 glibc 2.39 与 GStreamer 1.24，Wayland 与 X11 都可用，HUD 经 XWayland 承载。同版本重装需加上 `--reinstall`，卸载执行 `sudo apt remove craftsharp`。
 
 ## 开发
 
-环境要求：Windows 10/11、Node.js 20 或更高、Rust 1.77 或更高、WebView2 运行时。
+环境要求：
+
+- Windows 10/11：Node.js 20 或更高、Rust 1.77 或更高、WebView2 运行时
+- Linux（Ubuntu 24.04）：Node.js 20 或更高、Rust 1.77 或更高、WebKitGTK 4.1、GTK3、AppIndicator3 与 GStreamer 1.24 开发包
 
 ```bash
 cd apps/desktop
@@ -58,8 +70,10 @@ npm start
 
 ```bash
 npm run build     # 类型检查 + 前端构建，输出 dist
-npm run package   # 生成安装包，输出到 src-tauri/target/release/bundle
+npm run package   # Windows 安装包，输出到 src-tauri/target/release/bundle
 ```
+
+Linux 的 deb 用 `apps/desktop/linux/package-deb.sh` 组装，参数依次是版本号、release 可执行文件和输出路径。
 
 ## 目录结构
 
@@ -69,7 +83,7 @@ npm run package   # 生成安装包，输出到 src-tauri/target/release/bundle
 
 ## 发布
 
-推送 `v26.11.20` 形式的 tag 后，GitHub Actions 会自动构建 NSIS 和两个 MSI，校验体积和版本后上传到 draft release，并统一命名成 `CraftSharp_26.11.20_Windows_x64-setup.exe` 和 `CraftSharp_26.11.20_Windows_x64_{zh-CN,en-US}.msi`。核对后手动把 draft 转正式。
+推送 `vYY.M.D` 形式的 tag 后，GitHub Actions 会构建 Windows 的 NSIS、两个 MSI 和 Linux 的 deb，校验体积和版本后统一上传到 draft release。产物命名为 `CraftSharp_<版本>_Windows_x64-setup.exe`、`CraftSharp_<版本>_Windows_x64_{zh-CN,en-US}.msi` 和 `CraftSharp_<版本>_Linux_amd64.deb`。核对后手动把 draft 转正式。
 
 ## 许可
 
