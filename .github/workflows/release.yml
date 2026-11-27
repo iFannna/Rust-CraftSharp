@@ -114,5 +114,68 @@ jobs:
           set -euo pipefail
           gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP"/release-assets/* --clobber
 
+      - name: Windows assets ready
+        run: echo "Windows assets uploaded; Linux build follows"
+
+  linux:
+    needs: release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Linux binary
+        run: cargo build --release --features tauri/custom-protocol --bin craftsharp-desktop --manifest-path src-tauri/Cargo.toml
+
+      - name: Package deb
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bash linux/package-deb.sh "$version" src-tauri/target/release/craftsharp-desktop "CraftSharp_${version}_Linux_amd64.deb"
+          ls -l "CraftSharp_${version}_Linux_amd64.deb"
+
+      - name: Upload Linux asset to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release upload "$GITHUB_REF_NAME" "CraftSharp_${version}_Linux_amd64.deb" --clobber
+
+      - name: Verify draft assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          count="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets | length')"
+          [ "$count" -eq 4 ] || { echo "expected 4 assets, found $count"; exit 1; }
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[] | "\(.name) \(.size)"'
+
       - name: Draft ready
         run: echo "Draft release $GITHUB_REF_NAME is ready, review and publish manually"

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CraftSharp
+Comment=Minecraft 风格的桌面 HUD 与壁纸应用
+Exec=CraftSharp
+Icon=craftsharp
+Terminal=false
+Categories=Utility;
+StartupNotify=false
